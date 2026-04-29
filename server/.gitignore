@@ -1,0 +1,26 @@
+# 编译产物
+todoalarm-server
+todoalarm-server-*
+/dist/
+
+# 实际配置(不要提交;只提交 config.example.toml)
+config.toml
+
+# 数据库与日志
+data/
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# 编辑器/IDE
+.vscode/
+.idea/
+*.swp
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 依赖缓存(Go 默认不要 vendor)
+/vendor/

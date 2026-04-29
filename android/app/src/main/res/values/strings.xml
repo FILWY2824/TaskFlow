@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">TodoAlarm</string>
+
+    <!-- 通知 channel -->
+    <string name="channel_alarm_name">强提醒</string>
+    <string name="channel_alarm_desc">到点强提醒,响铃 + 全屏</string>
+    <string name="channel_alarm_service_name">提醒前台服务</string>
+    <string name="channel_alarm_service_desc">用来在响铃期间保活</string>
+
+    <!-- Permission rationale -->
+    <string name="rationale_notifications">需要通知权限才能在 Android 13+ 上展示提醒</string>
+    <string name="rationale_alarm">需要"精确闹钟"权限,才能按本地时间精确触发(系统设置 → 应用 → 闹钟与提醒)</string>
+    <string name="rationale_battery">建议关闭电池优化,否则系统可能延迟或丢弃提醒</string>
+</resources>

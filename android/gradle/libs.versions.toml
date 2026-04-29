@@ -1,0 +1,93 @@
+[versions]
+# Build / Kotlin / AGP
+agp                = "8.7.2"
+kotlin             = "2.0.21"
+ksp                = "2.0.21-1.0.27"
+
+# Android SDK
+compileSdk         = "35"
+targetSdk          = "35"
+minSdk             = "26"
+
+# AndroidX
+core-ktx           = "1.15.0"
+lifecycle          = "2.8.7"
+activity-compose   = "1.9.3"
+compose-bom        = "2024.10.01"
+navigation-compose = "2.8.4"
+work-runtime       = "2.10.0"
+datastore          = "1.1.1"
+security-crypto    = "1.1.0-alpha06"
+
+# Room
+room               = "2.6.1"
+
+# Network
+retrofit           = "2.11.0"
+okhttp             = "4.12.0"
+
+# JSON
+moshi              = "1.15.1"
+
+# Serialization-free JSON for tiny stuff (we use moshi everywhere)
+
+# Coroutines
+coroutines         = "1.9.0"
+
+# RRULE — pure Java port for client-side preview of周期提醒
+google-rfc-2445    = "20110304"
+
+[libraries]
+androidx-core-ktx           = { group = "androidx.core",                module = "core-ktx",                                version.ref = "core-ktx" }
+androidx-lifecycle-runtime  = { group = "androidx.lifecycle",           module = "lifecycle-runtime-ktx",                   version.ref = "lifecycle" }
+androidx-lifecycle-vm-ktx   = { group = "androidx.lifecycle",           module = "lifecycle-viewmodel-ktx",                 version.ref = "lifecycle" }
+androidx-lifecycle-vm-comp  = { group = "androidx.lifecycle",           module = "lifecycle-viewmodel-compose",             version.ref = "lifecycle" }
+androidx-activity-compose   = { group = "androidx.activity",            module = "activity-compose",                        version.ref = "activity-compose" }
+
+# Compose
+compose-bom                 = { group = "androidx.compose",             module = "compose-bom",                             version.ref = "compose-bom" }
+compose-ui                  = { group = "androidx.compose.ui",          module = "ui" }
+compose-ui-graphics         = { group = "androidx.compose.ui",          module = "ui-graphics" }
+compose-ui-tooling          = { group = "androidx.compose.ui",          module = "ui-tooling" }
+compose-ui-tooling-preview  = { group = "androidx.compose.ui",          module = "ui-tooling-preview" }
+compose-foundation          = { group = "androidx.compose.foundation",  module = "foundation" }
+compose-material3           = { group = "androidx.compose.material3",   module = "material3" }
+compose-material-icons-ext  = { group = "androidx.compose.material",    module = "material-icons-extended" }
+compose-runtime-livedata    = { group = "androidx.compose.runtime",     module = "runtime-livedata" }
+
+# Navigation
+navigation-compose          = { group = "androidx.navigation",          module = "navigation-compose",                      version.ref = "navigation-compose" }
+
+# Work / DataStore / Security
+work-runtime-ktx            = { group = "androidx.work",                module = "work-runtime-ktx",                        version.ref = "work-runtime" }
+datastore-preferences       = { group = "androidx.datastore",           module = "datastore-preferences",                   version.ref = "datastore" }
+security-crypto             = { group = "androidx.security",            module = "security-crypto",                         version.ref = "security-crypto" }
+
+# Room
+room-runtime                = { group = "androidx.room",                module = "room-runtime",                            version.ref = "room" }
+room-compiler               = { group = "androidx.room",                module = "room-compiler",                           version.ref = "room" }
+room-ktx                    = { group = "androidx.room",                module = "room-ktx",                                version.ref = "room" }
+
+# Retrofit + OkHttp
+retrofit                    = { group = "com.squareup.retrofit2",       module = "retrofit",                                version.ref = "retrofit" }
+retrofit-converter-moshi    = { group = "com.squareup.retrofit2",       module = "converter-moshi",                         version.ref = "retrofit" }
+okhttp                      = { group = "com.squareup.okhttp3",         module = "okhttp",                                  version.ref = "okhttp" }
+okhttp-logging              = { group = "com.squareup.okhttp3",         module = "logging-interceptor",                     version.ref = "okhttp" }
+
+# Moshi
+moshi                       = { group = "com.squareup.moshi",           module = "moshi",                                   version.ref = "moshi" }
+moshi-kotlin                = { group = "com.squareup.moshi",           module = "moshi-kotlin",                            version.ref = "moshi" }
+moshi-codegen               = { group = "com.squareup.moshi",           module = "moshi-kotlin-codegen",                    version.ref = "moshi" }
+
+# Coroutines
+coroutines-core             = { group = "org.jetbrains.kotlinx",        module = "kotlinx-coroutines-core",                 version.ref = "coroutines" }
+coroutines-android          = { group = "org.jetbrains.kotlinx",        module = "kotlinx-coroutines-android",              version.ref = "coroutines" }
+
+# RRULE
+rfc2445                     = { group = "com.google.code.findbugs",     module = "annotations",                             version = "3.0.1u2" } # placeholder, see app/build.gradle for the real RRULE dep
+
+[plugins]
+android-application = { id = "com.android.application",                version.ref = "agp" }
+kotlin-android      = { id = "org.jetbrains.kotlin.android",           version.ref = "kotlin" }
+kotlin-compose      = { id = "org.jetbrains.kotlin.plugin.compose",    version.ref = "kotlin" }
+ksp                 = { id = "com.google.devtools.ksp",                version.ref = "ksp" }

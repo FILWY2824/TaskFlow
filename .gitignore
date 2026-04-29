@@ -1,0 +1,68 @@
+# ==============================
+# OS & Editor/IDE Files
+# ==============================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ==============================
+# Go Backend (/server)
+# ==============================
+/server/todoalarm-server
+/server/todoalarm-server-*
+/server/dist/
+/server/config.toml
+/server/data/
+/server/*.db
+/server/*.db-wal
+/server/*.db-shm
+/server/*.log
+/server/vendor/
+
+# ==============================
+# Node / Frontend (/web & /windows)
+# ==============================
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+.npm/
+*.tsbuildinfo
+.env
+.env.*.local
+.env.local
+
+# ==============================
+# Rust / Tauri (/windows)
+# ==============================
+/windows/src-tauri/target/
+**/*.rs.bk
+
+# ==============================
+# Android (/android)
+# ==============================
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/local.properties
+/android/.cxx/
+*.apk
+*.aab
+*.keystore
+
+# ==============================
+# Logs & General Caches
+# ==============================
+*.log
+.tmp/
+.temp/

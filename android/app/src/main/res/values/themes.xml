@@ -1,0 +1,14 @@
+<resources>
+    <!-- 普通主题 - Compose Material3 启动主题 -->
+    <style name="Theme.TodoAlarm" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+
+    <!-- 全屏强提醒 Activity 专用主题:不要 Action Bar,亮屏,沉浸 -->
+    <style name="Theme.TodoAlarm.Alarm" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

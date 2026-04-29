@@ -1,0 +1,68 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "TodoAlarm",
+  "version": "0.4.0",
+  "identifier": "com.example.todoalarm",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "TodoAlarm",
+        "width": 1100,
+        "height": 760,
+        "minWidth": 720,
+        "minHeight": 500,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false,
+        "alwaysOnTop": false,
+        "visible": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' ipc:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: https: http:; font-src 'self' data:"
+    },
+    "trayIcon": {
+      "iconPath": "icons/tray.png",
+      "iconAsTemplate": false,
+      "menuOnLeftClick": false,
+      "tooltip": "TodoAlarm"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.ico"
+    ],
+    "category": "Productivity",
+    "shortDescription": "TodoAlarm 桌面客户端",
+    "longDescription": "多用户 TODO + 强提醒,Windows 端本地强提醒 + 系统托盘 + 开机启动。",
+    "publisher": "TodoAlarm",
+    "windows": {
+      "wix": {
+        "language": ["zh-CN", "en-US"]
+      },
+      "nsis": {
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": true,
+        "installMode": "perUser"
+      }
+    }
+  },
+  "plugins": {
+    "notification": {
+      "all": true
+    }
+  }
+}

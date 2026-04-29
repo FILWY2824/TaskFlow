@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  数据备份策略:用户的认证 token / 偏好可以备份,本地缓存数据库不要备份(同步即可恢复)。
+-->
+<full-backup-content>
+    <include domain="sharedpref" path="." />
+    <exclude domain="database" path="todoalarm.db" />
+    <exclude domain="database" path="todoalarm.db-journal" />
+    <exclude domain="database" path="todoalarm.db-wal" />
+    <exclude domain="database" path="todoalarm.db-shm" />
+</full-backup-content>

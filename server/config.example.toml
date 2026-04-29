@@ -1,0 +1,50 @@
+# TodoAlarm 服务端配置
+# 复制为 config.toml 后修改使用
+
+[server]
+# 监听地址。生产环境建议 127.0.0.1:8080,由 Nginx 反向代理到 :443
+listen = "127.0.0.1:8080"
+# 优雅关闭超时(秒)
+shutdown_timeout_seconds = 15
+# 写超时(秒) —— 注意:实际进程会强制设为 0,因为 /ws/events SSE 是长连接
+write_timeout_seconds = 30
+# 读超时(秒)
+read_timeout_seconds = 30
+
+[database]
+# SQLite 文件路径(相对路径相对于工作目录)
+path = "data/todoalarm.db"
+
+[auth]
+# JWT 签名密钥。生产环境必须改为长随机字符串(>=32 字节)。可用 openssl rand -hex 32
+jwt_secret = "CHANGE_ME_TO_A_LONG_RANDOM_SECRET_AT_LEAST_32_BYTES"
+# Access Token 有效期(秒)
+access_ttl_seconds = 900       # 15 分钟
+# Refresh Token 有效期(秒)
+refresh_ttl_seconds = 2592000  # 30 天
+# bcrypt cost (10~14)
+bcrypt_cost = 11
+
+[log]
+# debug | info | warn | error
+level = "info"
+
+[telegram]
+# 从 @BotFather 拿到的 bot token。留空则禁用所有 telegram 功能(deep-link / webhook / 推送)。
+bot_token = ""
+# 你的 Bot username,不带 @,例如 "TodoAlarmBot"。客户端用它拼 deep-link。
+bot_username = ""
+# Telegram setWebhook 时设置的 secret_token。Telegram 会通过
+# X-Telegram-Bot-Api-Secret-Token 头回传,服务端做 constant-time 比较。
+# 自己生成:openssl rand -hex 32
+webhook_secret = ""
+# bind_token 有效期(秒),默认 600 即 10 分钟
+bind_token_ttl_seconds = 600
+
+[scheduler]
+# 扫描周期(秒)。提醒触发延迟在 0~tick 之间,默认 5。
+tick_interval_seconds = 5
+# 单次扫描最多处理多少条 due 提醒,默认 200
+batch_size = 200
+# 关掉调度器(开发/调试用)。注意:关掉后 telegram 推送、通知中心都不会工作。
+disabled = false

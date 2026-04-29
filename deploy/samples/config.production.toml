@@ -1,0 +1,37 @@
+# TodoAlarm 生产配置模板
+# install.sh 会基于这个模板生成 /opt/todoalarm/config.toml(随机注入 jwt_secret)。
+#
+# 改完此文件需要 systemctl restart todoalarm 才生效。
+
+[server]
+listen = "127.0.0.1:8080"
+shutdown_timeout_seconds = 15
+write_timeout_seconds = 30
+read_timeout_seconds = 30
+
+[database]
+path = "/opt/todoalarm/data/todoalarm.db"
+
+[auth]
+# 生成方式:openssl rand -hex 32 (>=32 字节)
+jwt_secret = "REPLACE_ME_BEFORE_DEPLOY"
+access_ttl_seconds = 900
+refresh_ttl_seconds = 2592000
+bcrypt_cost = 11
+
+[log]
+level = "info"
+
+[telegram]
+# 在 BotFather 拿到 token 后再填,否则 telegram 功能全部禁用
+bot_token = ""
+bot_username = ""
+# 用于 setWebhook 的 secret_token,Telegram 会通过 X-Telegram-Bot-Api-Secret-Token 回传。
+# openssl rand -hex 32
+webhook_secret = ""
+bind_token_ttl_seconds = 600
+
+[scheduler]
+tick_interval_seconds = 5
+batch_size = 200
+disabled = false
