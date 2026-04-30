@@ -36,6 +36,7 @@ async function submit() {
   <div class="auth-page">
     <form class="auth-card" @submit.prevent="submit">
       <h2>登录到 TodoAlarm</h2>
+      <div class="auth-subtitle">欢迎回来，继续您的任务管理</div>
       <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
       <div class="field">
         <label>邮箱</label>

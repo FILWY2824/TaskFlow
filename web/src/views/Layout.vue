@@ -36,13 +36,10 @@ onBeforeUnmount(() => {
 })
 
 const sidebarFilters = [
-  { name: 'today', label: '今日', icon: '☀' },
-  { name: 'tomorrow', label: '明天', icon: '➡' },
-  { name: 'this-week', label: '本周', icon: '📅' },
-  { name: 'overdue', label: '过期', icon: '⏰' },
-  { name: 'no-date', label: '无日期', icon: '◯' },
+  { name: 'schedule', label: '日程', icon: '📅' },
   { name: 'all', label: '全部', icon: '📋' },
-  { name: 'completed', label: '已完成', icon: '✓' },
+  { name: 'archive', label: '完成 & 过期', icon: '📁' },
+  { name: 'no-date', label: '无日期', icon: '◯' },
 ] as const
 
 const sidebarTools = [
@@ -167,7 +164,13 @@ const userLabel = computed(() => auth.user?.display_name || auth.user?.email || 
         </div>
       </header>
       <section class="content">
-        <RouterView />
+        <div class="content-inner">
+          <router-view v-slot="{ Component }">
+            <transition name="fade" mode="out-in">
+              <component :is="Component" />
+            </transition>
+          </router-view>
+        </div>
       </section>
     </main>
 
@@ -177,7 +180,9 @@ const userLabel = computed(() => auth.user?.display_name || auth.user?.email || 
       <div class="drawer" style="width: min(420px, 95vw)">
         <header>
           <span class="title">新建清单</span>
-          <button class="btn-ghost" @click="showNewListDialog = false">✕</button>
+          <button class="btn-close" @click="showNewListDialog = false">
+            <svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
         </header>
         <div class="body">
           <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
@@ -204,13 +209,10 @@ import type { RouteLocationNormalizedLoaded } from 'vue-router'
 
 function pageTitle(route: RouteLocationNormalizedLoaded): string {
   const m: Record<string, string> = {
-    today: '今日',
-    tomorrow: '明天',
-    'this-week': '本周',
-    overdue: '过期',
+    schedule: '日程',
+    archive: '完成 & 过期',
     'no-date': '无日期',
     all: '全部任务',
-    completed: '已完成',
     list: '清单',
     calendar: '日历',
     pomodoro: '番茄专注',

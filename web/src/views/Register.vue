@@ -50,6 +50,7 @@ async function submit() {
   <div class="auth-page">
     <form class="auth-card" @submit.prevent="submit">
       <h2>注册 TodoAlarm</h2>
+      <div class="auth-subtitle">创建一个新账号开始您的管理旅程</div>
       <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
       <div class="field">
         <label>邮箱</label>

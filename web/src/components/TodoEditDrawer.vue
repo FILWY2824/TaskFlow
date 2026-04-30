@@ -208,7 +208,9 @@ const rrulePresets = [
   <div class="drawer">
     <header>
       <span class="title">编辑任务</span>
-      <button class="btn-ghost" @click="emit('close')">✕</button>
+      <button class="btn-close" @click="emit('close')">
+        <svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
     </header>
     <div class="body">
       <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
@@ -325,7 +327,9 @@ const rrulePresets = [
     <div class="drawer" style="width: min(420px, 95vw); z-index: 61">
       <header>
         <span class="title">新增提醒</span>
-        <button class="btn-ghost" @click="showReminderDialog = false">✕</button>
+        <button class="btn-close" @click="showReminderDialog = false">
+          <svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
       </header>
       <div class="body">
         <div v-if="remErr" class="auth-error">{{ remErr }}</div>
