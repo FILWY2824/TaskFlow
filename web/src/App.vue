@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 import { useNotificationsStore } from '@/stores/notifications'
+import AppDialogs from '@/components/AppDialogs.vue'
 
 const notif = useNotificationsStore()
 const online = ref(navigator.onLine)
@@ -52,4 +53,7 @@ onBeforeUnmount(() => {
       <div v-if="t.body" class="toast-body">{{ t.body }}</div>
     </div>
   </TransitionGroup>
+
+  <!-- 全局自定义 confirm/alert 弹窗（替代浏览器原生 window.confirm/alert）。 -->
+  <AppDialogs />
 </template>

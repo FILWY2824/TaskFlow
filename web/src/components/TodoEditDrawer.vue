@@ -13,6 +13,8 @@ import {
   toDatetimeLocal,
   toRFC3339,
 } from '@/utils'
+import PrettyDateTimePicker from '@/components/PrettyDateTimePicker.vue'
+import { confirmDialog } from '@/dialogs'
 
 const props = defineProps<{
   todo: Todo
@@ -36,6 +38,21 @@ const dueAtLocal = ref(toDatetimeLocal(props.todo.due_at ? new Date(props.todo.d
 const dueAllDay = ref(props.todo.due_all_day)
 // 时区永远跟随当前账号设置（在"设置 → 时区"里统一管理）；这里只读不可编辑。
 const tz = ref(authStore.user?.timezone || props.todo.timezone || DEFAULT_TIMEZONE)
+
+// ─── 「无日期」 vs「日程任务」 互不串通的强约束 ────────────────────────────────
+// 业务规则:
+//   - 一旦任务被创建为"无日期"（due_at 为空），它在编辑时就不能再被加上日期 ——
+//     这种任务专门用来登记"想做但还没排期"的事项，不该跑到日程里搅局；
+//   - 反过来，一旦任务被创建为"有日期"（即在日程视图里的任务），它在编辑时
+//     也不能被把日期清空 —— 不能让它意外地"跌出"日程进入无日期视图。
+// 也就是说："是否有日期"是任务的一个不可变属性。需要切换的话，请删除并重建。
+//
+// 实现上：
+//   - originallyHadDueAt 在抽屉首次打开和切换 todo 时刻"快照"任务原始状态；
+//   - 模板里根据它分别渲染"已锁定的无日期标识"或"已锁定的日期时间选择器"；
+//   - PrettyDateTimePicker 在前一种情况下完全不渲染；后一种情况下传 allow-clear=false。
+const originallyHadDueAt = ref<boolean>(!!props.todo.due_at)
+const isNoDateTask = computed(() => !originallyHadDueAt.value)
 
 const errMsg = ref('')
 const saving = ref(false)
@@ -74,6 +91,8 @@ watch(
     dueAtLocal.value = toDatetimeLocal(props.todo.due_at ? new Date(props.todo.due_at) : null)
     dueAllDay.value = props.todo.due_all_day
     tz.value = authStore.user?.timezone || props.todo.timezone || DEFAULT_TIMEZONE
+    // 重新拍摄"原始是否有日期"的快照（这是任务的不可变属性）
+    originallyHadDueAt.value = !!props.todo.due_at
     errMsg.value = ''
     await Promise.all([data.loadSubtasks(props.todo.id), data.loadReminders(props.todo.id)]).catch(() => {})
   },
@@ -86,9 +105,23 @@ async function save() {
     errMsg.value = '标题不能为空'
     return
   }
+  // 强约束：日程任务不能把日期清空，无日期任务不能加日期。
+  // UI 上已通过禁用控件防止用户操作；这里再做一次双保险，防止意外路径绕过。
+  if (originallyHadDueAt.value && !dueAtLocal.value) {
+    errMsg.value = '日程任务必须保留截止时间。如需把它改为"无日期"，请先删除再重建。'
+    return
+  }
+  if (!originallyHadDueAt.value && dueAtLocal.value) {
+    errMsg.value = '"无日期"任务不能添加截止时间。如需安排进日程，请先删除再重建。'
+    return
+  }
   saving.value = true
   try {
-    const due = dueAtLocal.value ? fromDatetimeLocal(dueAtLocal.value) : null
+    // 严格按"原始是否有日期"决定提交内容：无日期任务永远提交 null，杜绝任何
+    // 隐式状态切换。
+    const due = originallyHadDueAt.value
+      ? (dueAtLocal.value ? fromDatetimeLocal(dueAtLocal.value) : null)
+      : null
     const updated = await data.updateTodo(props.todo.id, {
       title: title.value.trim(),
       description: description.value,
@@ -96,7 +129,7 @@ async function save() {
       effort: effort.value,
       list_id: listId.value,
       due_at: due ? toRFC3339(due) : null,
-      due_all_day: dueAllDay.value,
+      due_all_day: originallyHadDueAt.value ? dueAllDay.value : false,
       timezone: tz.value,
     })
     emit('updated', updated)
@@ -108,7 +141,14 @@ async function save() {
 }
 
 async function remove() {
-  if (!confirm('确认删除这个任务？')) return
+  const ok = await confirmDialog({
+    title: '确认删除任务？',
+    message: `任务 "${props.todo.title}" 将被永久删除，包括它下面的子任务和提醒规则。此操作无法撤销。`,
+    confirmText: '删除',
+    cancelText: '取消',
+    danger: true,
+  })
+  if (!ok) return
   try {
     await data.removeTodo(props.todo.id)
     emit('removed', props.todo.id)
@@ -195,7 +235,16 @@ async function toggleReminder(r: ReminderRule) {
 }
 
 async function removeReminder(r: ReminderRule) {
-  if (!confirm('删除这条提醒？')) return
+  const ok = await confirmDialog({
+    title: '删除这条提醒？',
+    message: r.title
+      ? `提醒 "${r.title}" 将被永久删除，对应的下次触发也会一并取消。`
+      : '这条提醒将被永久删除，对应的下次触发也会一并取消。',
+    confirmText: '删除',
+    cancelText: '取消',
+    danger: true,
+  })
+  if (!ok) return
   try {
     await remindersApi.remove(r.id)
     await data.loadReminders(props.todo.id)
@@ -291,27 +340,43 @@ const rrulePresets = [
         </div>
       </div>
 
-      <div class="row">
+      <!-- ============ 截止时间 / "无日期"锁定标识 ============
+           "无日期" 与 "日程任务" 互不串通；任务一旦创建为某种类型就不能跨过去。 -->
+      <template v-if="isNoDateTask">
         <div class="field">
-          <label>截止时间</label>
-          <div class="pretty-input-wrap">
-            <input v-model="dueAtLocal" class="pretty-input" type="datetime-local" />
-            <span class="pretty-input-glow" aria-hidden="true" />
+          <label>类型</label>
+          <div class="locked-no-date">
+            <span class="locked-no-date-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+                <line x1="6" y1="15" x2="18" y2="15"/>
+              </svg>
+            </span>
+            <div class="locked-no-date-text">
+              <strong>「无日期」任务</strong>
+              <span class="locked-no-date-desc">
+                这是一条无日期任务，不会出现在日程视图里。
+                "无日期" 与 "日程" 互不串通：如需把它安排进日程，请先删除再重建。
+              </span>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template v-else>
+        <div class="field">
+          <label>截止时间 <span class="required" title="日程任务必填">*</span></label>
+          <PrettyDateTimePicker v-model="dueAtLocal" :allow-clear="false" />
+          <div class="form-hint muted">
+            日程任务必须保留截止时间。
           </div>
         </div>
         <div class="field">
           <label>全天</label>
           <label class="field-inline" style="padding-top:8px"><input v-model="dueAllDay" type="checkbox" /> 全天任务</label>
         </div>
-      </div>
-
-      <!-- 时区不再在此处编辑：统一遵循"设置 → 时区"。 -->
-      <div class="muted tz-hint">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        时间按账号时区 <strong>{{ tz }}</strong> 解析。如需修改，请到「设置 → 时区」。
-      </div>
+      </template>
 
       <hr />
 
@@ -416,17 +481,11 @@ const rrulePresets = [
           </div>
           <div v-if="!effectiveRRule" class="field">
             <label>触发时间（单次）</label>
-            <div class="pretty-input-wrap">
-              <input v-model="remTriggerLocal" class="pretty-input" type="datetime-local" />
-              <span class="pretty-input-glow" aria-hidden="true" />
-            </div>
+            <PrettyDateTimePicker v-model="remTriggerLocal" />
           </div>
           <div v-else class="field">
             <label>起始时间（dtstart，周期从这里展开）</label>
-            <div class="pretty-input-wrap">
-              <input v-model="remDtstartLocal" class="pretty-input" type="datetime-local" />
-              <span class="pretty-input-glow" aria-hidden="true" />
-            </div>
+            <PrettyDateTimePicker v-model="remDtstartLocal" />
           </div>
           <div class="field">
             <label>通道</label>

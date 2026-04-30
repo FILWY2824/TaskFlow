@@ -6,9 +6,11 @@ import type { Todo, TodoFilterName } from '@/types'
 import { fromDatetimeLocal, isOverdue, toRFC3339 } from '@/utils'
 import TodoItem from '@/components/TodoItem.vue'
 import TodoEditDrawer from '@/components/TodoEditDrawer.vue'
+import PrettyDateTimePicker from '@/components/PrettyDateTimePicker.vue'
 import { ApiError, reminders as remindersApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { DEFAULT_TIMEZONE } from '@/timezones'
+import { confirmDialog } from '@/dialogs'
 
 const props = defineProps<{
   filter?: TodoFilterName
@@ -61,13 +63,21 @@ onMounted(async () => {
 })
 
 // 应用顶栏「状态筛选」: all / open / done / expired
+//
+// 关键修复: 「未完成」与「已过期」必须互斥 ——
+//   - open    = 未完成 AND 未过期（也即"还没到点的待办"）
+//   - expired = 未完成 AND 已过期（也即"已超时但仍未完成"）
+//   - done    = 已完成
+//   - all     = 不过滤
+// 把已过期错误地塞进未完成里是严重的语义错误：用户在「未完成」中本不该看到那些
+// 已经超过截止时间的事项，否则根本没法快速识别"哪些是还来得及做的"。
 function passStatus(t: Todo): boolean {
   switch (data.statusFilter) {
-    case 'open': return !t.is_completed
-    case 'done': return t.is_completed
+    case 'open':    return !t.is_completed && !isOverdue(t)
+    case 'done':    return t.is_completed
     case 'expired': return isOverdue(t)
     case 'all':
-    default: return true
+    default:        return true
   }
 }
 
@@ -75,9 +85,10 @@ const filteredTodos = computed(() => data.todos.filter(passStatus))
 
 const groupedTodos = computed(() => {
   const items = filteredTodos.value
-  const open = items.filter((t) => !t.is_completed)
+  const open = items.filter((t) => !t.is_completed && !isOverdue(t))
+  const overdue = items.filter((t) => !t.is_completed && isOverdue(t))
   const done = items.filter((t) => t.is_completed)
-  return { open, done }
+  return { open, overdue, done }
 })
 
 // =========== 新建任务对话框 ==============
@@ -239,7 +250,14 @@ async function submitAdd() {
 function open(t: Todo) { editing.value = t }
 
 async function remove(t: Todo) {
-  if (!confirm(`确认删除任务 "${t.title}"？`)) return
+  const ok = await confirmDialog({
+    title: '确认删除任务？',
+    message: `任务 "${t.title}" 将被永久删除，包括它下面的子任务和提醒规则。此操作无法撤销。`,
+    confirmText: '删除',
+    cancelText: '取消',
+    danger: true,
+  })
+  if (!ok) return
   try { await data.removeTodo(t.id) }
   catch (e) { errMsg.value = e instanceof ApiError ? e.message : (e as Error).message }
 }
@@ -311,15 +329,41 @@ const statusLabel = computed(() => {
     </div>
 
     <template v-else>
-      <TransitionGroup name="list" tag="div" class="todo-list">
-        <TodoItem
-          v-for="t in groupedTodos.open"
-          :key="t.id"
-          :todo="t"
-          @open="open"
-          @remove="remove"
-        />
-      </TransitionGroup>
+      <!-- 已超时未完成（仅在 statusFilter=all/open 时也合并显示，让用户更早注意） -->
+      <div v-if="groupedTodos.overdue.length > 0">
+        <div class="section-divider section-divider-warn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          已超时未完成 · {{ groupedTodos.overdue.length }}
+        </div>
+        <TransitionGroup name="list" tag="div" class="todo-list">
+          <TodoItem
+            v-for="t in groupedTodos.overdue"
+            :key="t.id"
+            :todo="t"
+            @open="open"
+            @remove="remove"
+          />
+        </TransitionGroup>
+      </div>
+
+      <div v-if="groupedTodos.open.length > 0">
+        <div v-if="groupedTodos.overdue.length > 0" class="section-divider">
+          待办（未到截止时间） · {{ groupedTodos.open.length }}
+        </div>
+        <TransitionGroup name="list" tag="div" class="todo-list">
+          <TodoItem
+            v-for="t in groupedTodos.open"
+            :key="t.id"
+            :todo="t"
+            @open="open"
+            @remove="remove"
+          />
+        </TransitionGroup>
+      </div>
+
       <div v-if="groupedTodos.done.length > 0">
         <div class="section-divider">已完成 · {{ groupedTodos.done.length }}</div>
         <TransitionGroup name="list" tag="div" class="todo-list">
@@ -486,16 +530,13 @@ const statusLabel = computed(() => {
                 <span v-if="filterGroup === 'schedule'" class="required">*</span>
                 <span v-else class="optional">可选</span>
               </label>
-              <div class="pretty-input-wrap pretty-date-wrap">
-                <svg class="pretty-date-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
-                <input v-model="addDueLocal" class="pretty-input pretty-date-input" type="datetime-local" />
-                <span class="pretty-input-glow" aria-hidden="true" />
-              </div>
-              <div class="form-hint muted">
-                时区跟随账号设置（可在「设置 → 时区」中修改）
-                <template v-if="filterGroup === 'schedule'"> · 日程任务必须设置时间</template>
+              <PrettyDateTimePicker
+                v-model="addDueLocal"
+                :allow-clear="filterGroup !== 'schedule'"
+                :placeholder="filterGroup === 'schedule' ? '日程任务必须设置时间' : '点此选择日期与时间'"
+              />
+              <div v-if="filterGroup === 'schedule'" class="form-hint muted">
+                · 日程任务必须设置时间
               </div>
             </div>
 

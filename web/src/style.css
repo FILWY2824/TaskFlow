@@ -1143,6 +1143,18 @@ body.on-calendar .content-inner {
   letter-spacing: 0.10em;
   text-transform: uppercase;
 }
+.section-divider-warn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px;
+  margin: 24px 4px 10px;
+  background: color-mix(in srgb, var(--tg-danger) 10%, transparent);
+  color: var(--tg-danger);
+  border: 1px solid color-mix(in srgb, var(--tg-danger) 28%, transparent);
+  border-radius: 999px;
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+.section-divider-warn svg { flex-shrink: 0; }
 
 /* ==========================================================================
  * 9. Drawer (任务编辑抽屉)
@@ -1222,6 +1234,40 @@ body.on-calendar .content-inner {
   font-size: 12px;
 }
 .tz-hint strong { color: var(--tg-info); font-weight: 700; }
+
+/* 「无日期」任务在编辑抽屉里展示的"已锁定类型"提示。
+ * 任务一旦创建为无日期就不能再加日期（反之亦然）；UI 上明确告诉用户这一点。 */
+.locked-no-date {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--tg-primary) 8%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--tg-primary) 28%, transparent);
+  border-radius: var(--tg-radius-md);
+}
+.locked-no-date-icon {
+  flex-shrink: 0;
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--tg-primary) 18%, transparent);
+  color: var(--tg-primary);
+  border-radius: var(--tg-radius-sm);
+}
+.locked-no-date-text {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.locked-no-date-text strong {
+  font-family: 'Sora', sans-serif;
+  font-size: 13.5px; font-weight: 700;
+  color: var(--tg-primary);
+  letter-spacing: -0.005em;
+}
+.locked-no-date-desc {
+  color: var(--tg-text-secondary);
+  font-size: 12.5px;
+}
 
 .row-flex { display: flex; align-items: center; gap: 8px; }
 .row-flex .spacer { flex: 1; }

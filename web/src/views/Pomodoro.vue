@@ -6,6 +6,8 @@ import { fmtDateTime, fmtDuration } from '@/utils'
 import { useDataStore } from '@/stores/data'
 import { usePrefsStore } from '@/stores/prefs'
 import { useNotificationsStore } from '@/stores/notifications'
+import { confirmDialog } from '@/dialogs'
+import { playPomodoroEnd } from '@/sound'
 
 const data = useDataStore()
 const prefs = usePrefsStore()
@@ -98,6 +100,8 @@ function startTick() {
       remaining.value = 0
       // 提醒
       ringNotify('🍅 番茄到点！', '专注时间已结束。')
+      // 清脆的"叮咚——叮咚"完成提示音（受用户偏好控制）
+      playPomodoroEnd({ muted: !prefs.pomodoroSound })
 
       if (prefs.pomodoroAutoComplete) {
         // 自动结束：以"设定时长"为准入库，actual=planned，状态=completed。
@@ -170,12 +174,20 @@ async function complete() {
     expiredHandled.value = false
     if (tickHandle.value) { window.clearInterval(tickHandle.value); tickHandle.value = null }
     recent.value.unshift(s)
+    // 手动结束番茄也响一声"叮咚——叮咚"
+    playPomodoroEnd({ muted: !prefs.pomodoroSound })
   } catch (e) { errMsg.value = e instanceof ApiError ? e.message : (e as Error).message }
 }
 
 async function abandon() {
   if (!session.value) return
-  if (!confirm('放弃当前番茄？这条会记为 abandoned。')) return
+  if (!(await confirmDialog({
+    title: '放弃当前番茄？',
+    message: '这条番茄会被记录为 "abandoned"（放弃），后续统计中也会保留。',
+    confirmText: '放弃',
+    cancelText: '继续专注',
+    danger: true,
+  }))) return
   try {
     const s = await pomoApi.abandon(session.value.id)
     session.value = null

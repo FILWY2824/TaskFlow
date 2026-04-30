@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { telegram as tgApi, ApiError } from '@/api'
 import type { TelegramBindToken, TelegramBinding, TelegramConfig } from '@/types'
 import { fmtDateTime } from '@/utils'
+import { confirmDialog } from '@/dialogs'
 
 const bindings = ref<TelegramBinding[]>([])
 const errMsg = ref('')
@@ -104,7 +105,14 @@ function cancelBind() {
 }
 
 async function unbind(id: number) {
-  if (!confirm('确认解绑这个 Telegram 账号？')) return
+  const yes = await confirmDialog({
+    title: '确认解绑这个 Telegram 账号？',
+    message: '解绑后将不再向该账号推送提醒。如需重新绑定，可以再次走绑定流程。',
+    confirmText: '解绑',
+    cancelText: '取消',
+    danger: true,
+  })
+  if (!yes) return
   try {
     await tgApi.unbind(id)
     await loadBindings()

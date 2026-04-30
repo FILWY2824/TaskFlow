@@ -7,6 +7,7 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { ApiError } from '@/api'
 import type { List } from '@/types'
 import { installTodoDueScheduler } from '@/scheduler'
+import { alertDialog, confirmDialog } from '@/dialogs'
 
 const auth = useAuthStore()
 const data = useDataStore()
@@ -163,14 +164,26 @@ async function submitList() {
   }
 }
 async function removeList(l: List) {
-  if (!confirm(`删除分类 "${l.name}"？\n该分类下的任务会自动归入「未分类」。`)) return
+  const ok = await confirmDialog({
+    title: `删除分类 "${l.name}"？`,
+    message: '该分类下的所有任务会自动归入「未分类」。分类本身将被永久删除。',
+    confirmText: '删除',
+    cancelText: '取消',
+    danger: true,
+  })
+  if (!ok) return
   try {
     await data.removeList(l.id)
     if (route.name === 'list' && Number(route.params.id) === l.id) {
       router.replace({ name: 'uncategorized' })
     }
   } catch (e) {
-    alert((e instanceof ApiError ? e.message : (e as Error).message) || '删除失败')
+    await alertDialog({
+      title: '删除失败',
+      message: (e instanceof ApiError ? e.message : (e as Error).message) || '删除失败',
+      confirmText: '知道了',
+      danger: true,
+    })
   }
 }
 

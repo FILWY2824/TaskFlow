@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { lists as listsApi, todos as todosApi, subtasks as subtasksApi, reminders as remindersApi } from '@/api'
 import type { List, ReminderRule, Subtask, Todo, TodoFilterName, TodoInput } from '@/types'
+import { playDing } from '@/sound'
 
 // 顶栏「完成状态」筛选：在已经按日期/分类过滤出的任务中再做一层客户端筛选。
 //   all      — 全部（默认）
@@ -88,10 +89,15 @@ export const useDataStore = defineStore('data', {
       return t
     },
     async toggleTodoComplete(t: Todo) {
-      const updated = t.is_completed
+      const wasCompleted = t.is_completed
+      const updated = wasCompleted
         ? await todosApi.uncomplete(t.id)
         : await todosApi.complete(t.id)
       this.replaceTodo(updated)
+      // 完成时（而不是"取消完成"时）播放清脆的"叮咚"提示音。
+      if (!wasCompleted && updated.is_completed) {
+        playDing()
+      }
       // 在 today/no_date 等过滤下,完成/取消完成会改变是否归属此过滤
       if (this.currentFilter.name !== 'completed' && this.currentFilter.name !== 'all') {
         if (updated.is_completed) {
@@ -123,12 +129,17 @@ export const useDataStore = defineStore('data', {
       this.subtasksByTodo[todoId] = arr
     },
     async toggleSubtask(s: Subtask) {
-      const updated = s.is_completed
+      const wasCompleted = s.is_completed
+      const updated = wasCompleted
         ? await subtasksApi.uncomplete(s.id)
         : await subtasksApi.complete(s.id)
       const arr = this.subtasksByTodo[s.todo_id] || []
       const i = arr.findIndex((x) => x.id === s.id)
       if (i >= 0) arr[i] = updated
+      // 完成子任务时同样响一声"叮咚"
+      if (!wasCompleted && updated.is_completed) {
+        playDing()
+      }
     },
     async updateSubtask(s: Subtask, title: string) {
       const updated = await subtasksApi.update(s.id, { title })

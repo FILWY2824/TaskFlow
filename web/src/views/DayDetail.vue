@@ -6,6 +6,8 @@ import { todos as todosApi, ApiError } from '@/api'
 import { fmtTime, isOverdue, PRIORITY_LABELS, toRFC3339 } from '@/utils'
 import { useDataStore } from '@/stores/data'
 import TodoEditDrawer from '@/components/TodoEditDrawer.vue'
+import PrettyTimePicker from '@/components/PrettyTimePicker.vue'
+import { confirmDialog } from '@/dialogs'
 
 const props = defineProps<{
   date: string  // 形如 YYYY-MM-DD（来自路由 params）
@@ -141,7 +143,14 @@ async function toggleDone(t: Todo, e: Event) {
 
 // ========== 删除 ==========
 async function remove(t: Todo) {
-  if (!confirm(`确认删除任务 "${t.title}"？`)) return
+  const ok = await confirmDialog({
+    title: '确认删除任务？',
+    message: `任务 "${t.title}" 将被永久删除，包括它下面的子任务和提醒规则。此操作无法撤销。`,
+    confirmText: '删除',
+    cancelText: '取消',
+    danger: true,
+  })
+  if (!ok) return
   try {
     await todosApi.remove(t.id)
     items.value = items.value.filter((x) => x.id !== t.id)
@@ -221,10 +230,21 @@ async function submitAdd() {
   }
 }
 
-// ESC 关闭对话框
+// ESC 关闭对话框 / N 快速新建任务（与 Tasks.vue 一致的快捷键体验）
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape' && showAddDialog.value) {
     showAddDialog.value = false
+    return
+  }
+  // 在弹窗 / 编辑抽屉打开时不触发
+  if (showAddDialog.value || editing.value) return
+  // 处于输入控件时不抢键
+  const tag = (e.target as HTMLElement)?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+  if ((e.target as HTMLElement)?.isContentEditable) return
+  if (e.key === 'n' || e.key === 'N') {
+    e.preventDefault()
+    openAdd()
   }
 }
 onMounted(() => window.addEventListener('keydown', onKey))
@@ -260,14 +280,21 @@ function shiftDay(delta: number) {
 
 <template>
   <div class="day-page">
-    <!-- ============ 头部：返回 + 大日期 + 进度条 ============ -->
+    <!-- ============ 顶部清晰的"返回日历"链路（独占一行） ============ -->
+    <button class="day-back-link" @click="backToCalendar">
+      <span class="day-back-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+             stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </span>
+      <span class="day-back-text">返回日历</span>
+    </button>
+
+    <!-- ============ 头部：大日期 + 进度条 + 上/下一日 ============ -->
     <header class="day-hero" :class="{ 'is-today': isToday, 'is-past': isPast }">
       <div class="day-hero-row">
-        <button class="btn-icon back-btn" @click="backToCalendar" title="返回日历">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
-        </button>
         <div class="day-hero-main">
           <div class="day-hero-meta">
             {{ dayDow }}
@@ -316,9 +343,9 @@ function shiftDay(delta: number) {
 
     <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
 
-    <!-- ============ 顶部分类筛选 ============ -->
+    <!-- ============ 顶部分类筛选（横向滚动；分类多时不再撑开） ============ -->
     <div class="day-filter-row">
-      <div class="day-filter-chips">
+      <div class="day-filter-chips" role="tablist">
         <button
           class="filter-chip"
           :class="{ 'is-active': filterKey === 'all' }"
@@ -350,12 +377,15 @@ function shiftDay(delta: number) {
           <span class="chip-count">{{ items.filter(t => t.list_id === l.id).length }}</span>
         </button>
       </div>
-      <button class="btn-primary day-add-btn" @click="openAdd">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-        新增任务
-      </button>
+      <div class="day-filter-actions">
+        <button class="btn-primary day-add-btn" @click="openAdd">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          新增任务
+        </button>
+        <span class="day-add-hint muted">按 <kbd>N</kbd> 也可快速新建</span>
+      </div>
     </div>
 
     <!-- ============ 任务列表 ============ -->
@@ -626,10 +656,11 @@ function shiftDay(delta: number) {
 
             <div class="form-field">
               <label>时间（可选）</label>
-              <div class="pretty-input-wrap">
-                <input v-model="addTimeLocal" class="pretty-input" type="time" />
-                <span class="pretty-input-glow" aria-hidden="true" />
-              </div>
+              <PrettyTimePicker
+                v-model="addTimeLocal"
+                placeholder="选择时间，不填则默认 23:59"
+                default-time="23:59"
+              />
               <div class="form-hint muted">不填则默认为当天 23:59</div>
             </div>
           </div>
@@ -650,6 +681,57 @@ function shiftDay(delta: number) {
 .day-page {
   position: relative;
   padding-bottom: 60px;
+}
+
+/* ============ 返回日历 链路（独占一行，区别于 "前一天" 按钮） ============
+ *
+ * 之前的设计把"返回"做成一个仅有"<"图标的圆形按钮，又紧挨"前一天/后一天"两个
+ * 同样是"<" / ">" 图标的按钮，几乎所有用户都会把它误认为"再前一天"。这里把"返回"
+ * 单独提到 hero 之外、做成"<- 返回日历" 文字链路：
+ *   1) 图标改成长箭头 (←)，与"前一天"用的 chevron (<) 视觉上彻底区别开；
+ *   2) 增加文字"返回日历"，让目的地非常明确；
+ *   3) 横向布局占据一整行，hover 时高亮，是一个常见的面包屑/返回模式；
+ *   4) "前一天/后一天"两个按钮单独留在 hero 右上角的导航组里，不再混淆。
+ */
+.day-back-link {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-bottom: 14px;
+  padding: 7px 14px 7px 10px;
+  background: var(--tg-bg-elev);
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-pill);
+  color: var(--tg-text-secondary);
+  font-family: 'Sora', sans-serif;
+  font-size: 13px; font-weight: 700;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  box-shadow: var(--tg-shadow-xs);
+  transition: all var(--tg-trans-fast);
+}
+.day-back-link:hover {
+  background: color-mix(in srgb, var(--tg-primary) 8%, var(--tg-bg-elev));
+  border-color: color-mix(in srgb, var(--tg-primary) 35%, var(--tg-divider));
+  color: var(--tg-primary);
+  transform: translateX(-2px);
+  box-shadow: var(--tg-shadow-sm);
+}
+.day-back-link:active { transform: translateX(0) scale(0.98); }
+.day-back-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--tg-grad-brand-soft);
+  color: var(--tg-primary);
+  transition: transform var(--tg-trans-fast);
+}
+.day-back-link:hover .day-back-icon {
+  background: var(--tg-grad-brand);
+  color: var(--tg-on-primary);
+  transform: translateX(-2px);
+}
+.day-back-icon svg { width: 13px; height: 13px; }
+.day-back-text {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ============ Hero ============ */
@@ -684,11 +766,6 @@ function shiftDay(delta: number) {
 .day-hero-row {
   position: relative; z-index: 1;
   display: flex; align-items: center; gap: 12px;
-}
-.back-btn {
-  width: 36px; height: 36px;
-  flex-shrink: 0;
-  border-radius: var(--tg-radius-pill);
 }
 .day-hero-main { flex: 1; min-width: 0; }
 .day-hero-meta {
@@ -783,17 +860,37 @@ function shiftDay(delta: number) {
   min-width: 38px; text-align: right;
 }
 
-/* ============ filter row ============ */
+/* ============ filter row ============
+ *
+ * 之前 .day-filter-chips 用 flex-wrap 换行，分类一多就会撑得很高、把"新增任务"按钮
+ * 顶到下一行，整个布局看起来很乱。这里改成"横向单行滚动"：
+ *   - 分类区只占一行，超出时横向滚动，左/右两侧用渐变羽化暗示"还有更多"；
+ *   - 移除滚动条样式但仍可滑动；
+ *   - "新增任务" 按钮固定在右侧，不再被分类区挤动。
+ */
 .day-filter-row {
   display: flex; align-items: center; gap: 12px;
-  flex-wrap: wrap;
   margin-bottom: 16px;
+  /* 不再 flex-wrap：分类自己滚动；按钮永远在右 */
 }
 .day-filter-chips {
-  flex: 1;
-  display: flex; flex-wrap: wrap; gap: 6px;
+  flex: 1; min-width: 0;
+  display: flex; gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 16px 6px 2px;       /* 让 active chip 的阴影不被裁掉 */
+  scroll-behavior: smooth;
+  scrollbar-width: none;            /* Firefox */
+  -ms-overflow-style: none;         /* IE */
+  /* 左右两端的羽化遮罩，提示"还有更多" */
+  mask-image: linear-gradient(90deg,
+    transparent 0%, #000 12px, #000 calc(100% - 16px), transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg,
+    transparent 0%, #000 12px, #000 calc(100% - 16px), transparent 100%);
 }
+.day-filter-chips::-webkit-scrollbar { display: none; }
 .filter-chip {
+  flex-shrink: 0;                   /* 不被压缩；超出就横滚 */
   --cat-color: var(--tg-primary);
   display: inline-flex; align-items: center; gap: 6px;
   padding: 7px 12px;
@@ -846,11 +943,30 @@ function shiftDay(delta: number) {
   color: var(--tg-on-primary);
 }
 
+.day-filter-actions {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  flex-shrink: 0;
+}
 .day-add-btn {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 9px 16px;
   font-size: 13.5px;
   white-space: nowrap;
+}
+.day-add-hint {
+  font-size: 11.5px;
+}
+.day-add-hint kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  background: var(--tg-bg-elev);
+  border: 1px solid var(--tg-divider-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; font-weight: 600;
+  color: var(--tg-text-secondary);
+  line-height: 1;
 }
 
 /* ============ sections / items ============ */
@@ -1080,6 +1196,9 @@ function shiftDay(delta: number) {
   .day-stat .num { font-size: 18px; }
   .day-progress { min-width: 0; }
   .item-actions { opacity: 1; transform: translateX(0); }
-  .day-add-btn { width: 100%; }
+  .day-add-btn { width: auto; }
+  .day-add-hint { display: none; }
+  .day-filter-actions { align-items: stretch; }
+  .day-back-link { padding: 6px 12px 6px 8px; font-size: 12.5px; }
 }
 </style>
