@@ -652,18 +652,22 @@ button { cursor: pointer; }
 .btn-secondary {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 10px 18px;
-  background: var(--tg-bg-elev);
-  color: var(--tg-text);
+  /* 比"白底+近黑字"明显更亮:浅紫色背景 + 品牌主色文字。 */
+  background: color-mix(in srgb, var(--tg-primary) 8%, var(--tg-bg-elev));
+  color: var(--tg-primary);
   font-weight: 600; font-size: 14px;
-  border: 1.5px solid var(--tg-divider);
+  border: 1.5px solid color-mix(in srgb, var(--tg-primary) 28%, var(--tg-divider));
   border-radius: var(--tg-radius-sm);
   transition: border-color var(--tg-trans-fast), background var(--tg-trans-fast),
-              color var(--tg-trans-fast);
+              color var(--tg-trans-fast), transform var(--tg-trans-fast),
+              box-shadow var(--tg-trans-fast);
 }
 .btn-secondary:hover:not(:disabled) {
   border-color: var(--tg-primary);
-  color: var(--tg-primary);
-  background: var(--tg-primary-soft);
+  color: var(--tg-on-primary);
+  background: var(--tg-grad-brand);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--tg-primary) 50%, transparent);
 }
 .btn-secondary:disabled { opacity: 0.55; cursor: not-allowed; }
 
@@ -671,12 +675,16 @@ button { cursor: pointer; }
   display: inline-flex; align-items: center; justify-content: center; gap: 4px;
   padding: 7px 12px;
   background: transparent;
-  color: var(--tg-text-secondary);
-  font-weight: 500; font-size: 13px;
+  /* 用品牌主色而非"近黑灰" —— 更轻盈、更亮。 */
+  color: var(--tg-primary);
+  font-weight: 600; font-size: 13px;
   border: none; border-radius: var(--tg-radius-sm);
   transition: background var(--tg-trans-fast), color var(--tg-trans-fast);
 }
-.btn-ghost:hover:not(:disabled) { background: var(--tg-hover); color: var(--tg-text); }
+.btn-ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tg-primary) 12%, transparent);
+  color: var(--tg-primary-hover);
+}
 
 .btn-danger { color: var(--tg-danger); }
 .btn-danger:hover:not(:disabled) { background: var(--tg-danger-soft); color: var(--tg-danger); }
@@ -685,13 +693,15 @@ button { cursor: pointer; }
   display: inline-flex; align-items: center; justify-content: center;
   width: 36px; height: 36px;
   background: transparent;
-  color: var(--tg-text-secondary);
+  /* 同样替换近黑色为品牌主色,整体更明亮。 */
+  color: var(--tg-primary);
   border: none; border-radius: var(--tg-radius-sm);
   transition: background var(--tg-trans-fast), color var(--tg-trans-fast),
               transform var(--tg-trans-fast);
 }
 .btn-icon:hover:not(:disabled) {
-  background: var(--tg-hover); color: var(--tg-text);
+  background: color-mix(in srgb, var(--tg-primary) 12%, transparent);
+  color: var(--tg-primary-hover);
   transform: scale(1.05);
 }
 .btn-icon:active:not(:disabled) { transform: scale(0.96); }
@@ -979,7 +989,8 @@ body.on-calendar .content-inner {
 .segment-control button {
   padding: 7px 18px;
   background: transparent;
-  color: var(--tg-text-secondary);
+  /* 比 secondary text 更明亮：直接用主色的 70% 混合，让"未选中"也保持鲜活。 */
+  color: color-mix(in srgb, var(--tg-primary) 75%, var(--tg-text-secondary));
   font-weight: 600; font-size: 13.5px;
   border: none; border-radius: var(--tg-radius-pill);
   white-space: nowrap;

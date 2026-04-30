@@ -35,6 +35,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'calendar', name: 'calendar', component: () => import('@/views/Calendar.vue') },
       { path: 'day/:date', name: 'day', component: () => import('@/views/DayDetail.vue'), props: true },
       { path: 'pomodoro', name: 'pomodoro', component: () => import('@/views/Pomodoro.vue') },
+      { path: 'pomodoro/history', name: 'pomodoro-history', component: () => import('@/views/PomodoroHistory.vue') },
       { path: 'stats', name: 'stats', component: () => import('@/views/Stats.vue') },
       { path: 'notifications', name: 'notifications', component: () => import('@/views/NotificationsView.vue') },
       { path: 'telegram', name: 'telegram', component: () => import('@/views/Telegram.vue') },

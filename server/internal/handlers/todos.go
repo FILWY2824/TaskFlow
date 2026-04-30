@@ -81,7 +81,7 @@ func (req *todoRequest) toInput() store.TodoInput {
 // Query 参数:
 //
 //	filter      = today | tomorrow | this_week | recent_week | recent_month |
-//	              overdue | no_date | no_list | completed | all
+//	              overdue | no_date | no_list | completed | scheduled | all
 //	list_id     = int
 //	due_on      = YYYY-MM-DD（按用户时区取该日的 [00:00, 24:00) 区间）
 //	search      = string
@@ -187,10 +187,13 @@ func applyFilterShortcut(f *store.TodoFilter, name, tzName string, now time.Time
 	}
 	switch name {
 	case "today":
+		// 今日 = 截止于今日及之前 + 仍未完成（包括过往逾期未做的任务，避免遗漏）。
+		// 也就是: due_at < 明日零点 AND (due_at >= 今日零点 OR is_completed = 0)
 		s := startOfDay(now)
 		e := s.Add(24 * time.Hour)
 		f.DueAfter = &s
 		f.DueBefore = &e
+		f.IncludePastIncomplete = true
 	case "tomorrow":
 		s := startOfDay(now).Add(24 * time.Hour)
 		e := s.Add(24 * time.Hour)
@@ -205,18 +208,21 @@ func applyFilterShortcut(f *store.TodoFilter, name, tzName string, now time.Time
 		e := s.AddDate(0, 0, 7)
 		f.DueAfter = &s
 		f.DueBefore = &e
+		f.IncludePastIncomplete = true
 	case "recent_week":
-		// 「近一周」：今日起未来 7 天滚动窗口（含今日）
+		// 「近一周」：今日起未来 7 天滚动窗口（含今日）+ 过往未完成
 		s := startOfDay(now)
 		e := s.AddDate(0, 0, 7)
 		f.DueAfter = &s
 		f.DueBefore = &e
+		f.IncludePastIncomplete = true
 	case "recent_month":
-		// 「近一个月」：今日起未来 30 天滚动窗口（含今日）
+		// 「近一个月」：今日起未来 30 天滚动窗口（含今日）+ 过往未完成
 		s := startOfDay(now)
 		e := s.AddDate(0, 0, 30)
 		f.DueAfter = &s
 		f.DueBefore = &e
+		f.IncludePastIncomplete = true
 	case "overdue":
 		nUTC := now.UTC()
 		f.DueBefore = &nUTC
@@ -231,6 +237,16 @@ func applyFilterShortcut(f *store.TodoFilter, name, tzName string, now time.Time
 		t := true
 		f.IsCompleted = &t
 		f.IncludeDone = true
+	case "scheduled":
+		// 「日程·全部」：所有"有日期"的任务（无日期任务严格不出现在日程里）。
+		// 包含已完成；客户端可以再用 status 筛选缩到"未完成 / 已过期 / 全部"。
+		f.IncludeDone = true
+		// 通过一个不可能匹配的 NoDueDate=false + 一个非常早的 DueAfter,
+		// 让 due_at IS NULL 的记录被排除。这里直接用零年作为下界。
+		zero := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+		far := time.Date(2999, 1, 1, 0, 0, 0, 0, time.UTC)
+		f.DueAfter = &zero
+		f.DueBefore = &far
 	case "all":
 		f.IncludeDone = true
 	default:

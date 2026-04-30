@@ -34,7 +34,12 @@ watch(
 )
 
 const activeFilter = computed<TodoFilterName>(() => {
-  if (props.filterGroup) return currentFilter.value
+  if (props.filterGroup === 'schedule') {
+    // 「日程·全部」严格只显示"有日期"的任务，与「无日期」视图互斥。
+    // 服务端用专门的 'scheduled' 过滤器返回所有 due_at IS NOT NULL 的任务（含已完成）。
+    if (currentFilter.value === 'all') return 'scheduled'
+    return currentFilter.value
+  }
   return props.filter || 'today'
 })
 
@@ -81,7 +86,20 @@ function passStatus(t: Todo): boolean {
   }
 }
 
-const filteredTodos = computed(() => data.todos.filter(passStatus))
+const filteredTodos = computed(() => {
+  let arr = data.todos
+  // 双保险: 「日程」分组下的任意 tab（今日 / 明天 / 本周 / 近一周 / 近一个月 / 全部）
+  // 都不允许显示 due_at 为空的任务 —— 它们是「无日期」视图的专属。即使后端意外
+  // 漏放了一条无日期记录进来,这里也会过滤掉。
+  if (props.filterGroup === 'schedule') {
+    arr = arr.filter((t) => !!t.due_at)
+  }
+  // 反向: 「无日期」视图下,绝不能出现任何带日期的任务
+  if (activeFilter.value === 'no_date') {
+    arr = arr.filter((t) => !t.due_at)
+  }
+  return arr.filter(passStatus)
+})
 
 const groupedTodos = computed(() => {
   const items = filteredTodos.value
@@ -414,7 +432,7 @@ const statusLabel = computed(() => {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
-              「无日期」任务只用于"想做但没排期"的事项；不会出现在日程里，需要排期时进入任务后再补上时间即可。
+              「无日期」任务专用于"想做但没排期"的事项，与日程视图完全隔离 —— 它不会出现在「日程」里，也无法选择时间。一旦创建后将无法再添加日期；如需安排进日程，请删除后到「日程」中重建。
             </div>
 
             <!-- ============ 标题：自定义漂亮输入框 ============ -->

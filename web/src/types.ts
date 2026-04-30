@@ -282,4 +282,5 @@ export type TodoFilterName =
   | 'no_date'
   | 'no_list'       // 未分类（list_id IS NULL）
   | 'completed'
+  | 'scheduled'     // 日程·全部：所有"有日期"的任务（包含已完成；不包含无日期）
   | 'all'

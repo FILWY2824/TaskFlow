@@ -266,6 +266,72 @@ function scrollWheelsToSelected() {
   })
 }
 
+// ---------- 滚轮"软滚"防过冲 ----------
+//
+// 用户痛点: 在分钟盘上稍微一滑，惯性会带过去好几个 5 分钟档，导致很难
+// 精确停在想要的值上。修复思路:
+//   1. 监听 scroll 事件,在停下时(scrollend / 一段防抖延迟)读取容器
+//      的 scrollTop, 反推用户实际"停"在了哪个 item, 然后写回 selected
+//      并平滑对齐到正中。
+//   2. 不主动节流滚动事件 —— 让 CSS 的 scroll-snap 先做粗对齐,
+//      JS 只负责把状态同步到 selected。
+const HOUR_STEP_PX = 36
+let hourScrollTimer: number | null = null
+let minuteScrollTimer: number | null = null
+function onHourScroll() {
+  if (!hourListRef.value) return
+  if (hourScrollTimer) window.clearTimeout(hourScrollTimer)
+  hourScrollTimer = window.setTimeout(() => {
+    if (!hourListRef.value) return
+    const idx = Math.round(hourListRef.value.scrollTop / HOUR_STEP_PX)
+    const h = Math.max(0, Math.min(23, idx))
+    if (h !== selectedHour.value) {
+      selectedHour.value = h
+      if (selectedDate.value) commit()
+    }
+    // 对齐到正中, 避免 scroll-snap 在一些浏览器上"差一个像素"
+    const target = h * HOUR_STEP_PX
+    if (Math.abs(hourListRef.value.scrollTop - target) > 1) {
+      hourListRef.value.scrollTo({ top: target, behavior: 'smooth' })
+    }
+  }, 120)
+}
+function onMinuteScroll() {
+  if (!minuteListRef.value) return
+  if (minuteScrollTimer) window.clearTimeout(minuteScrollTimer)
+  minuteScrollTimer = window.setTimeout(() => {
+    if (!minuteListRef.value) return
+    const idx = Math.round(minuteListRef.value.scrollTop / HOUR_STEP_PX)
+    const clampedIdx = Math.max(0, Math.min(11, idx))
+    const m = clampedIdx * 5
+    if (m !== selectedMinute.value) {
+      selectedMinute.value = m
+      if (selectedDate.value) commit()
+    }
+    const target = clampedIdx * HOUR_STEP_PX
+    if (Math.abs(minuteListRef.value.scrollTop - target) > 1) {
+      minuteListRef.value.scrollTo({ top: target, behavior: 'smooth' })
+    }
+  }, 120)
+}
+
+// 直接 +/- 一个 5 分钟档；专门为"我只想动一下"的场景设计
+function stepMinute(delta: 1 | -1) {
+  let idx = Math.round(selectedMinute.value / 5) + delta
+  let h = selectedHour.value
+  if (idx >= 12) { idx = 0; h = (h + 1) % 24 }
+  if (idx < 0)  { idx = 11; h = (h + 23) % 24 }
+  selectedMinute.value = idx * 5
+  selectedHour.value = h
+  if (selectedDate.value) commit()
+  scrollWheelsToSelected()
+}
+function stepHour(delta: 1 | -1) {
+  selectedHour.value = (selectedHour.value + delta + 24) % 24
+  if (selectedDate.value) commit()
+  scrollWheelsToSelected()
+}
+
 // ---------- 快捷预设 ----------
 function presetToday(hh: number, mm: number) {
   const t = new Date()
@@ -406,102 +472,131 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <!-- 中部：日历 -->
-        <div class="pdt-cal">
-          <div class="pdt-cal-head">
-            <button class="pdt-cal-nav" type="button" @click="prevMonth" aria-label="上个月">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="15 18 9 12 15 6"/>
-              </svg>
-            </button>
-            <button class="pdt-cal-title" type="button" @click="jumpToday" title="回到本月">
-              {{ monthLabel }}
-            </button>
-            <button class="pdt-cal-nav" type="button" @click="nextMonth" aria-label="下个月">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="9 18 15 12 9 6"/>
-              </svg>
-            </button>
-          </div>
-          <div class="pdt-cal-dows">
-            <span v-for="(w, i) in dows" :key="i" :class="{ 'is-weekend': i >= 5 }">
-              {{ w }}
-            </span>
-          </div>
-          <div class="pdt-cal-grid">
-            <button
-              v-for="(d, i) in cells"
-              :key="i"
-              type="button"
-              class="pdt-cal-cell"
-              :class="{
-                'is-out': !inBrowseMonth(d),
-                'is-today': isToday(d),
-                'is-selected': isSelected(d),
-                'is-weekend': isWeekend(d),
-              }"
-              @click="pickDay(d)"
-            >{{ d.getDate() }}</button>
-          </div>
-        </div>
-
-        <!-- 时间区域 -->
-        <div class="pdt-time">
-          <div class="pdt-time-head">
-            <span class="pdt-time-title">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <polyline points="12 6 12 12 16 14"/>
-              </svg>
-              时间
-            </span>
-            <div class="pdt-time-quick">
-              <button type="button" @click="shiftMinutes(-60)">-1h</button>
-              <button type="button" @click="shiftMinutes(-15)">-15m</button>
-              <button type="button" @click="shiftMinutes(15)">+15m</button>
-              <button type="button" @click="shiftMinutes(60)">+1h</button>
+        <!-- 主体: 日历(左) + 时间(右) 两列布局 -->
+        <div class="pdt-main">
+          <!-- 左侧: 日历 -->
+          <div class="pdt-cal">
+            <div class="pdt-cal-head">
+              <button class="pdt-cal-nav" type="button" @click="prevMonth" aria-label="上个月">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+              </button>
+              <button class="pdt-cal-title" type="button" @click="jumpToday" title="回到本月">
+                {{ monthLabel }}
+              </button>
+              <button class="pdt-cal-nav" type="button" @click="nextMonth" aria-label="下个月">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </button>
+            </div>
+            <div class="pdt-cal-dows">
+              <span v-for="(w, i) in dows" :key="i" :class="{ 'is-weekend': i >= 5 }">
+                {{ w }}
+              </span>
+            </div>
+            <div class="pdt-cal-grid">
+              <button
+                v-for="(d, i) in cells"
+                :key="i"
+                type="button"
+                class="pdt-cal-cell"
+                :class="{
+                  'is-out': !inBrowseMonth(d),
+                  'is-today': isToday(d),
+                  'is-selected': isSelected(d),
+                  'is-weekend': isWeekend(d),
+                }"
+                @click="pickDay(d)"
+              >{{ d.getDate() }}</button>
             </div>
           </div>
 
-          <div class="pdt-wheels">
-            <!-- 小时 -->
-            <div class="pdt-wheel">
-              <div class="pdt-wheel-band" aria-hidden="true" />
-              <div ref="hourListRef" class="pdt-wheel-list">
-                <div class="pdt-wheel-pad" />
-                <div
-                  v-for="h in hours"
-                  :key="`h-${h}`"
-                  class="pdt-wheel-item"
-                  :class="{ 'is-selected': h === selectedHour }"
-                  @click="pickHour(h)"
-                >
-                  {{ String(h).padStart(2, '0') }}
-                </div>
-                <div class="pdt-wheel-pad" />
+          <!-- 右侧: 时间 -->
+          <div class="pdt-time">
+            <div class="pdt-time-head">
+              <span class="pdt-time-title">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                时间
+              </span>
+            </div>
+
+            <!-- 大字号显示当前时间 -->
+            <div class="pdt-time-display">
+              <span class="pdt-time-value">{{ String(selectedHour).padStart(2, '0') }}</span>
+              <span class="pdt-time-colon">:</span>
+              <span class="pdt-time-value">{{ String(selectedMinute).padStart(2, '0') }}</span>
+            </div>
+
+            <!-- 步进按钮 (单击精确 ±5 分钟 / ±1 小时) -->
+            <div class="pdt-step-row">
+              <div class="pdt-step-group">
+                <button type="button" class="pdt-step-btn" title="-1 小时" @click="stepHour(-1)">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <span class="pdt-step-label">小时</span>
+                <button type="button" class="pdt-step-btn" title="+1 小时" @click="stepHour(1)">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+              </div>
+              <div class="pdt-step-group">
+                <button type="button" class="pdt-step-btn" title="-5 分钟" @click="stepMinute(-1)">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <span class="pdt-step-label">5 分</span>
+                <button type="button" class="pdt-step-btn" title="+5 分钟" @click="stepMinute(1)">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
               </div>
             </div>
-            <span class="pdt-wheel-sep">:</span>
-            <!-- 分钟 -->
-            <div class="pdt-wheel">
-              <div class="pdt-wheel-band" aria-hidden="true" />
-              <div ref="minuteListRef" class="pdt-wheel-list">
-                <div class="pdt-wheel-pad" />
-                <div
-                  v-for="m in minutes"
-                  :key="`m-${m}`"
-                  class="pdt-wheel-item"
-                  :class="{ 'is-selected': m === selectedMinute }"
-                  @click="pickMinute(m)"
-                >
-                  {{ String(m).padStart(2, '0') }}
+
+            <!-- 滚轮 (拖滑选择) -->
+            <div class="pdt-wheels">
+              <!-- 小时 -->
+              <div class="pdt-wheel">
+                <div class="pdt-wheel-band" aria-hidden="true" />
+                <div ref="hourListRef" class="pdt-wheel-list" @scroll.passive="onHourScroll">
+                  <div class="pdt-wheel-pad" />
+                  <div
+                    v-for="h in hours"
+                    :key="`h-${h}`"
+                    class="pdt-wheel-item"
+                    :class="{ 'is-selected': h === selectedHour }"
+                    @click="pickHour(h)"
+                  >
+                    {{ String(h).padStart(2, '0') }}
+                  </div>
+                  <div class="pdt-wheel-pad" />
                 </div>
-                <div class="pdt-wheel-pad" />
+              </div>
+              <span class="pdt-wheel-sep">:</span>
+              <!-- 分钟 -->
+              <div class="pdt-wheel">
+                <div class="pdt-wheel-band" aria-hidden="true" />
+                <div ref="minuteListRef" class="pdt-wheel-list" @scroll.passive="onMinuteScroll">
+                  <div class="pdt-wheel-pad" />
+                  <div
+                    v-for="m in minutes"
+                    :key="`m-${m}`"
+                    class="pdt-wheel-item"
+                    :class="{ 'is-selected': m === selectedMinute }"
+                    @click="pickMinute(m)"
+                  >
+                    {{ String(m).padStart(2, '0') }}
+                  </div>
+                  <div class="pdt-wheel-pad" />
+                </div>
               </div>
             </div>
+
+            <div class="pdt-wheel-hint">滑动滚轮 · 单击数字 · 或点上方步进按钮</div>
           </div>
         </div>
 
@@ -619,7 +714,7 @@ onBeforeUnmount(() => {
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  width: 340px;
+  width: 620px;
   max-width: calc(100vw - 32px);
   z-index: 800;
   background: var(--tg-bg-elev);
@@ -630,6 +725,17 @@ onBeforeUnmount(() => {
     0 12px 36px -8px rgba(15, 23, 42, 0.14),
     0 0 0 1px rgba(99, 102, 241, 0.06) inset;
   overflow: hidden;
+}
+
+/* ===== 主体: 日历(左) + 时间(右) ===== */
+.pdt-main {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(220px, auto);
+  gap: 0;
+}
+.pdt-main > .pdt-time {
+  border-top: none;
+  border-left: 1px solid var(--tg-divider);
 }
 
 /* ===== 快捷预设 ===== */
@@ -773,11 +879,13 @@ onBeforeUnmount(() => {
 /* ===== 时间区 ===== */
 .pdt-time {
   border-top: 1px solid var(--tg-divider);
-  padding: 12px 12px 6px;
+  padding: 12px 14px 10px;
+  display: flex;
+  flex-direction: column;
 }
 .pdt-time-head {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 .pdt-time-title {
   display: inline-flex; align-items: center; gap: 5px;
@@ -788,40 +896,87 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
 }
 .pdt-time-title svg { color: var(--tg-primary); }
-.pdt-time-quick {
-  display: flex; gap: 3px;
+
+/* 大字号当前值 */
+.pdt-time-display {
+  display: flex; align-items: baseline; justify-content: center;
+  gap: 4px;
+  padding: 6px 0 4px;
+  font-family: 'Sora', sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
-.pdt-time-quick button {
-  appearance: none;
-  padding: 3px 7px;
+.pdt-time-value {
+  font-size: 26px; font-weight: 800;
+  color: var(--tg-primary);
+  background: color-mix(in srgb, var(--tg-primary) 8%, transparent);
+  padding: 2px 10px;
+  border-radius: 8px;
+  min-width: 56px; text-align: center;
+}
+.pdt-time-colon {
+  font-size: 24px; font-weight: 800;
+  color: var(--tg-text-secondary);
+}
+
+/* 步进按钮组 */
+.pdt-step-row {
+  display: flex; gap: 8px; justify-content: center;
+  margin: 6px 0 8px;
+}
+.pdt-step-group {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px;
   background: var(--tg-hover);
   border: 1px solid var(--tg-divider);
-  border-radius: var(--tg-radius-pill);
-  font-family: 'Manrope', sans-serif;
-  font-size: 10.5px; font-weight: 700;
-  color: var(--tg-text-secondary);
+  border-radius: 999px;
+}
+.pdt-step-btn {
+  appearance: none;
+  width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--tg-bg-elev);
+  border: 1px solid var(--tg-divider);
+  border-radius: 50%;
+  color: var(--tg-primary);
   cursor: pointer;
   transition: all var(--tg-trans-fast);
-  font-variant-numeric: tabular-nums;
 }
-.pdt-time-quick button:hover {
-  background: color-mix(in srgb, var(--tg-primary) 12%, transparent);
-  color: var(--tg-primary);
-  border-color: color-mix(in srgb, var(--tg-primary) 35%, transparent);
+.pdt-step-btn:hover {
+  background: var(--tg-primary);
+  color: var(--tg-on-primary);
+  border-color: var(--tg-primary);
+  transform: scale(1.06);
+}
+.pdt-step-btn:active { transform: scale(0.94); }
+.pdt-step-label {
+  font-family: 'Sora', sans-serif;
+  font-size: 11px; font-weight: 700;
+  color: var(--tg-text-secondary);
+  padding: 0 4px;
+  letter-spacing: 0.04em;
 }
 
 /* ===== 滚轮 ===== */
 .pdt-wheels {
   display: flex; align-items: center; justify-content: center;
-  gap: 12px;
+  gap: 10px;
   padding: 4px 0 0;
 }
 .pdt-wheel {
   position: relative;
-  width: 64px; height: 144px;  /* 4 * 36 */
+  width: 70px; height: 144px;  /* 4 * 36 */
   border-radius: var(--tg-radius-md);
   background: var(--tg-hover);
   overflow: hidden;
+}
+.pdt-wheel-hint {
+  font-size: 10.5px;
+  color: var(--tg-text-tertiary);
+  text-align: center;
+  margin-top: 8px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 .pdt-wheel-band {
   position: absolute;
@@ -940,6 +1095,18 @@ onBeforeUnmount(() => {
 }
 
 /* ===== 移动端优化 ===== */
+@media (max-width: 720px) {
+  /* 两列变一列：日历在上、时间在下，便于在窄屏单手操作 */
+  .pdt-pop { width: 380px; }
+  .pdt-main {
+    grid-template-columns: 1fr;
+  }
+  .pdt-main > .pdt-time {
+    border-left: none;
+    border-top: 1px solid var(--tg-divider);
+  }
+}
+
 @media (max-width: 480px) {
   .pdt-pop {
     position: fixed;

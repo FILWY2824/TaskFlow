@@ -30,7 +30,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         :key="d.id"
         class="ad-backdrop"
         :class="{ 'is-top': i === dialogState.items.length - 1 }"
-        :style="{ zIndex: 4000 + i }"
+        :style="{ zIndex: 10000 + i }"
         @click.self="onChoose(d.id, false)"
       >
         <div class="ad-card" :class="{ 'is-danger': d.danger }">
@@ -81,6 +81,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 .ad-stack {
   position: fixed; inset: 0;
   pointer-events: none;
+  /* isolation: isolate 强制在这里建立独立的层叠上下文,避免父级的 transform /
+     filter / opacity 等无意中"困住" backdrop,以致弹窗看起来不在最前。
+     z-index 设为非常大的值,确保压过任何业务面板 (drawer 100/101 / modal 200 /
+     popover 800 等)。 */
+  isolation: isolate;
+  z-index: 9999;
 }
 .ad-backdrop {
   position: fixed; inset: 0;

@@ -357,8 +357,8 @@ const rrulePresets = [
             <div class="locked-no-date-text">
               <strong>「无日期」任务</strong>
               <span class="locked-no-date-desc">
-                这是一条无日期任务，不会出现在日程视图里。
-                "无日期" 与 "日程" 互不串通：如需把它安排进日程，请先删除再重建。
+                这是一条无日期任务，与日程视图完全隔离，不会出现在「日程」里，也无法添加日期或时间。
+                如需把它安排进日程，请先删除再到「日程」里重建。
               </span>
             </div>
           </div>

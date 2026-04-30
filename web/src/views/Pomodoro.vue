@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { pomodoro as pomoApi, todos as todosApi, ApiError } from '@/api'
 import type { PomodoroKind, PomodoroSession, Todo } from '@/types'
-import { fmtDateTime, fmtDuration } from '@/utils'
+import { fmtDuration } from '@/utils'
 import { useDataStore } from '@/stores/data'
 import { usePrefsStore } from '@/stores/prefs'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -202,15 +202,6 @@ function applyPreset(p: { seconds: number; kind: PomodoroKind }) {
   kind.value = p.kind
 }
 
-function statusText(s: PomodoroSession): string {
-  switch (s.status) {
-    case 'completed': return '完成'
-    case 'abandoned': return '放弃'
-    case 'active': return '进行中'
-    default: return s.status
-  }
-}
-
 const isActive = computed(() => !!session.value && session.value.status === 'active')
 // 当倒计时结束、且未自动完成（用户偏好关闭），UI 上要让用户能手动结束。
 const isExpiredWaiting = computed(() => isActive.value && remaining.value <= 0)
@@ -314,31 +305,17 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
       </div>
     </div>
 
-    <h3 class="section-title">最近记录</h3>
-    <div class="history-list" v-if="recent.length > 0">
-      <div v-for="s in recent" :key="s.id" class="history-item">
-        <div class="hi-icon">
-          <span v-if="s.kind === 'focus'">🎯</span>
-          <span v-else-if="s.kind === 'short_break'">☕</span>
-          <span v-else>🛌</span>
-        </div>
-        <div class="hi-info">
-          <div class="hi-title">
-            {{ s.kind === 'focus' ? '专注' : (s.kind === 'short_break' ? '短休' : '长休') }}
-            <span v-if="s.note" class="muted"> — {{ s.note }}</span>
-          </div>
-          <div class="hi-time">{{ fmtDateTime(s.started_at) }}</div>
-        </div>
-        <div class="hi-status-wrap">
-          <span class="hi-status-badge" :class="s.status">{{ statusText(s) }}</span>
-          <span class="hi-duration">{{ fmtDuration(s.actual_duration_seconds || s.planned_duration_seconds) }}</span>
-        </div>
-      </div>
-    </div>
-    <div v-else class="empty">
-      <div class="empty-icon">🍅</div>
-      <div class="empty-title">还没有番茄记录</div>
-      <div class="empty-hint">开始你的第一次专注吧</div>
+    <div class="pomo-history-link-wrap">
+      <RouterLink :to="{ name: 'pomodoro-history' }" class="pomo-history-link">
+        <span class="phl-icon">📜</span>
+        <span class="phl-text">
+          <span class="phl-title">查看历史记录</span>
+          <span class="phl-sub">最近 {{ recent.length || 0 }} 条 · 完成 / 放弃 / 进行中</span>
+        </span>
+        <svg class="phl-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </RouterLink>
     </div>
   </div>
 </template>
@@ -400,37 +377,52 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
 .pomo-pref-hint { padding-top: 4px; font-size: 12px; }
 .pomo-actions { display: flex; gap: 10px; justify-content: center; }
 .start-btn { padding: 11px 36px; font-size: 14.5px; border-radius: 999px; min-width: 140px; }
-.history-list { display: flex; flex-direction: column; gap: 6px; }
-.history-item {
+/* === 跳转到历史记录页的卡片 === */
+.pomo-history-link-wrap { margin-top: 8px; }
+.pomo-history-link {
   display: flex; align-items: center; gap: 14px;
-  padding: 12px 14px; border-radius: var(--tg-radius-md);
-  transition: background 0.15s;
+  padding: 14px 18px;
+  background: var(--tg-bg-elev);
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-md);
+  color: var(--tg-text);
+  text-decoration: none;
+  transition: border-color var(--tg-trans-fast),
+              background var(--tg-trans-fast),
+              transform var(--tg-trans-fast),
+              box-shadow var(--tg-trans-fast);
 }
-.history-item:hover { background: var(--tg-hover); }
-.hi-icon {
-  font-size: 20px; background: var(--tg-hover);
-  width: 40px; height: 40px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
+.pomo-history-link:hover {
+  border-color: color-mix(in srgb, var(--tg-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--tg-primary) 5%, var(--tg-bg-elev));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px -6px rgba(99, 102, 241, 0.28);
+}
+.phl-icon {
+  font-size: 22px;
+  width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--tg-hover);
+  border-radius: 50%;
   flex-shrink: 0;
 }
-.hi-info { flex: 1; overflow: hidden; min-width: 0; }
-.hi-title {
-  font-size: 14px; font-weight: 600; margin-bottom: 2px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.phl-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.phl-title {
+  font-size: 14.5px; font-weight: 700;
+  color: var(--tg-primary);
+  letter-spacing: -0.005em;
 }
-.hi-time { font-size: 12px; color: var(--tg-text-secondary); }
-.hi-status-wrap {
-  display: flex; flex-direction: column; align-items: flex-end;
-  gap: 4px; flex-shrink: 0;
+.phl-sub {
+  font-size: 12px; color: var(--tg-text-secondary);
 }
-.hi-status-badge {
-  font-size: 11px; font-weight: 600;
-  padding: 2px 8px; border-radius: 999px;
+.phl-arrow {
+  color: var(--tg-text-tertiary);
+  transition: transform var(--tg-trans-fast), color var(--tg-trans-fast);
 }
-.hi-status-badge.completed { background: var(--tg-success-soft); color: var(--tg-success); }
-.hi-status-badge.abandoned { background: var(--tg-danger-soft); color: var(--tg-danger); }
-.hi-status-badge.active { background: var(--tg-primary-soft); color: var(--tg-primary); }
-.hi-duration { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pomo-history-link:hover .phl-arrow {
+  color: var(--tg-primary);
+  transform: translateX(2px);
+}
 
 @media (max-width: 600px) {
   .pomo-form { grid-template-columns: 1fr; }

@@ -36,16 +36,21 @@ type TodoInput struct {
 // TodoFilter 列表筛选。所有 Has* 标志为 true 时才启用对应字段。
 type TodoFilter struct {
 	ListID      *int64
-	NoList      bool       // 仅返回 list_id IS NULL（未分类）的 todo
+	NoList      bool // 仅返回 list_id IS NULL（未分类）的 todo
 	IsCompleted *bool
 	DueAfter    *time.Time // 含
 	DueBefore   *time.Time // 不含
 	NoDueDate   bool
-	Search      string
-	Limit       int
-	Offset      int
-	IncludeDone bool   // 默认不带已完成
-	OrderBy     string // "due_at_asc" | "created_desc" | "priority_desc" | "sort_order"
+	// IncludePastIncomplete 仅在与 DueAfter / DueBefore 同时使用时生效:
+	// 为 true 时, 不仅返回 [DueAfter, DueBefore) 区间内的任务，还会把
+	// "在 DueAfter 之前但仍未完成"的任务一起带回来 —— 用于「今日 / 本周 /
+	// 近一周 / 近一个月」这类视图，让用户不要漏掉过期的待办。
+	IncludePastIncomplete bool
+	Search                string
+	Limit                 int
+	Offset                int
+	IncludeDone           bool   // 默认不带已完成
+	OrderBy               string // "due_at_asc" | "created_desc" | "priority_desc" | "sort_order"
 }
 
 func (s *TodoStore) Create(ctx context.Context, userID int64, in TodoInput) (*models.Todo, error) {
@@ -119,17 +124,26 @@ func (s *TodoStore) List(ctx context.Context, userID int64, f TodoFilter) ([]*mo
 	} else if f.NoList {
 		conds = append(conds, "list_id IS NULL")
 	}
+	// useCompoundDueClause: 「今日 / 本周 / 近一周 / 近一个月」等视图把过往未完成
+	// 的任务也带回来，这里需要走一个特殊的 OR 子句，并且不能再叠加全局
+	// is_completed = 0 的简单条件（否则会把"今日已完成"也排掉）。
+	useCompoundDueClause := f.IncludePastIncomplete && f.DueAfter != nil && f.DueBefore != nil && !f.NoDueDate
+
 	if f.IsCompleted != nil {
 		if *f.IsCompleted {
 			conds = append(conds, "is_completed = 1")
 		} else {
 			conds = append(conds, "is_completed = 0")
 		}
-	} else if !f.IncludeDone {
+	} else if !f.IncludeDone && !useCompoundDueClause {
 		conds = append(conds, "is_completed = 0")
 	}
 	if f.NoDueDate {
 		conds = append(conds, "due_at IS NULL")
+	} else if useCompoundDueClause {
+		// 区间内全部 + 区间前未完成
+		conds = append(conds, "due_at < ? AND (due_at >= ? OR is_completed = 0)")
+		args = append(args, f.DueBefore.UTC(), f.DueAfter.UTC())
 	} else {
 		if f.DueAfter != nil {
 			conds = append(conds, "due_at >= ?")
