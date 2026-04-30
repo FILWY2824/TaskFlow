@@ -35,8 +35,13 @@ async function submit() {
 <template>
   <div class="auth-page">
     <form class="auth-card" @submit.prevent="submit">
-      <h2>登录到 TodoAlarm</h2>
-      <div class="auth-subtitle">欢迎回来，继续您的任务管理</div>
+      <div class="auth-logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <h2>欢迎回来</h2>
+      <div class="auth-subtitle">登录到 ToDo List 继续您的任务管理</div>
       <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
       <div class="field">
         <label>邮箱</label>
@@ -52,7 +57,7 @@ async function submit() {
         </button>
       </div>
       <div class="switch">
-        还没有账号?<RouterLink to="/register">注册一个</RouterLink>
+        还没有账号？<RouterLink to="/register">立即注册</RouterLink>
       </div>
     </form>
   </div>

@@ -46,7 +46,10 @@ const newSubtaskTitle = ref('')
 const showReminderDialog = ref(false)
 const remTitle = ref('')
 const remTriggerLocal = ref('')
-const remRRule = ref('')
+// BUGFIX: 此前 select 和 input 都 v-model 到 remRRule，互相覆盖。改成
+// remRRulePreset (select) + remRRuleCustom (input)，最终值在提交时合成。
+const remRRulePreset = ref('')   // 预设：'' 不重复 / 'FREQ=DAILY' 等
+const remRRuleCustom = ref('')   // 自定义自由文本（优先级高于预设）
 const remDtstartLocal = ref('')
 const remChannelLocal = ref(true)
 const remChannelTelegram = ref(false)
@@ -101,7 +104,7 @@ async function save() {
 }
 
 async function remove() {
-  if (!confirm('确认删除这个任务?')) return
+  if (!confirm('确认删除这个任务？')) return
   try {
     await data.removeTodo(props.todo.id)
     emit('removed', props.todo.id)
@@ -124,7 +127,8 @@ async function addSub() {
 function openReminderDialog() {
   remTitle.value = ''
   remTriggerLocal.value = ''
-  remRRule.value = ''
+  remRRulePreset.value = ''
+  remRRuleCustom.value = ''
   remDtstartLocal.value = ''
   remChannelLocal.value = true
   remChannelTelegram.value = false
@@ -132,19 +136,23 @@ function openReminderDialog() {
   showReminderDialog.value = true
 }
 
+// 最终合成 RRULE：优先用自定义文本；否则用预设；都为空则视为单次
+const effectiveRRule = computed(() => remRRuleCustom.value.trim() || remRRulePreset.value)
+
 async function createReminder() {
   remErr.value = ''
-  const isOnce = !remRRule.value
+  const rrule = effectiveRRule.value
+  const isOnce = !rrule
   if (isOnce && !remTriggerLocal.value) {
-    remErr.value = '请选择触发时间,或填写 RRULE 周期'
+    remErr.value = '请选择触发时间，或选择/填写 RRULE 周期'
     return
   }
   if (!isOnce && !remDtstartLocal.value) {
-    remErr.value = '周期提醒必须指定起始时间(dtstart)'
+    remErr.value = '周期提醒必须指定起始时间（dtstart）'
     return
   }
   try {
-    const body: any = {
+    const body: Record<string, unknown> = {
       todo_id: props.todo.id,
       title: remTitle.value.trim() || props.todo.title,
       timezone: tz.value,
@@ -161,7 +169,7 @@ async function createReminder() {
     } else {
       const d = fromDatetimeLocal(remDtstartLocal.value)
       if (!d) throw new Error('无效的起始时间')
-      body.rrule = remRRule.value
+      body.rrule = rrule
       body.dtstart = toRFC3339(d)
     }
     await remindersApi.create(body)
@@ -183,7 +191,7 @@ async function toggleReminder(r: ReminderRule) {
 }
 
 async function removeReminder(r: ReminderRule) {
-  if (!confirm('删除这条提醒?')) return
+  if (!confirm('删除这条提醒？')) return
   try {
     await remindersApi.remove(r.id)
     await data.loadReminders(props.todo.id)
@@ -192,7 +200,6 @@ async function removeReminder(r: ReminderRule) {
   }
 }
 
-// 常用 RRULE 预设
 const rrulePresets = [
   { label: '不重复', value: '' },
   { label: '每天', value: 'FREQ=DAILY;INTERVAL=1' },
@@ -209,7 +216,7 @@ const rrulePresets = [
     <header>
       <span class="title">编辑任务</span>
       <button class="btn-close" @click="emit('close')">
-        <svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </header>
     <div class="body">
@@ -221,7 +228,7 @@ const rrulePresets = [
       </div>
       <div class="field">
         <label>描述</label>
-        <textarea v-model="description" rows="4" placeholder="补充信息(可选)" />
+        <textarea v-model="description" rows="3" placeholder="补充信息（可选）" />
       </div>
 
       <div class="row">
@@ -253,7 +260,7 @@ const rrulePresets = [
         </div>
         <div class="field">
           <label>全天</label>
-          <label style="padding-top: 8px"><input v-model="dueAllDay" type="checkbox" /> 全天任务</label>
+          <label class="field-inline" style="padding-top:8px"><input v-model="dueAllDay" type="checkbox" /> 全天任务</label>
         </div>
       </div>
 
@@ -262,10 +269,10 @@ const rrulePresets = [
         <input v-model="tz" placeholder="Asia/Shanghai" />
       </div>
 
-      <hr style="border: none; border-top: 1px solid var(--c-border); margin: 18px 0" />
+      <hr />
 
       <div class="row-flex">
-        <strong>子任务 ({{ subtasks.length }})</strong>
+        <strong style="font-size:14px">子任务 ({{ subtasks.length }})</strong>
       </div>
       <ul class="subtasks">
         <li v-for="s in subtasks" :key="s.id" :class="{ done: s.is_completed }">
@@ -274,45 +281,49 @@ const rrulePresets = [
             :checked="s.is_completed"
             @change="data.toggleSubtask(s)"
           />
-          <span class="stitle" style="flex: 1">{{ s.title }}</span>
-          <button class="btn-ghost btn-danger" @click="data.removeSubtask(s)">🗑</button>
+          <span class="stitle">{{ s.title }}</span>
+          <button class="btn-ghost btn-danger" title="删除子任务" @click="data.removeSubtask(s)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
         </li>
       </ul>
-      <div class="row-flex">
+      <div class="add-subtask">
         <input v-model="newSubtaskTitle" placeholder="新增子任务…" @keydown.enter="addSub" />
-        <button class="btn-secondary" @click="addSub">+</button>
+        <button class="btn-secondary" @click="addSub">+ 添加</button>
       </div>
 
-      <hr style="border: none; border-top: 1px solid var(--c-border); margin: 18px 0" />
+      <hr />
 
       <div class="row-flex">
-        <strong>提醒 ({{ reminders.length }})</strong>
+        <strong style="font-size:14px">提醒 ({{ reminders.length }})</strong>
         <span class="spacer" />
         <button class="btn-secondary" @click="openReminderDialog">+ 新增</button>
       </div>
-      <div v-if="reminders.length === 0" class="muted" style="font-size: 13px">还没有提醒。可添加单次或周期(如每 6 个月)提醒。</div>
+      <div v-if="reminders.length === 0" class="muted" style="font-size:13px">还没有提醒。可添加单次或周期（如每 6 个月）提醒。</div>
       <div v-for="r in reminders" :key="r.id" class="reminder-rule">
         <div>
           <div>
-            <span v-if="!r.is_enabled" class="muted">[已停用]</span>
+            <span v-if="!r.is_enabled" class="muted">[已停用] </span>
             {{ r.title || '(未命名)' }}
-            <span class="muted"> — {{ r.rrule ? r.rrule : '单次' }}</span>
+            <span class="muted"> · {{ r.rrule ? r.rrule : '单次' }}</span>
           </div>
           <div class="rmeta">
-            <span v-if="r.next_fire_at">下一次:{{ fmtRelative(r.next_fire_at) }}</span>
-            <span v-else-if="r.trigger_at">触发于:{{ fmtDateTime(r.trigger_at) }}</span>
+            <span v-if="r.next_fire_at">下一次：{{ fmtRelative(r.next_fire_at) }}</span>
+            <span v-else-if="r.trigger_at">触发于：{{ fmtDateTime(r.trigger_at) }}</span>
             <span v-if="r.channel_telegram"> · TG</span>
             <span v-if="r.channel_local"> · 本地</span>
           </div>
         </div>
-        <div>
+        <div class="rule-actions">
           <button class="btn-ghost" @click="toggleReminder(r)">{{ r.is_enabled ? '停用' : '启用' }}</button>
-          <button class="btn-ghost btn-danger" @click="removeReminder(r)">🗑</button>
+          <button class="btn-ghost btn-danger" title="删除" @click="removeReminder(r)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
         </div>
       </div>
     </div>
     <footer>
-      <button class="btn-danger" @click="remove">删除任务</button>
+      <button class="btn-ghost btn-danger" @click="remove">删除任务</button>
       <span class="spacer" />
       <button class="btn-secondary" @click="emit('close')">取消</button>
       <button class="btn-primary" :disabled="saving" @click="save">
@@ -321,52 +332,51 @@ const rrulePresets = [
     </footer>
   </div>
 
-  <!-- 新增提醒小对话框(不再嵌套 drawer,在 drawer 内嵌简单覆盖) -->
-  <template v-if="showReminderDialog">
-    <div class="drawer-backdrop" style="z-index: 60" @click="showReminderDialog = false" />
-    <div class="drawer" style="width: min(420px, 95vw); z-index: 61">
-      <header>
-        <span class="title">新增提醒</span>
-        <button class="btn-close" @click="showReminderDialog = false">
-          <svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-      </header>
-      <div class="body">
-        <div v-if="remErr" class="auth-error">{{ remErr }}</div>
-        <div class="field">
-          <label>标题(默认沿用任务标题)</label>
-          <input v-model="remTitle" />
+  <!-- 新增提醒对话框 -->
+  <Transition name="fade">
+    <div v-if="showReminderDialog" class="modal-backdrop" @click.self="showReminderDialog = false">
+      <div class="modal-card" style="width:min(420px,95vw)">
+        <header style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--tg-divider)">
+          <span style="font-size:16px;font-weight:600">新增提醒</span>
+          <button class="btn-icon" @click="showReminderDialog = false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </header>
+        <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
+          <div v-if="remErr" class="auth-error">{{ remErr }}</div>
+          <div class="field">
+            <label>标题（默认沿用任务标题）</label>
+            <input v-model="remTitle" />
+          </div>
+          <div class="field">
+            <label>重复（预设）</label>
+            <select v-model="remRRulePreset">
+              <option v-for="p in rrulePresets" :key="p.label" :value="p.value">{{ p.label }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>或自定义 RRULE（优先级高于预设）</label>
+            <input v-model="remRRuleCustom" placeholder="例如：FREQ=DAILY;INTERVAL=2" />
+          </div>
+          <div v-if="!effectiveRRule" class="field">
+            <label>触发时间（单次）</label>
+            <input v-model="remTriggerLocal" type="datetime-local" />
+          </div>
+          <div v-else class="field">
+            <label>起始时间（dtstart，周期从这里展开）</label>
+            <input v-model="remDtstartLocal" type="datetime-local" />
+          </div>
+          <div class="field">
+            <label>通道</label>
+            <label class="field-inline"><input v-model="remChannelLocal" type="checkbox" /> 服务端通知中心 / 本地</label>
+            <label class="field-inline"><input v-model="remChannelTelegram" type="checkbox" /> Telegram 推送</label>
+          </div>
         </div>
-        <div class="field">
-          <label>重复</label>
-          <select v-model="remRRule">
-            <option v-for="p in rrulePresets" :key="p.label" :value="p.value">{{ p.label }}</option>
-          </select>
-          <input
-            v-model="remRRule"
-            placeholder="或自定义,例如 FREQ=DAILY;INTERVAL=2"
-            style="margin-top: 6px"
-          />
-        </div>
-        <div v-if="!remRRule" class="field">
-          <label>触发时间(单次)</label>
-          <input v-model="remTriggerLocal" type="datetime-local" />
-        </div>
-        <div v-else class="field">
-          <label>起始时间(dtstart,周期从这里展开)</label>
-          <input v-model="remDtstartLocal" type="datetime-local" />
-        </div>
-        <div class="field">
-          <label>通道</label>
-          <label><input v-model="remChannelLocal" type="checkbox" /> 服务端通知中心 / 本地</label>
-          <br />
-          <label><input v-model="remChannelTelegram" type="checkbox" /> Telegram 推送</label>
-        </div>
+        <footer style="display:flex;gap:10px;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--tg-divider)">
+          <button class="btn-secondary" @click="showReminderDialog = false">取消</button>
+          <button class="btn-primary" @click="createReminder">创建</button>
+        </footer>
       </div>
-      <footer>
-        <button class="btn-secondary" @click="showReminderDialog = false">取消</button>
-        <button class="btn-primary" @click="createReminder">创建</button>
-      </footer>
     </div>
-  </template>
+  </Transition>
 </template>

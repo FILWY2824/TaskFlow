@@ -6,7 +6,16 @@ interface SSEHandle {
   close(): void
 }
 
-// 用 fetch + ReadableStream 自己读 SSE,因为浏览器原生 EventSource 不能加 Authorization header。
+interface ToastItem {
+  key: number     // 唯一自增 key，避免同一 notification_id 被多次推送时 <TransitionGroup> 报重复 key 警告
+  id: number      // 后端 notification_id
+  title: string
+  body: string
+}
+
+let toastSeq = 0
+
+// 用 fetch + ReadableStream 自己读 SSE，因为浏览器原生 EventSource 不能加 Authorization header。
 function openSSE(token: string, onEvent: (e: SSENotification) => void): SSEHandle {
   const ctrl = new AbortController()
   let closed = false
@@ -55,7 +64,7 @@ function openSSE(token: string, onEvent: (e: SSENotification) => void): SSEHandl
             }
           }
         }
-      } catch (e) {
+      } catch {
         if (closed) break
         // 断流后退避 3s 重连
         await new Promise((r) => setTimeout(r, 3000))
@@ -76,7 +85,7 @@ export const useNotificationsStore = defineStore('notifications', {
     items: [] as Notification[],
     unread: 0,
     sse: null as SSEHandle | null,
-    toastQueue: [] as { id: number; title: string; body: string }[],
+    toastQueue: [] as ToastItem[],
   }),
   actions: {
     async refresh() {
@@ -102,34 +111,32 @@ export const useNotificationsStore = defineStore('notifications', {
       this.unread = 0
     },
     pushToast(t: { id: number; title: string; body: string }) {
-      this.toastQueue.push(t)
-      // 自动关闭
+      const key = ++toastSeq
+      this.toastQueue.push({ key, id: t.id, title: t.title, body: t.body })
       setTimeout(() => {
-        this.toastQueue = this.toastQueue.filter((x) => x.id !== t.id)
+        this.toastQueue = this.toastQueue.filter((x) => x.key !== key)
       }, 6000)
     },
-    dismissToast(id: number) {
-      this.toastQueue = this.toastQueue.filter((x) => x.id !== id)
+    dismissToast(key: number) {
+      this.toastQueue = this.toastQueue.filter((x) => x.key !== key)
     },
     startSSE() {
       if (this.sse) return
       const t = loadTokens()
       if (!t) return
       this.sse = openSSE(t.accessToken, (ev) => {
-        // 收到通知时自增未读 + 弹 toast + 浏览器 Notification(若用户授权)
         this.unread += 1
         this.pushToast({
           id: ev.notification_id,
           title: ev.title,
           body: ev.body || '',
         })
-        // 触发后台拉取最新 5 条通知
         this.refresh().catch(() => {
           // ignore
         })
         try {
           if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification(ev.title, { body: ev.body || '', tag: 'todoalarm-' + ev.notification_id })
+            new Notification(ev.title, { body: ev.body || '', tag: 'todolist-' + ev.notification_id })
           }
         } catch {
           // ignore

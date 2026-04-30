@@ -5,20 +5,18 @@ import { todos as todosApi, ApiError } from '@/api'
 import { fmtTime, toRFC3339 } from '@/utils'
 import TodoEditDrawer from '@/components/TodoEditDrawer.vue'
 
-// Base date to center the calendar
 const baseDate = ref(new Date())
 const items = ref<Todo[]>([])
 const loading = ref(false)
 const errMsg = ref('')
 const editing = ref<Todo | null>(null)
 
-// 35-day window centered on the week of baseDate
+// 35 格固定窗口（5 周），以 baseDate 所在周为中央。
 const cells = computed(() => {
   const target = baseDate.value
-  const dow = (target.getDay() + 6) % 7 // Monday = 0
+  const dow = (target.getDay() + 6) % 7
   const start = new Date(target)
-  start.setDate(target.getDate() - dow - 14) // Start 2 weeks before current week
-  
+  start.setDate(target.getDate() - dow - 14)
   const arr: Date[] = []
   for (let i = 0; i < 35; i++) {
     const d = new Date(start)
@@ -32,9 +30,9 @@ const rangeLabel = computed(() => {
   const start = cells.value[0]
   const end = cells.value[cells.value.length - 1]
   if (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth()) {
-    return `${start.getFullYear()}年 ${start.getMonth() + 1}月`
+    return `${start.getFullYear()} 年 ${start.getMonth() + 1} 月`
   } else if (start.getFullYear() === end.getFullYear()) {
-    return `${start.getFullYear()}年 ${start.getMonth() + 1}月 - ${end.getMonth() + 1}月`
+    return `${start.getFullYear()} 年 ${start.getMonth() + 1} - ${end.getMonth() + 1} 月`
   }
   return `${start.getFullYear()}年${start.getMonth() + 1}月 - ${end.getFullYear()}年${end.getMonth() + 1}月`
 })
@@ -54,9 +52,11 @@ function todayStr(): string {
   const t = new Date()
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
 }
-
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function isCurrentMonth(d: Date): boolean {
+  return d.getMonth() === baseDate.value.getMonth()
 }
 
 async function load() {
@@ -70,7 +70,7 @@ async function load() {
     const before = new Date(end)
     before.setDate(end.getDate() + 1)
     before.setHours(0, 0, 0, 0)
-    
+
     const all = await todosApi.list({ limit: 500, include_done: true, order_by: 'due_at_asc' })
     items.value = all.filter((t) => {
       if (!t.due_at) return false
@@ -89,12 +89,12 @@ watch(baseDate, load)
 
 function prev() {
   const d = new Date(baseDate.value)
-  d.setDate(d.getDate() - 28) // Move back 4 weeks
+  d.setDate(d.getDate() - 28)
   baseDate.value = d
 }
 function next() {
   const d = new Date(baseDate.value)
-  d.setDate(d.getDate() + 28) // Move forward 4 weeks
+  d.setDate(d.getDate() + 28)
   baseDate.value = d
 }
 function jumpToday() {
@@ -105,7 +105,7 @@ const showAddDialog = ref(false)
 const addTitle = ref('')
 const addDate = ref<Date | null>(null)
 const addTime = ref('')
-const addDuration = ref(30) // Default duration: 30 minutes
+const addDuration = ref(30)
 
 const calculatedEndTime = computed(() => {
   if (!addTime.value || !addDate.value || !addDuration.value) return ''
@@ -129,21 +129,19 @@ async function submitAdd() {
     const due = new Date(addDate.value)
     if (addTime.value) {
       const [h, m] = addTime.value.split(':').map(Number)
-      due.setHours(h, m + addDuration.value, 0, 0) // due_at is the end time
-      // If we want start_at we can set it:
+      due.setHours(h, m + addDuration.value, 0, 0)
       const start = new Date(addDate.value)
       start.setHours(h, m, 0, 0)
-      await todosApi.create({ 
-        title: addTitle.value.trim(), 
+      await todosApi.create({
+        title: addTitle.value.trim(),
         start_at: toRFC3339(start),
         due_at: toRFC3339(due),
-        effort: addDuration.value >= 60 ? Math.ceil(addDuration.value / 60) : 0 // optional mapping
+        effort: addDuration.value >= 60 ? Math.ceil(addDuration.value / 60) : 0,
       })
     } else {
       due.setHours(9, 0, 0, 0)
       await todosApi.create({ title: addTitle.value.trim(), due_at: toRFC3339(due) })
     }
-    
     showAddDialog.value = false
     await load()
   } catch (e) {
@@ -155,402 +153,258 @@ const dows = ['一', '二', '三', '四', '五', '六', '日']
 </script>
 
 <template>
-  <div class="calendar-page">
+  <div>
     <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
-    
+
     <div class="calendar-card">
       <div class="cal-header">
         <div class="cal-nav">
-          <button class="btn-icon" @click="prev">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          <button class="btn-icon" @click="prev" title="前 4 周">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <div class="cal-title">{{ rangeLabel }}</div>
-          <button class="btn-icon" @click="next">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          <button class="btn-icon" @click="next" title="后 4 周">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
-        <button class="btn-today" @click="jumpToday">回到今天</button>
+        <button class="btn-secondary" @click="jumpToday">回到今天</button>
       </div>
 
-      <Transition name="fade" mode="out-in">
-        <div class="cal-grid" :key="rangeLabel">
-          <div v-for="d in dows" :key="d" class="cal-dow">周{{ d }}</div>
-          <div
-            v-for="(d, i) in cells"
-            :key="i"
-            class="cal-cell"
-            :class="{ today: dayKey(d) === todayStr() }"
-            @click.self="quickAdd(d)"
-          >
-            <div class="cal-num">{{ d.getDate() }}</div>
-            <div class="cal-events">
-              <div
-                v-for="t in (todoMap[dayKey(d)] || []).slice(0, 4)"
-                :key="t.id"
-                class="cal-ev"
-                :class="{ completed: t.is_completed }"
-                :title="t.title"
-                @click.stop="editing = t"
-              >
-                <span class="ev-time" v-if="t.due_at && !t.due_all_day">{{ fmtTime(t.due_at) }}</span>
-                <span class="ev-title">{{ t.title }}</span>
-              </div>
-              <div
-                v-if="(todoMap[dayKey(d)] || []).length > 4"
-                class="cal-more"
-              >
-                +{{ (todoMap[dayKey(d)] || []).length - 4 }} 更多
+      <div class="cal-grid">
+        <div v-for="d in dows" :key="d" class="cal-dow">周{{ d }}</div>
+        <!-- BUGFIX: 之前外层用 @click.self，点击 .cal-num 会被吃掉。
+             现在改为外层无监听，专门用 .cal-empty 占满空白处，
+             点击日期数字也能触发 quickAdd。 -->
+        <div
+          v-for="(d, i) in cells"
+          :key="i"
+          class="cal-cell"
+          :class="{
+            today: dayKey(d) === todayStr(),
+            'in-month': isCurrentMonth(d),
+            'has-events': (todoMap[dayKey(d)] || []).length > 0,
+          }"
+        >
+          <div class="cal-num" @click="quickAdd(d)">{{ d.getDate() }}</div>
+          <div class="cal-events">
+            <div
+              v-for="t in (todoMap[dayKey(d)] || []).slice(0, 3)"
+              :key="t.id"
+              class="cal-ev"
+              :class="[`prio-${t.priority}`, { completed: t.is_completed }]"
+              :title="t.title"
+              @click.stop="editing = t"
+            >
+              <span v-if="t.due_at && !t.due_all_day" class="ev-time">{{ fmtTime(t.due_at) }}</span>
+              <span class="ev-title">{{ t.title }}</span>
+            </div>
+            <div
+              v-if="(todoMap[dayKey(d)] || []).length > 3"
+              class="cal-more"
+              @click.stop
+            >
+              +{{ (todoMap[dayKey(d)] || []).length - 3 }} 更多
+            </div>
+          </div>
+          <button class="cal-empty" @click="quickAdd(d)" :title="`在 ${dayKey(d)} 添加`" tabindex="-1"></button>
+        </div>
+      </div>
+    </div>
+
+    <Transition name="fade">
+      <div v-if="showAddDialog" class="modal-backdrop" @click.self="showAddDialog = false">
+        <div class="modal-card">
+          <header style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--tg-divider)">
+            <span style="font-size:16px;font-weight:600">
+              新建任务
+              <span class="muted" style="font-weight:400;font-size:13px"> · {{ addDate ? dayKey(addDate) : '' }}</span>
+            </span>
+            <button class="btn-icon" @click="showAddDialog = false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
+            <div class="field">
+              <label style="font-size:12px;font-weight:600;color:var(--tg-primary);display:block;margin-bottom:6px">标题</label>
+              <input v-model="addTitle" placeholder="任务名称…" autofocus @keydown.enter="submitAdd" />
+            </div>
+            <div class="field">
+              <label style="font-size:12px;font-weight:600;color:var(--tg-primary);display:block;margin-bottom:6px">开始时间（可选）</label>
+              <input v-model="addTime" type="time" />
+            </div>
+            <div v-if="addTime" class="field">
+              <label style="font-size:12px;font-weight:600;color:var(--tg-primary);display:block;margin-bottom:6px">时长（分钟）</label>
+              <input v-model.number="addDuration" type="number" min="5" max="1440" step="5" />
+              <div class="muted" style="font-size:12px;margin-top:6px" v-if="calculatedEndTime">
+                结束于 {{ calculatedEndTime }}
               </div>
             </div>
           </div>
+          <footer style="display:flex;gap:10px;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--tg-divider)">
+            <button class="btn-secondary" @click="showAddDialog = false">取消</button>
+            <button class="btn-primary" :disabled="!addTitle.trim()" @click="submitAdd">创建</button>
+          </footer>
         </div>
-      </Transition>
-    </div>
-    
-    <p class="muted" style="margin-top: 16px; font-size: 13px; text-align: center;">
-      点击空白日期可快速添加任务，点击任务可进行编辑
-    </p>
+      </div>
+    </Transition>
 
-    <!-- Edit Task Drawer -->
     <Transition name="slide-fade">
       <TodoEditDrawer
         v-if="editing"
         :todo="editing"
         @close="editing = null"
-        @updated="editing = null; load()"
-        @removed="editing = null; load()"
+        @updated="(t) => { const i = items.findIndex(x => x.id === t.id); if (i >= 0) items[i] = t; editing = null }"
+        @removed="(id) => { items = items.filter(x => x.id !== id); editing = null }"
       />
-    </Transition>
-
-    <!-- Beautiful Add Task Modal -->
-    <Transition name="modal-fade">
-      <div v-if="showAddDialog" class="modal-backdrop" @click.self="showAddDialog = false">
-        <div class="modal-card">
-          <div class="modal-header">
-            <span class="title">新建任务</span>
-            <div class="modal-subtitle" v-if="addDate">{{ dayKey(addDate) }}</div>
-            <button class="btn-close" @click="showAddDialog = false">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
-          </div>
-          <div class="modal-body">
-            <div class="field">
-              <label>任务内容</label>
-              <input v-model="addTitle" placeholder="准备做什么？" autofocus @keydown.enter="submitAdd" />
-            </div>
-            <div class="field-row">
-              <div class="field" style="flex: 1;">
-                <label>开始时间 (可选)</label>
-                <input v-model="addTime" type="time" class="time-input" />
-              </div>
-              <div class="field" style="flex: 1;" v-if="addTime">
-                <label>持续时间 (分钟)</label>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <input v-model.number="addDuration" type="number" min="1" max="1440" style="width: 80px;" />
-                  <span v-if="calculatedEndTime" style="font-size: 13px; color: var(--c-text-soft);">
-                    至 {{ calculatedEndTime }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-secondary" @click="showAddDialog = false">取消</button>
-            <button class="btn-primary" @click="submitAdd">创建任务</button>
-          </div>
-        </div>
-      </div>
     </Transition>
   </div>
 </template>
 
 <style scoped>
-.calendar-page {
-  max-width: 1000px;
-  margin: 0 auto;
-}
-
 .calendar-card {
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-xl);
-  padding: 24px;
-  box-shadow: var(--shadow-md);
+  background: var(--tg-side);
+  border: 1px solid var(--tg-divider);
+  border-radius: var(--tg-radius-lg);
+  padding: 16px 18px;
+  overflow: hidden;
 }
-
 .cal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
-  padding: 0 8px;
+  margin-bottom: 14px;
 }
-
 .cal-nav {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 4px;
 }
-
 .cal-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
-  color: var(--c-text);
-  min-width: 160px;
+  letter-spacing: -0.2px;
+  padding: 0 8px;
+  min-width: 130px;
   text-align: center;
-}
-
-.btn-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--c-surface-2);
-  color: var(--c-text-soft);
-  transition: all 0.2s ease;
-}
-.btn-icon:hover {
-  background: var(--c-primary-soft);
-  color: var(--c-primary);
-  transform: scale(1.05);
-}
-
-.btn-today {
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: var(--radius-md);
-  background: var(--c-surface-2);
-  color: var(--c-text);
-  transition: all 0.2s ease;
-}
-.btn-today:hover {
-  background: var(--c-border);
 }
 
 .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 10px;
+  gap: 2px;
 }
-
 .cal-dow {
   text-align: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--c-text-muted);
-  padding: 8px 0;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  padding: 6px 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--tg-text-tertiary);
+  letter-spacing: 0.3px;
 }
-
 .cal-cell {
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-md);
-  padding: 8px;
-  min-height: 110px;
-  cursor: pointer;
+  position: relative;
+  background: var(--tg-side);
+  border: 1px solid var(--tg-divider);
+  border-radius: var(--tg-radius-sm);
+  height: 96px;
+  padding: 4px 6px 4px 6px;
   display: flex;
   flex-direction: column;
-  transition: all 0.2s ease;
+  gap: 2px;
+  overflow: hidden;
+  transition: background var(--tg-trans-fast), border-color var(--tg-trans-fast);
+}
+.cal-cell:not(.in-month) {
+  background: transparent;
+  border-color: transparent;
+}
+.cal-cell:not(.in-month) .cal-num {
+  color: var(--tg-text-tertiary);
 }
 .cal-cell:hover {
-  border-color: var(--c-primary-soft);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-2px);
+  background: var(--tg-hover);
+  border-color: var(--tg-divider-strong);
 }
 .cal-cell.today {
-  border-color: var(--c-primary);
-  background: var(--c-primary-soft);
+  border-color: var(--tg-primary);
+  background: var(--tg-primary-soft);
+}
+.cal-cell.today .cal-num {
+  color: var(--tg-primary);
+  font-weight: 700;
 }
 
 .cal-num {
-  font-size: 14px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: var(--c-text-soft);
-  margin-bottom: 8px;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
+  text-align: right;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  align-self: flex-end;
+  z-index: 2;
 }
-.cal-cell.today .cal-num {
-  background: var(--c-primary);
-  color: white;
+.cal-num:hover {
+  background: var(--tg-press);
 }
 
 .cal-events {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  z-index: 2;
 }
-
 .cal-ev {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--c-surface-2);
-  color: var(--c-text);
-  border-radius: 6px;
-  padding: 4px 6px;
-  font-size: 12px;
-  transition: all 0.2s;
-}
-.cal-ev:hover {
-  background: var(--c-border);
-}
-.cal-ev.completed {
-  opacity: 0.6;
-  text-decoration: line-through;
-  background: transparent;
-  border: 1px dashed var(--c-border);
-}
-.ev-time {
   font-size: 11px;
-  color: var(--c-primary);
-  font-weight: 600;
-}
-.ev-title {
+  background: var(--tg-primary-soft);
+  color: var(--tg-primary);
+  padding: 1px 5px;
+  border-radius: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
   font-weight: 500;
+  border-left: 2px solid var(--tg-primary);
+  transition: background var(--tg-trans-fast);
+}
+.cal-ev:hover { background: var(--tg-primary); color: #fff; }
+.cal-ev.completed { opacity: 0.45; text-decoration: line-through; }
+.cal-ev.prio-3 { border-left-color: #f59e0b; }
+.cal-ev.prio-4 { border-left-color: #ef4444; background: var(--tg-danger-soft); color: var(--tg-danger); }
+.cal-ev.prio-4:hover { background: var(--tg-danger); color: #fff; }
+.cal-ev .ev-time {
+  font-weight: 700;
+  margin-right: 3px;
+  font-variant-numeric: tabular-nums;
 }
 .cal-more {
-  font-size: 11px;
-  color: var(--c-text-muted);
-  text-align: center;
-  padding-top: 2px;
-  font-weight: 600;
+  font-size: 10.5px;
+  color: var(--tg-text-tertiary);
+  padding: 0 4px;
+  cursor: default;
 }
 
-/* Beautiful Modal */
-.modal-backdrop {
-  position: fixed;
+/* 占满整个 cell 的透明按钮，点击空白处 = quickAdd；不抢日期数字与事件的点击 */
+.cal-empty {
+  position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  z-index: 1;
+  border-radius: inherit;
+  padding: 0;
 }
-.modal-card {
-  background: var(--c-surface);
-  border-radius: var(--radius-xl);
-  width: min(420px, 92vw);
-  box-shadow: var(--shadow-lg);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.modal-header {
-  padding: 20px 24px;
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid var(--c-border);
-  position: relative;
-}
-.modal-header .title {
-  font-size: 18px;
-  font-weight: 700;
-  flex: 1;
-}
-.modal-subtitle {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--c-primary);
-  background: var(--c-primary-soft);
-  padding: 4px 10px;
-  border-radius: 12px;
-  margin-right: 12px;
-}
-.modal-body {
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.modal-body .field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.field-row {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-}
-.modal-body label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--c-text-soft);
-}
-.modal-body input {
-  padding: 12px 16px;
-  font-size: 15px;
-  background: var(--c-surface-2);
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  transition: all 0.2s;
-}
-.modal-body input:focus {
-  background: var(--c-surface);
-  border-color: var(--c-primary);
-  box-shadow: 0 0 0 3px var(--c-primary-soft);
-}
-.time-input {
-  width: 140px !important;
-}
-.modal-footer {
-  padding: 16px 24px;
-  background: var(--c-bg);
-  border-top: 1px solid var(--c-border);
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-}
-.modal-footer button {
-  padding: 10px 20px;
-  font-size: 15px;
-  border-radius: var(--radius-md);
-}
-
-/* Modal Transition */
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-}
-.modal-fade-enter-from,
-.modal-fade-leave-to {
-  opacity: 0;
-}
-.modal-fade-enter-from .modal-card,
-.modal-fade-leave-to .modal-card {
-  transform: scale(0.95) translateY(10px);
-}
+.cal-empty:focus { outline: none; }
 
 @media (max-width: 768px) {
-  .calendar-card {
-    padding: 16px 12px;
-  }
-  .cal-grid {
-    gap: 6px;
-  }
-  .cal-cell {
-    min-height: 80px;
-    padding: 4px;
-  }
-  .cal-ev {
-    padding: 2px 4px;
-  }
-  .ev-time {
-    display: none;
-  }
+  .cal-cell { height: 70px; }
+  .cal-ev { font-size: 10px; padding: 0 4px; }
+  .cal-ev .ev-time { display: none; }
+  .cal-num { font-size: 11.5px; }
 }
 </style>

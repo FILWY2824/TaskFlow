@@ -49,19 +49,24 @@ async function submit() {
 <template>
   <div class="auth-page">
     <form class="auth-card" @submit.prevent="submit">
-      <h2>注册 TodoAlarm</h2>
-      <div class="auth-subtitle">创建一个新账号开始您的管理旅程</div>
+      <div class="auth-logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <h2>创建账号</h2>
+      <div class="auth-subtitle">开始你在 ToDo List 的高效之旅</div>
       <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
       <div class="field">
         <label>邮箱</label>
         <input v-model="email" type="email" autocomplete="email" autofocus required />
       </div>
       <div class="field">
-        <label>显示名(可选)</label>
+        <label>显示名（可选）</label>
         <input v-model="displayName" type="text" />
       </div>
       <div class="field">
-        <label>密码 (≥8 位)</label>
+        <label>密码（≥8 位）</label>
         <input v-model="password" type="password" autocomplete="new-password" required />
       </div>
       <div class="field">
@@ -78,7 +83,7 @@ async function submit() {
         </button>
       </div>
       <div class="switch">
-        已有账号?<RouterLink to="/login">去登录</RouterLink>
+        已有账号？<RouterLink to="/login">去登录</RouterLink>
       </div>
     </form>
   </div>

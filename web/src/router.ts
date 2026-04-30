@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
-// 路由懒加载,首屏只加载 Layout + Today 视图。
+// 路由懒加载，首屏只加载 Layout + 默认视图。
 const routes: RouteRecordRaw[] = [
   {
     path: '/login',
@@ -16,7 +16,7 @@ const routes: RouteRecordRaw[] = [
     meta: { public: true },
   },
   {
-    // Tauri 强提醒窗口路由,无需认证(由 Rust 侧拉起)
+    // Tauri 强提醒窗口路由，无需认证（由 Rust 侧拉起）
     path: '/alarm',
     name: 'alarm',
     component: () => import('@/views/Alarm.vue'),
@@ -40,7 +40,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'settings', name: 'settings', component: () => import('@/views/Settings.vue') },
     ],
   },
-  { path: '/:catchAll(.*)', redirect: { name: 'today' } },
+  // BUGFIX: 此前 catchAll 重定向到不存在的路由 'today'，任意未匹配的 URL 都会导航失败。
+  { path: '/:catchAll(.*)', redirect: { name: 'schedule' } },
 ]
 
 const router = createRouter({
@@ -53,9 +54,10 @@ router.beforeEach((to) => {
   if (!to.meta.public && !authStore.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
-  // 公开路由 + 已登录:除了 alarm 这种"独立窗口",其他公开页跳到 today
+  // 公开路由 + 已登录：除了 alarm 这种"独立窗口"，其他公开页跳到默认视图。
+  // BUGFIX: 此前这里也是不存在的 'today'，已登录用户访问 /login 会卡住。
   if (to.meta.public && authStore.isAuthenticated && !to.meta.standalone) {
-    return { name: 'today' }
+    return { name: 'schedule' }
   }
 })
 

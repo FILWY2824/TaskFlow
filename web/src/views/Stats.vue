@@ -53,29 +53,32 @@ const maxTask = computed(() => {
   return max
 })
 const maxPomo = computed(() => {
-  let max = 1 // 至少 1 min
+  let max = 1
   for (const b of daily.value) {
     if (b.pomodoro_seconds / 60 > max) max = b.pomodoro_seconds / 60
   }
   return max
 })
 
-const H = 180
-const innerH = H - 30
+const innerH = 150
 
 function getBarHeight(val: number, max: number) {
   return Math.max((val / max) * innerH, 0)
 }
+
+// BUGFIX: 此前 width 用 (length * 40) + '%'，单位错（应为 px）。
+// 在小尺寸屏幕上会撑出无穷宽。改为正确的 px 单位 + max-width 兜底。
+const chartWidth = computed(() => Math.max(daily.value.length * 44, 320) + 'px')
 </script>
 
 <template>
-  <div class="stats-page">
+  <div>
     <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
 
     <div class="segment-control">
-      <button :class="{ active: range === '7' }" @click="range = '7'; load()">7天</button>
-      <button :class="{ active: range === '14' }" @click="range = '14'; load()">14天</button>
-      <button :class="{ active: range === '30' }" @click="range = '30'; load()">30天</button>
+      <button :class="{ active: range === '7' }" @click="range = '7'; load()">最近 7 天</button>
+      <button :class="{ active: range === '14' }" @click="range = '14'; load()">最近 14 天</button>
+      <button :class="{ active: range === '30' }" @click="range = '30'; load()">最近 30 天</button>
     </div>
 
     <div v-if="loading" class="muted" style="text-align: center; padding: 40px 0;">
@@ -112,14 +115,14 @@ function getBarHeight(val: number, max: number) {
 
       <div class="chart-section">
         <div class="chart-header">
-          <h3>任务趋势 (创建 vs 完成)</h3>
+          <h3>任务趋势 · 创建 vs 完成</h3>
           <div class="chart-legend">
-            <span><span class="legend-dot" style="background: var(--c-surface-2)"></span>创建</span>
-            <span><span class="legend-dot" style="background: var(--c-primary)"></span>完成</span>
+            <span><span class="legend-dot" style="background: var(--tg-divider-strong)"></span>创建</span>
+            <span><span class="legend-dot" style="background: var(--tg-primary)"></span>完成</span>
           </div>
         </div>
         <div class="chart-scroll">
-          <div class="chart-container" :style="{ width: Math.max(daily.length * 40, 100) + '%' }">
+          <div class="chart-container" :style="{ width: chartWidth }">
             <div class="chart-bars">
               <div v-for="b in daily" :key="b.date" class="bar-group" :title="`${b.date}\n创建: ${b.created}\n完成: ${b.completed}`">
                 <div class="bar-pair">
@@ -135,13 +138,13 @@ function getBarHeight(val: number, max: number) {
 
       <div class="chart-section">
         <div class="chart-header">
-          <h3>番茄专注 (分钟)</h3>
+          <h3>番茄专注 · 分钟</h3>
           <div v-if="pomoAgg" class="chart-legend muted">
-            共 {{ pomoAgg.total_sessions }} 次, 合计 {{ fmtDuration(pomoAgg.total_seconds) }}
+            共 {{ pomoAgg.total_sessions }} 次，合计 {{ fmtDuration(pomoAgg.total_seconds) }}
           </div>
         </div>
         <div class="chart-scroll">
-          <div class="chart-container" :style="{ width: Math.max(daily.length * 40, 100) + '%' }">
+          <div class="chart-container" :style="{ width: chartWidth }">
             <div class="chart-bars">
               <div v-for="b in daily" :key="b.date" class="bar-group" :title="`${b.date}\n专注时长: ${fmtDuration(b.pomodoro_seconds)}\n专注次数: ${b.pomodoro_count}`">
                 <div class="bar-pair single">
@@ -158,103 +161,57 @@ function getBarHeight(val: number, max: number) {
 </template>
 
 <style scoped>
-.stats-page {
-  max-width: 800px;
-  margin: 0 auto;
-}
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-  margin-bottom: 32px;
-}
-.stat-card {
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-lg);
-  padding: 20px;
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--c-border-hover);
-}
-.stat-card .label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--c-text-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.stat-card .value {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1;
-}
-.danger-text { color: var(--c-danger); }
-.success-text { color: var(--c-success); }
-
 .chart-section {
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-xl);
-  padding: 24px;
-  box-shadow: var(--shadow-sm);
-  margin-bottom: 24px;
+  background: var(--tg-side);
+  border: 1px solid var(--tg-divider);
+  border-radius: var(--tg-radius-lg);
+  padding: 18px 20px;
+  margin-bottom: 16px;
 }
 .chart-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 18px;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
 }
 .chart-header h3 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
 }
 .chart-legend {
   display: flex;
-  gap: 16px;
-  font-size: 13px;
-  color: var(--c-text-soft);
+  gap: 14px;
+  font-size: 12.5px;
+  color: var(--tg-text-secondary);
 }
 .legend-dot {
   display: inline-block;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  margin-right: 6px;
+  margin-right: 5px;
   vertical-align: -1px;
 }
 .chart-scroll {
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 12px;
+  padding-bottom: 8px;
 }
-/* Hide scrollbar for cleaner look, or style it */
-.chart-scroll::-webkit-scrollbar { height: 6px; }
-.chart-scroll::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 10px; }
-
 .chart-container {
-  min-width: 100%;
   height: 180px;
   position: relative;
-  border-bottom: 1px solid var(--c-border);
+  border-bottom: 1px solid var(--tg-divider);
 }
 .chart-bars {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   height: 100%;
-  padding: 0 10px;
+  padding: 0 6px;
+  gap: 4px;
 }
 .bar-group {
   display: flex;
@@ -262,38 +219,38 @@ function getBarHeight(val: number, max: number) {
   align-items: center;
   justify-content: flex-end;
   flex: 1;
+  min-width: 32px;
   height: 100%;
   cursor: pointer;
-  padding: 0 4px;
+  padding: 0 2px;
   transition: opacity 0.2s;
 }
-.bar-group:hover {
-  opacity: 0.8;
-}
+.bar-group:hover { opacity: 0.85; }
 .bar-pair {
   display: flex;
   align-items: flex-end;
   gap: 2px;
   width: 100%;
   justify-content: center;
-  height: 150px; /* innerH */
+  height: 150px;
 }
 .bar-pair.single .bar {
-  width: 16px;
+  width: 14px;
   border-radius: 4px 4px 0 0;
 }
 .bar {
-  width: 12px;
+  width: 10px;
   border-radius: 4px 4px 0 0;
-  transition: height 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.bar-bg { background: var(--c-surface-2); }
-.bar-fg { background: var(--c-primary); }
-.bar-warn { background: var(--c-warn); }
+.bar-bg { background: var(--tg-divider-strong); }
+.bar-fg { background: var(--tg-primary); }
+.bar-warn { background: var(--tg-warn); }
 .bar-label {
   margin-top: 8px;
   font-size: 11px;
-  color: var(--c-text-muted);
+  color: var(--tg-text-tertiary);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 </style>

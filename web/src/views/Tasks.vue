@@ -29,7 +29,7 @@ watch(
   { immediate: true },
 )
 
-const activeFilter = computed(() => {
+const activeFilter = computed<TodoFilterName>(() => {
   if (props.filterGroup) return currentFilter.value
   return props.filter || 'today'
 })
@@ -57,10 +57,11 @@ watch(
   { immediate: true },
 )
 
+// 当切到 list 视图时，把 quick-add 的清单默认值锁到当前清单；切回非 list 视图时，重置为 null。
 watch(
   () => props.listId,
   (l) => {
-    if (l) newListId.value = l
+    newListId.value = l ?? null
   },
   { immediate: true },
 )
@@ -75,32 +76,33 @@ const groupedTodos = computed(() => {
 async function addQuick() {
   errMsg.value = ''
   if (!newTitle.value.trim()) return
-  const due = newDueLocal.value ? fromDatetimeLocal(newDueLocal.value) : null
+  const dueDate = newDueLocal.value ? fromDatetimeLocal(newDueLocal.value) : null
 
-  // 基于当前过滤推断默认 due_at:今日 -> 今天 09:00,明日 -> 明天 09:00
-  let inferredDue: string | null = null
-  if (!due) {
-    if (activeFilter.value === 'today') {
-      const d = new Date()
-      d.setHours(23, 59, 0, 0)
-      inferredDue = toRFC3339(d)
-    } else if (activeFilter.value === 'tomorrow') {
-      const d = new Date()
-      d.setDate(d.getDate() + 1)
-      d.setHours(9, 0, 0, 0)
-      inferredDue = toRFC3339(d)
-    }
+  // 没填截止时间且当前过滤是"今天"或"明天"时，给个默认。
+  let dueIso: string | null = null
+  if (dueDate) {
+    dueIso = toRFC3339(dueDate)
+  } else if (activeFilter.value === 'today') {
+    const d = new Date()
+    d.setHours(23, 59, 0, 0)
+    dueIso = toRFC3339(d)
+  } else if (activeFilter.value === 'tomorrow') {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    d.setHours(9, 0, 0, 0)
+    dueIso = toRFC3339(d)
   }
 
   try {
     await data.createTodo({
       title: newTitle.value.trim(),
       priority: newPriority.value,
-      due_at: due ? toRFC3339(due) : inferredDue,
+      due_at: dueIso,
       list_id: newListId.value || props.listId || null,
     })
     newTitle.value = ''
     newDueLocal.value = ''
+    // 优先级和清单保留，方便连续添加同类任务
   } catch (e) {
     errMsg.value = e instanceof ApiError ? e.message : (e as Error).message
   }
@@ -110,7 +112,7 @@ function open(t: Todo) {
   editing.value = t
 }
 async function remove(t: Todo) {
-  if (!confirm(`确认删除任务 "${t.title}"?`)) return
+  if (!confirm(`确认删除任务 "${t.title}"？`)) return
   try {
     await data.removeTodo(t.id)
   } catch (e) {
@@ -140,7 +142,7 @@ async function remove(t: Todo) {
     >
       <input
         v-model="newTitle"
-        placeholder="+ 快速添加任务,回车保存"
+        placeholder="添加任务，回车保存"
         type="text"
       />
       <div class="qa-meta">
@@ -160,12 +162,12 @@ async function remove(t: Todo) {
       </div>
     </form>
 
-    <div v-if="data.todosLoading" class="muted">加载中…</div>
+    <div v-if="data.todosLoading" class="muted" style="text-align:center;padding:32px 0">加载中…</div>
 
     <div v-else-if="data.todos.length === 0" class="empty">
-      <div class="empty-icon">🎉</div>
-      <div class="empty-title">当前视图没有任务</div>
-      <div style="font-size: 14px; color: var(--c-text-soft);">尝试在上方快速添加一个新的任务吧</div>
+      <div class="empty-icon">✨</div>
+      <div class="empty-title">这里空空如也</div>
+      <div class="empty-hint">尝试在上方快速添加一个新的任务</div>
     </div>
 
     <template v-else>
@@ -178,8 +180,8 @@ async function remove(t: Todo) {
           @remove="remove"
         />
       </TransitionGroup>
-      <div v-if="groupedTodos.done.length > 0" style="margin-top: 24px">
-        <div class="muted" style="margin-bottom: 8px">已完成({{ groupedTodos.done.length }})</div>
+      <div v-if="groupedTodos.done.length > 0">
+        <div class="section-divider">已完成 · {{ groupedTodos.done.length }}</div>
         <TransitionGroup name="list" tag="div" class="todo-list">
           <TodoItem
             v-for="t in groupedTodos.done"
