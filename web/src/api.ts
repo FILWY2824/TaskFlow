@@ -261,6 +261,7 @@ export const todos = {
   async list(query: {
     filter?: string
     list_id?: number
+    due_on?: string // YYYY-MM-DD：按用户时区取该日的全部 todo
     search?: string
     limit?: number
     offset?: number

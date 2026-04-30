@@ -36,6 +36,7 @@ type TodoInput struct {
 // TodoFilter 列表筛选。所有 Has* 标志为 true 时才启用对应字段。
 type TodoFilter struct {
 	ListID      *int64
+	NoList      bool       // 仅返回 list_id IS NULL（未分类）的 todo
 	IsCompleted *bool
 	DueAfter    *time.Time // 含
 	DueBefore   *time.Time // 不含
@@ -115,6 +116,8 @@ func (s *TodoStore) List(ctx context.Context, userID int64, f TodoFilter) ([]*mo
 	if f.ListID != nil {
 		conds = append(conds, "list_id = ?")
 		args = append(args, *f.ListID)
+	} else if f.NoList {
+		conds = append(conds, "list_id IS NULL")
 	}
 	if f.IsCompleted != nil {
 		if *f.IsCompleted {

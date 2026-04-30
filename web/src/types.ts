@@ -276,7 +276,10 @@ export type TodoFilterName =
   | 'today'
   | 'tomorrow'
   | 'this_week'
+  | 'recent_week'   // 今日起未来 7 天（含今日）
+  | 'recent_month'  // 今日起未来 30 天（含今日）
   | 'overdue'
   | 'no_date'
+  | 'no_list'       // 未分类（list_id IS NULL）
   | 'completed'
   | 'all'

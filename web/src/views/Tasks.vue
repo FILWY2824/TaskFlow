@@ -104,6 +104,15 @@ function openAdd() {
     d.setDate(d.getDate() + 1)
     d.setHours(9, 0, 0, 0)
     addDueLocal.value = toLocalInputValue(d)
+  } else if (
+    activeFilter.value === 'recent_week' ||
+    activeFilter.value === 'recent_month' ||
+    activeFilter.value === 'this_week'
+  ) {
+    // 这些视图默认填上今天的截止时间，方便快速登记一项
+    const d = new Date()
+    d.setHours(23, 59, 0, 0)
+    addDueLocal.value = toLocalInputValue(d)
   }
   showAddDialog.value = true
 }
@@ -184,6 +193,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <button :class="{ active: currentFilter === 'today' }" @click="currentFilter = 'today'">今日</button>
       <button :class="{ active: currentFilter === 'tomorrow' }" @click="currentFilter = 'tomorrow'">明天</button>
       <button :class="{ active: currentFilter === 'this_week' }" @click="currentFilter = 'this_week'">本周</button>
+      <button :class="{ active: currentFilter === 'recent_week' }" @click="currentFilter = 'recent_week'">近一周</button>
+      <button :class="{ active: currentFilter === 'recent_month' }" @click="currentFilter = 'recent_month'">近一个月</button>
     </div>
     <div v-if="filterGroup === 'archive'" class="segment-control">
       <button :class="{ active: currentFilter === 'completed' }" @click="currentFilter = 'completed'">已完成</button>
@@ -306,7 +317,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 </button>
               </div>
               <div v-if="data.lists.length === 0" class="form-hint muted">
-                还没有分类。可在左侧栏「我的分类」处新建。
+                还没有自定义分类。可在顶栏「分类」按钮中新建。
               </div>
             </div>
 

@@ -80,8 +80,10 @@ func (req *todoRequest) toInput() store.TodoInput {
 //
 // Query 参数:
 //
-//	filter      = today | tomorrow | overdue | no_date | completed | all
+//	filter      = today | tomorrow | this_week | recent_week | recent_month |
+//	              overdue | no_date | no_list | completed | all
 //	list_id     = int
+//	due_on      = YYYY-MM-DD（按用户时区取该日的 [00:00, 24:00) 区间）
 //	search      = string
 //	limit       = int (默认 200, 最大 500)
 //	offset      = int
@@ -125,6 +127,27 @@ func (h *TodosHandler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 	if v := q.Get("include_done"); v == "true" || v == "1" {
 		f.IncludeDone = true
+	}
+
+	// due_on=YYYY-MM-DD：按用户时区将该日变成 [00:00, 24:00) 半开区间
+	if v := q.Get("due_on"); v != "" {
+		user, err := h.Users.GetByID(r.Context(), uid)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		loc, lerr := time.LoadLocation(user.Timezone)
+		if lerr != nil {
+			loc = time.UTC
+		}
+		t, perr := time.ParseInLocation("2006-01-02", v, loc)
+		if perr != nil {
+			writeError(w, http.StatusBadRequest, "bad_request", "invalid due_on (expect YYYY-MM-DD)")
+			return
+		}
+		end := t.AddDate(0, 0, 1)
+		f.DueAfter = &t
+		f.DueBefore = &end
 	}
 
 	// filter 快捷方式需要用户时区做日界换算
@@ -182,6 +205,18 @@ func applyFilterShortcut(f *store.TodoFilter, name, tzName string, now time.Time
 		e := s.AddDate(0, 0, 7)
 		f.DueAfter = &s
 		f.DueBefore = &e
+	case "recent_week":
+		// 「近一周」：今日起未来 7 天滚动窗口（含今日）
+		s := startOfDay(now)
+		e := s.AddDate(0, 0, 7)
+		f.DueAfter = &s
+		f.DueBefore = &e
+	case "recent_month":
+		// 「近一个月」：今日起未来 30 天滚动窗口（含今日）
+		s := startOfDay(now)
+		e := s.AddDate(0, 0, 30)
+		f.DueAfter = &s
+		f.DueBefore = &e
 	case "overdue":
 		nUTC := now.UTC()
 		f.DueBefore = &nUTC
@@ -189,6 +224,9 @@ func applyFilterShortcut(f *store.TodoFilter, name, tzName string, now time.Time
 		f.IsCompleted = &fa
 	case "no_date":
 		f.NoDueDate = true
+	case "no_list":
+		// 「未分类」：list_id IS NULL
+		f.NoList = true
 	case "completed":
 		t := true
 		f.IsCompleted = &t

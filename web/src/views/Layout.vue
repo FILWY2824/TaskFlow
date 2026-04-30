@@ -17,7 +17,8 @@ const route = useRoute()
 const search = ref('')
 const sidebarOpen = ref(false)
 
-// ---------- 分类（List）对话框 ----------
+// ---------- 分类管理面板（右侧主页面区域弹出） ----------
+const showCatPanel = ref(false)
 const showListDialog = ref(false)
 const editingListId = ref<number | null>(null)
 const listForm = ref({ name: '', color: '#6366f1' })
@@ -54,9 +55,9 @@ watch(() => route.fullPath, () => {
   sidebarOpen.value = false
 })
 
+// 侧栏：移除「全部任务」与「我的分类」整段；分类入口移到顶栏按钮 + 弹层。
 const sidebarFilters = [
   { name: 'schedule', label: '日程', icon: 'calendar' },
-  { name: 'all', label: '全部任务', icon: 'inbox' },
   { name: 'archive', label: '完成 / 过期', icon: 'archive' },
   { name: 'no-date', label: '无日期', icon: 'circle' },
 ] as const
@@ -83,6 +84,15 @@ async function submitSearch() {
     params: route.params,
     query: { ...route.query, q: search.value || undefined },
   })
+}
+
+// ---------- 分类管理：打开 / 关闭 / CRUD ----------
+function openCatPanel() {
+  errMsg.value = ''
+  showCatPanel.value = true
+}
+function closeCatPanel() {
+  showCatPanel.value = false
 }
 
 function openNewList() {
@@ -116,15 +126,25 @@ async function submitList() {
   }
 }
 async function removeList(l: List) {
-  if (!confirm(`删除分类 "${l.name}" ？该分类下的任务会变为「未分类」。`)) return
+  if (!confirm(`删除分类 "${l.name}"？\n该分类下的任务会自动归入「未分类」。`)) return
   try {
     await data.removeList(l.id)
     if (route.name === 'list' && Number(route.params.id) === l.id) {
-      router.replace({ name: 'schedule' })
+      router.replace({ name: 'uncategorized' })
     }
   } catch (e) {
     alert((e instanceof ApiError ? e.message : (e as Error).message) || '删除失败')
   }
+}
+
+// 在面板里点击某个分类 → 跳转到对应 list 视图
+function gotoList(l: List) {
+  router.push({ name: 'list', params: { id: l.id } })
+  closeCatPanel()
+}
+function gotoUncategorized() {
+  router.push({ name: 'uncategorized' })
+  closeCatPanel()
 }
 
 const userInitial = computed(() => {
@@ -134,6 +154,11 @@ const userInitial = computed(() => {
 })
 const userLabel = computed(() => auth.user?.display_name || auth.user?.email || '')
 const userEmail = computed(() => auth.user?.email || '')
+
+// 顶栏 “分类” 按钮高亮：当前在 list/:id 或 uncategorized 视图时高亮
+const inCategoryView = computed(
+  () => route.name === 'list' || route.name === 'uncategorized',
+)
 </script>
 
 <template>
@@ -163,41 +188,6 @@ const userEmail = computed(() => auth.user?.email || '')
           <span class="nav-icon" v-html="navIcon(f.icon)" />
           <span class="nav-text">{{ f.label }}</span>
         </RouterLink>
-
-        <div class="group-title-row">
-          <span>我的分类</span>
-          <button class="add-btn" title="新建分类" @click="openNewList">+</button>
-        </div>
-
-        <div v-if="data.lists.length === 0" class="cat-empty">
-          点 <strong>+</strong> 创建第一个分类
-        </div>
-
-        <div v-for="l in data.lists" :key="l.id" class="list-row">
-          <RouterLink
-            :to="{ name: 'list', params: { id: l.id } }"
-            :class="{ active: route.name === 'list' && Number(route.params.id) === l.id }"
-          >
-            <span class="nav-icon">
-              <span class="dot" :style="{ background: l.color || 'var(--tg-primary)', color: l.color || 'var(--tg-primary)' }" />
-            </span>
-            <span class="nav-text">{{ l.name }}</span>
-          </RouterLink>
-          <div class="list-actions">
-            <button title="重命名 / 改色" @click.stop="openEditList(l)">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-              </svg>
-            </button>
-            <button title="删除分类" @click.stop="removeList(l)">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-              </svg>
-            </button>
-          </div>
-        </div>
 
         <div class="group-title">工具</div>
         <RouterLink
@@ -239,8 +229,22 @@ const userEmail = computed(() => auth.user?.email || '')
             <line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
         </button>
-        <div class="title">{{ pageTitle(route) }}</div>
+        <div class="title">{{ pageTitle(route, data.lists) }}</div>
         <div class="topbar-actions">
+          <!-- 分类管理按钮（取代左侧栏的分类列表） -->
+          <button
+            class="cat-btn"
+            :class="{ 'is-active': inCategoryView }"
+            type="button"
+            @click="openCatPanel"
+            title="分类管理"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7h7l2 2h9v11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/>
+            </svg>
+            <span class="cat-btn-label">分类</span>
+            <span v-if="data.lists.length" class="cat-btn-count">{{ data.lists.length }}</span>
+          </button>
           <input v-model="search" type="search" placeholder="搜索任务…" @keydown.enter="submitSearch" />
         </div>
       </header>
@@ -255,7 +259,86 @@ const userEmail = computed(() => auth.user?.email || '')
       </section>
     </main>
 
-    <!-- 新建 / 编辑分类 dialog -->
+    <!-- ============ 分类管理面板（右侧主页面） ============ -->
+    <Transition name="fade">
+      <div v-if="showCatPanel" class="modal-backdrop" @click.self="closeCatPanel">
+        <div class="modal-card cat-panel">
+          <header class="modal-head">
+            <span class="modal-title">分类管理</span>
+            <button class="btn-icon" @click="closeCatPanel" aria-label="关闭">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+
+          <div class="modal-body">
+            <div class="cat-panel-toolbar">
+              <div class="cat-panel-hint muted">
+                共 {{ data.lists.length + 1 }} 个分类（含「未分类」）。删除分类时，该分类下的任务会自动归入「未分类」。
+              </div>
+              <button class="btn-primary cat-new-btn" @click="openNewList">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                新建分类
+              </button>
+            </div>
+
+            <ul class="cat-list">
+              <!-- 默认且不可删除的「未分类」 -->
+              <li class="cat-list-item is-default" @click="gotoUncategorized">
+                <span class="cat-list-dot is-uncat" />
+                <div class="cat-list-info">
+                  <div class="cat-list-name">
+                    未分类
+                    <span class="cat-list-tag">默认 · 不可删除</span>
+                  </div>
+                  <div class="cat-list-sub muted">未指定分类的任务会归入这里</div>
+                </div>
+                <span class="cat-list-arrow" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </span>
+              </li>
+
+              <!-- 用户创建的分类 -->
+              <li
+                v-for="l in data.lists"
+                :key="l.id"
+                class="cat-list-item"
+                :style="{ '--cat-color': l.color || 'var(--tg-primary)' }"
+                @click="gotoList(l)"
+              >
+                <span class="cat-list-dot" />
+                <div class="cat-list-info">
+                  <div class="cat-list-name">{{ l.name }}</div>
+                </div>
+                <div class="cat-list-actions">
+                  <button class="btn-ghost" title="重命名 / 改色" @click.stop="openEditList(l)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </button>
+                  <button class="btn-ghost btn-danger" title="删除分类" @click.stop="removeList(l)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                  </button>
+                </div>
+              </li>
+
+              <li v-if="data.lists.length === 0" class="cat-list-empty muted">
+                还没有自定义分类。点击右上「新建分类」开始添加。
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ============ 新建 / 编辑分类 dialog ============ -->
     <Transition name="fade">
       <div v-if="showListDialog" class="modal-backdrop" @click.self="showListDialog = false">
         <div class="modal-card cat-modal">
@@ -277,7 +360,14 @@ const userEmail = computed(() => auth.user?.email || '')
 
             <div class="field">
               <label>名称</label>
-              <input v-model="listForm.name" autofocus maxlength="60" placeholder="例如：工作 / 学习 / 生活…" @keydown.enter="submitList" />
+              <input
+                v-model="listForm.name"
+                class="modern-input"
+                autofocus
+                maxlength="60"
+                placeholder="例如：工作 / 学习 / 生活…"
+                @keydown.enter="submitList"
+              />
             </div>
 
             <div class="field">
@@ -317,12 +407,31 @@ const userEmail = computed(() => auth.user?.email || '')
 
 <script lang="ts">
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
+import type { List as _List } from '@/types'
 
-function pageTitle(route: RouteLocationNormalizedLoaded): string {
+function pageTitle(route: RouteLocationNormalizedLoaded, lists: _List[] = []): string {
+  // 在 list/:id 视图下显示具体分类名称
+  if (route.name === 'list') {
+    const id = Number(route.params.id)
+    const l = lists.find((x) => x.id === id)
+    return l ? `分类 · ${l.name}` : '分类'
+  }
+  // 单日详情：显示「YYYY 年 M 月 D 日 · 周X」
+  if (route.name === 'day') {
+    const dateStr = String(route.params.date || '')
+    const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (m) {
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      const dows = ['日', '一', '二', '三', '四', '五', '六']
+      return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · 周${dows[d.getDay()]}`
+    }
+    return '日程详情'
+  }
   const m: Record<string, string> = {
     schedule: '日程',
     archive: '完成 / 过期',
     'no-date': '无日期',
+    uncategorized: '未分类',
     all: '全部任务',
     list: '分类',
     calendar: '日历',
@@ -367,28 +476,48 @@ function navIcon(name: string): string {
 </script>
 
 <style scoped>
-.cat-empty {
-  margin: 4px 12px 8px;
-  padding: 10px 12px;
-  font-size: 12px;
-  color: var(--tg-text-tertiary);
-  background: var(--tg-hover);
-  border-radius: var(--tg-radius-sm);
-  text-align: center;
-  line-height: 1.5;
+/* ====== 顶栏“分类”按钮 ====== */
+.cat-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  background: var(--tg-bg-elev);
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-pill);
+  color: var(--tg-text-secondary);
+  font-size: 13.5px; font-weight: 600;
+  transition: border-color var(--tg-trans-fast), color var(--tg-trans-fast),
+              background var(--tg-trans-fast), transform var(--tg-trans-fast),
+              box-shadow var(--tg-trans-fast);
 }
-.cat-empty strong {
-  display: inline-block;
-  width: 18px; height: 18px;
-  line-height: 18px;
-  text-align: center;
-  background: var(--tg-grad-brand);
-  color: var(--tg-on-primary);
-  border-radius: 5px;
-  font-weight: 800;
-  margin: 0 2px;
-  vertical-align: middle;
+.cat-btn:hover {
+  border-color: var(--tg-primary);
+  color: var(--tg-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--tg-shadow-sm);
 }
+.cat-btn:active { transform: translateY(0); }
+.cat-btn.is-active {
+  background: var(--tg-grad-brand-soft);
+  border-color: color-mix(in srgb, var(--tg-primary) 50%, transparent);
+  color: var(--tg-primary);
+}
+.cat-btn-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 6px;
+  background: var(--tg-primary-soft); color: var(--tg-primary);
+  font-size: 11px; font-weight: 700;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.cat-btn.is-active .cat-btn-count { background: var(--tg-primary); color: var(--tg-on-primary); }
+
+@media (max-width: 600px) {
+  .cat-btn-label { display: none; }
+  .cat-btn { padding: 8px; }
+}
+
+/* ====== 分类管理面板（弹层） ====== */
+.cat-panel { width: min(560px, 95vw); }
 
 .modal-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -403,6 +532,7 @@ function navIcon(name: string): string {
 .modal-body {
   padding: 22px;
   display: flex; flex-direction: column; gap: 16px;
+  max-height: 70vh; overflow-y: auto;
 }
 .modal-foot {
   display: flex; gap: 10px; justify-content: flex-end;
@@ -417,6 +547,129 @@ function navIcon(name: string): string {
   text-transform: uppercase;
 }
 
+.cat-panel-toolbar {
+  display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap;
+}
+.cat-panel-hint { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.55; }
+.cat-new-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 16px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.cat-list {
+  display: flex; flex-direction: column; gap: 6px;
+  margin: 0; padding: 0; list-style: none;
+}
+.cat-list-empty {
+  padding: 18px; text-align: center;
+  font-size: 13px;
+  background: var(--tg-hover);
+  border-radius: var(--tg-radius-md);
+}
+
+.cat-list-item {
+  --cat-color: var(--tg-primary);
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: var(--tg-bg-elev);
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-md);
+  cursor: pointer;
+  transition: border-color var(--tg-trans-fast), background var(--tg-trans-fast),
+              transform var(--tg-trans-fast), box-shadow var(--tg-trans-fast);
+  position: relative; overflow: hidden;
+}
+.cat-list-item::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--cat-color);
+  opacity: 0; transition: opacity var(--tg-trans-fast), width var(--tg-trans-fast);
+}
+.cat-list-item:hover {
+  border-color: color-mix(in srgb, var(--cat-color) 55%, transparent);
+  background: color-mix(in srgb, var(--cat-color) 6%, var(--tg-bg-elev));
+  transform: translateX(2px);
+  box-shadow: var(--tg-shadow-sm);
+}
+.cat-list-item:hover::before { opacity: 1; width: 5px; }
+.cat-list-item:active { transform: translateX(0); }
+
+.cat-list-item.is-default {
+  --cat-color: var(--tg-text-tertiary);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--tg-text-tertiary) 8%, var(--tg-bg-elev)),
+    var(--tg-bg-elev));
+}
+
+.cat-list-dot {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--cat-color);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--cat-color) 18%, transparent);
+  flex-shrink: 0;
+}
+.cat-list-dot.is-uncat {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--tg-text-tertiary),
+    var(--tg-text-tertiary) 3px,
+    transparent 3px,
+    transparent 6px
+  );
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tg-text-tertiary) 12%, transparent);
+}
+
+.cat-list-info { flex: 1; min-width: 0; }
+.cat-list-name {
+  font-family: 'Sora', sans-serif;
+  font-weight: 700; font-size: 15px;
+  color: var(--tg-text);
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+}
+.cat-list-tag {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px;
+  background: var(--tg-hover);
+  color: var(--tg-text-tertiary);
+  font-family: 'Manrope', sans-serif;
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+}
+.cat-list-sub { font-size: 12px; margin-top: 3px; }
+
+.cat-list-actions {
+  display: flex; gap: 4px;
+  opacity: 0;
+  transform: translateX(8px);
+  transition: opacity var(--tg-trans-fast), transform var(--tg-trans-fast);
+}
+.cat-list-item:hover .cat-list-actions {
+  opacity: 1; transform: translateX(0);
+}
+.cat-list-actions .btn-ghost {
+  width: 30px; height: 30px;
+  padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--tg-radius-sm);
+}
+
+.cat-list-arrow {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--tg-text-tertiary);
+  transition: transform var(--tg-trans-fast), color var(--tg-trans-fast);
+}
+.cat-list-item:hover .cat-list-arrow {
+  color: var(--cat-color);
+  transform: translateX(3px);
+}
+
+/* ====== 新建/编辑分类 dialog ====== */
 .cat-modal { width: min(440px, 95vw); }
 .cat-preview {
   display: flex; align-items: center; gap: 10px;

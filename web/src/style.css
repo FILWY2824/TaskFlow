@@ -286,47 +286,128 @@ a:hover { color: var(--tg-primary-hover); }
 ::-webkit-scrollbar-thumb:hover  { background: var(--tg-text-tertiary); }
 
 /* ==========================================================================
- * 4. Form controls (inputs / selects / textarea)
+ * 4. Form controls (inputs / selects / textarea) — modernized
+ *    设计要点：
+ *      · 默认态使用偏冷的 elevated 表面，配 1.5px divider 描边
+ *      · hover 浮起一点，描边更深
+ *      · focus 渐变描边 + 双层光晕（外柔内紧），并有轻微下沉动效
+ *      · 失败态（[aria-invalid]）红色描边 + 红色光晕
+ *      · disabled 减淡且禁用 hover
+ *      · 适配 datetime-local / date / time / color / file
  * ========================================================================== */
 input, select, textarea, button {
   font-family: inherit; font-size: inherit;
 }
 input[type='text'], input[type='email'], input[type='password'],
 input[type='search'], input[type='datetime-local'], input[type='date'],
-input[type='time'], input[type='number'], input[type='url'], select, textarea {
+input[type='time'], input[type='number'], input[type='url'],
+input[type='tel'], select, textarea {
   width: 100%;
-  padding: 11px 14px;
-  background: var(--tg-bg-elev);
+  padding: 12px 14px;
+  background:
+    linear-gradient(var(--tg-bg-elev), var(--tg-bg-elev)) padding-box,
+    var(--tg-bg-elev);
   border: 1.5px solid var(--tg-divider);
-  border-radius: var(--tg-radius-sm);
+  border-radius: var(--tg-radius-md);
   color: var(--tg-text);
   font-size: 14px;
   font-family: inherit;
+  font-weight: 500;
+  letter-spacing: -0.005em;
   transition: border-color var(--tg-trans-fast), box-shadow var(--tg-trans-fast),
-              background var(--tg-trans-fast);
+              background var(--tg-trans-fast), transform var(--tg-trans-fast);
   outline: none;
+  caret-color: var(--tg-primary);
+  -webkit-appearance: none;
 }
-input:hover, select:hover, textarea:hover {
+input:hover:not(:disabled):not(:focus),
+select:hover:not(:disabled):not(:focus),
+textarea:hover:not(:disabled):not(:focus) {
   border-color: var(--tg-divider-strong);
+  background: color-mix(in srgb, var(--tg-primary) 2%, var(--tg-bg-elev));
 }
 input:focus, select:focus, textarea:focus {
   border-color: var(--tg-primary);
-  box-shadow: var(--tg-ring);
+  background: var(--tg-bg-elev);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--tg-primary) 14%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--tg-primary) 18%, transparent);
 }
-input::placeholder, textarea::placeholder { color: var(--tg-text-tertiary); }
-textarea { resize: vertical; min-height: 80px; }
+input::placeholder, textarea::placeholder {
+  color: var(--tg-text-tertiary);
+  font-weight: 400;
+  transition: color var(--tg-trans-fast), opacity var(--tg-trans-fast);
+}
+input:focus::placeholder, textarea:focus::placeholder {
+  opacity: 0.6;
+}
+input:disabled, select:disabled, textarea:disabled {
+  background: var(--tg-hover);
+  color: var(--tg-text-tertiary);
+  cursor: not-allowed;
+  border-color: var(--tg-divider);
+}
+input[aria-invalid='true'], select[aria-invalid='true'], textarea[aria-invalid='true'] {
+  border-color: var(--tg-danger);
+}
+input[aria-invalid='true']:focus, select[aria-invalid='true']:focus, textarea[aria-invalid='true']:focus {
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--tg-danger) 16%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--tg-danger) 24%, transparent);
+}
+
+textarea {
+  resize: vertical; min-height: 88px;
+  line-height: 1.55;
+}
+
 select {
   appearance: none;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
   background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 36px;
+  background-position: right 14px center;
+  padding-right: 38px;
+  cursor: pointer;
 }
+select:focus {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+}
+
+/* datetime-local 在不同浏览器里表现略有差异，统一一下控件颜色 */
+input[type='datetime-local'], input[type='date'], input[type='time'] {
+  color-scheme: light;
+}
+input[type='datetime-local']::-webkit-calendar-picker-indicator,
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='time']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity var(--tg-trans-fast);
+}
+input[type='datetime-local']:hover::-webkit-calendar-picker-indicator,
+input[type='date']:hover::-webkit-calendar-picker-indicator,
+input[type='time']:hover::-webkit-calendar-picker-indicator { opacity: 1; }
+
+/* number 输入框去掉默认的上下箭头（更现代的极简） */
+input[type='number'] { -moz-appearance: textfield; }
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+
 input[type='color'] {
   width: 56px; height: 40px; padding: 4px;
   cursor: pointer; border-radius: var(--tg-radius-sm);
 }
 input[type='checkbox'] { accent-color: var(--tg-primary); cursor: pointer; }
+
+/* 现代化"原生 search"清除按钮 */
+input[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><line x1='18' y1='6' x2='6' y2='18'/><line x1='6' y1='6' x2='18' y2='18'/></svg>") center/contain no-repeat;
+  cursor: pointer;
+}
 
 /* ==========================================================================
  * 5. Buttons
@@ -642,15 +723,33 @@ button { cursor: pointer; }
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg>");
   background-repeat: no-repeat;
   background-position: 12px center;
+  transition: width var(--tg-trans), border-color var(--tg-trans-fast),
+              box-shadow var(--tg-trans-fast), background-color var(--tg-trans-fast);
 }
 .topbar input[type='search']:focus {
   width: 280px;
   border-color: var(--tg-primary);
-  box-shadow: var(--tg-ring);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--tg-primary) 14%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--tg-primary) 18%, transparent);
 }
 
 .content { flex: 1; overflow-y: auto; padding: 24px 24px 40px; }
 .content-inner { max-width: 940px; margin: 0 auto; }
+
+/* ==========================================================================
+ *  日历页全局开关：彻底移除主区域的滚动 + 取消最大宽度限制，
+ *  让 Calendar.vue 中的 .cal-page 严格充满主内容区。
+ *  组件挂载时给 <body> 加 .on-calendar，卸载时移除。
+ * ========================================================================== */
+body.on-calendar .content {
+  overflow: hidden;
+  padding: 16px 24px 24px;
+}
+body.on-calendar .content-inner {
+  max-width: none;
+  height: 100%;
+}
 
 /* ==========================================================================
  * 7. Segmented control & quick-add
@@ -663,13 +762,21 @@ button { cursor: pointer; }
   border: 1px solid var(--tg-divider);
   border-radius: var(--tg-radius-pill);
   box-shadow: var(--tg-shadow-xs);
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+.segment-control::-webkit-scrollbar { display: none; }
 .segment-control button {
   padding: 7px 18px;
   background: transparent;
   color: var(--tg-text-secondary);
   font-weight: 600; font-size: 13.5px;
   border: none; border-radius: var(--tg-radius-pill);
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: background var(--tg-trans), color var(--tg-trans);
 }
 .segment-control button:hover { color: var(--tg-text); }
@@ -1454,6 +1561,7 @@ code {
   .topbar input[type='search'] { width: 130px; }
   .topbar input[type='search']:focus { width: 180px; }
   .content { padding: 16px 16px 100px; }
+  body.on-calendar .content { padding: 12px 12px 12px; }
   .drawer .body .row { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
