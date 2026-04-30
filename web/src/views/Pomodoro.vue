@@ -254,26 +254,38 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
       <div v-if="!isActive" class="pomo-form">
         <div class="field">
           <label>类型</label>
-          <select v-model="kind">
-            <option value="focus">🎯 专注</option>
-            <option value="short_break">☕ 短休</option>
-            <option value="long_break">🛌 长休</option>
-          </select>
+          <div class="pretty-input-wrap">
+            <select v-model="kind" class="pretty-input">
+              <option value="focus">🎯 专注</option>
+              <option value="short_break">☕ 短休</option>
+              <option value="long_break">🛌 长休</option>
+            </select>
+            <span class="pretty-input-glow" aria-hidden="true" />
+          </div>
         </div>
         <div class="field">
           <label>时长（分钟）</label>
-          <input type="number" min="1" max="360" v-model.number="plannedMinutes" />
+          <div class="pretty-input-wrap">
+            <input class="pretty-input" type="number" min="1" max="360" v-model.number="plannedMinutes" />
+            <span class="pretty-input-glow" aria-hidden="true" />
+          </div>
         </div>
         <div class="field full-width">
           <label>关联任务（可选）</label>
-          <select v-model.number="todoId">
-            <option :value="null">不关联</option>
-            <option v-for="t in todoOptions" :key="t.id" :value="t.id">{{ t.title }}</option>
-          </select>
+          <div class="pretty-input-wrap">
+            <select v-model.number="todoId" class="pretty-input">
+              <option :value="null">不关联</option>
+              <option v-for="t in todoOptions" :key="t.id" :value="t.id">{{ t.title }}</option>
+            </select>
+            <span class="pretty-input-glow" aria-hidden="true" />
+          </div>
         </div>
         <div class="field full-width">
           <label>备注（可选）</label>
-          <input v-model="note" placeholder="比如：专注于重构 UI" @keydown.enter="start" />
+          <div class="pretty-input-wrap">
+            <input v-model="note" class="pretty-input" placeholder="比如：专注于重构 UI" @keydown.enter="start" />
+            <span class="pretty-input-glow" aria-hidden="true" />
+          </div>
         </div>
         <div class="field full-width pomo-pref-hint">
           <span class="muted">

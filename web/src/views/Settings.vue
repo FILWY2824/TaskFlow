@@ -128,7 +128,10 @@ async function toggleDesktopNotification(v: boolean) {
         <div class="form-row">
           <label>显示名</label>
           <div class="form-input-wrap">
-            <input v-model="displayName" placeholder="未设置" maxlength="64" />
+            <div class="pretty-input-wrap" style="flex:1">
+              <input v-model="displayName" class="pretty-input" placeholder="未设置" maxlength="64" />
+              <span class="pretty-input-glow" aria-hidden="true" />
+            </div>
             <button class="btn-primary btn-sm" :disabled="!nameDirty || nameSaving" @click="saveDisplayName">
               {{ nameSaving ? '保存中…' : '保存' }}
             </button>
@@ -150,11 +153,14 @@ async function toggleDesktopNotification(v: boolean) {
         <div class="form-row">
           <label>当前时区</label>
           <div class="form-input-wrap">
-            <select v-model="tz" class="select-lg">
-              <optgroup v-for="g in TIMEZONE_GROUPS" :key="g.label" :label="g.label">
-                <option v-for="o in g.options" :key="o.value" :value="o.value">{{ o.label }}</option>
-              </optgroup>
-            </select>
+            <div class="pretty-input-wrap" style="flex:1">
+              <select v-model="tz" class="pretty-input select-lg">
+                <optgroup v-for="g in TIMEZONE_GROUPS" :key="g.label" :label="g.label">
+                  <option v-for="o in g.options" :key="o.value" :value="o.value">{{ o.label }}</option>
+                </optgroup>
+              </select>
+              <span class="pretty-input-glow" aria-hidden="true" />
+            </div>
             <button class="btn-primary btn-sm" :disabled="!tzDirty || tzSaving" @click="saveTimezone">
               {{ tzSaving ? '保存中…' : '保存' }}
             </button>
@@ -292,8 +298,9 @@ async function toggleDesktopNotification(v: boolean) {
 .form-row label { font-size: 13px; color: var(--tg-text-secondary); font-weight: 500; }
 .form-static { font-size: 14px; }
 .form-input-wrap { display: flex; gap: 8px; align-items: center; }
-.form-input-wrap input,
-.form-input-wrap select.select-lg {
+/* 直接子元素的兜底样式（pretty-input-wrap 包裹时不参与） */
+.form-input-wrap > input,
+.form-input-wrap > select.select-lg {
   flex: 1;
   padding: 8px 12px;
   border-radius: var(--tg-radius-sm);
@@ -303,8 +310,8 @@ async function toggleDesktopNotification(v: boolean) {
   color: var(--tg-text);
   transition: border-color var(--tg-trans-fast);
 }
-.form-input-wrap input:focus,
-.form-input-wrap select.select-lg:focus { border-color: var(--tg-primary); outline: none; }
+.form-input-wrap > input:focus,
+.form-input-wrap > select.select-lg:focus { border-color: var(--tg-primary); outline: none; }
 
 .btn-sm { padding: 7px 14px !important; font-size: 13px !important; }
 .btn-xs { padding: 3px 8px !important; font-size: 11.5px !important; }

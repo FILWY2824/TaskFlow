@@ -28,7 +28,6 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', redirect: { name: 'schedule' } },
       { path: 'schedule', name: 'schedule', component: () => import('@/views/Tasks.vue'), props: { filterGroup: 'schedule' } },
-      { path: 'archive', name: 'archive', component: () => import('@/views/Tasks.vue'), props: { filterGroup: 'archive' } },
       { path: 'all', name: 'all', component: () => import('@/views/Tasks.vue'), props: { filter: 'all', titleZh: '全部' } },
       { path: 'no-date', name: 'no-date', component: () => import('@/views/Tasks.vue'), props: { filter: 'no_date', titleZh: '无日期' } },
       { path: 'uncategorized', name: 'uncategorized', component: () => import('@/views/Tasks.vue'), props: { filter: 'no_list', titleZh: '未分类' } },

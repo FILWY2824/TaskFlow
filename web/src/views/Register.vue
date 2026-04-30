@@ -61,27 +61,42 @@ async function submit() {
       <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
       <div class="field">
         <label>邮箱</label>
-        <input v-model="email" type="email" autocomplete="email" autofocus required />
+        <div class="pretty-input-wrap">
+          <input v-model="email" class="pretty-input" type="email" autocomplete="email" autofocus required />
+          <span class="pretty-input-glow" aria-hidden="true" />
+        </div>
       </div>
       <div class="field">
         <label>显示名（可选）</label>
-        <input v-model="displayName" type="text" maxlength="64" />
+        <div class="pretty-input-wrap">
+          <input v-model="displayName" class="pretty-input" type="text" maxlength="64" />
+          <span class="pretty-input-glow" aria-hidden="true" />
+        </div>
       </div>
       <div class="field">
         <label>密码（≥8 位）</label>
-        <input v-model="password" type="password" autocomplete="new-password" required />
+        <div class="pretty-input-wrap">
+          <input v-model="password" class="pretty-input" type="password" autocomplete="new-password" required />
+          <span class="pretty-input-glow" aria-hidden="true" />
+        </div>
       </div>
       <div class="field">
         <label>确认密码</label>
-        <input v-model="password2" type="password" autocomplete="new-password" required />
+        <div class="pretty-input-wrap">
+          <input v-model="password2" class="pretty-input" type="password" autocomplete="new-password" required />
+          <span class="pretty-input-glow" aria-hidden="true" />
+        </div>
       </div>
       <div class="field">
         <label>时区</label>
-        <select v-model="timezone">
-          <optgroup v-for="g in TIMEZONE_GROUPS" :key="g.label" :label="g.label">
-            <option v-for="o in g.options" :key="o.value" :value="o.value">{{ o.label }}</option>
-          </optgroup>
-        </select>
+        <div class="pretty-input-wrap">
+          <select v-model="timezone" class="pretty-input">
+            <optgroup v-for="g in TIMEZONE_GROUPS" :key="g.label" :label="g.label">
+              <option v-for="o in g.options" :key="o.value" :value="o.value">{{ o.label }}</option>
+            </optgroup>
+          </select>
+          <span class="pretty-input-glow" aria-hidden="true" />
+        </div>
         <div class="muted" style="font-size:11.5px;margin-top:6px">注册后可在「设置 → 时区」中修改。</div>
       </div>
       <div class="actions">

@@ -228,11 +228,17 @@ const rrulePresets = [
 
       <div class="field">
         <label>标题</label>
-        <input v-model="title" autofocus />
+        <div class="pretty-input-wrap">
+          <input v-model="title" class="pretty-input" autofocus />
+          <span class="pretty-input-glow" aria-hidden="true" />
+        </div>
       </div>
       <div class="field">
         <label>描述</label>
-        <textarea v-model="description" rows="3" placeholder="补充信息（可选）" />
+        <div class="pretty-input-wrap">
+          <textarea v-model="description" class="pretty-input pretty-textarea" rows="3" placeholder="补充信息（可选）" />
+          <span class="pretty-input-glow" aria-hidden="true" />
+        </div>
       </div>
 
       <!-- 视觉化分类选择 -->
@@ -267,22 +273,31 @@ const rrulePresets = [
       <div class="row">
         <div class="field">
           <label>优先级</label>
-          <select v-model.number="priority">
-            <option v-for="(lab, i) in PRIORITY_LABELS" :key="i" :value="i">{{ lab }}</option>
-          </select>
+          <div class="pretty-input-wrap">
+            <select v-model.number="priority" class="pretty-input">
+              <option v-for="(lab, i) in PRIORITY_LABELS" :key="i" :value="i">{{ lab }}</option>
+            </select>
+            <span class="pretty-input-glow" aria-hidden="true" />
+          </div>
         </div>
         <div class="field">
           <label>工作量</label>
-          <select v-model.number="effort">
-            <option v-for="i in 6" :key="i - 1" :value="i - 1">{{ i - 1 }}</option>
-          </select>
+          <div class="pretty-input-wrap">
+            <select v-model.number="effort" class="pretty-input">
+              <option v-for="i in 6" :key="i - 1" :value="i - 1">{{ i - 1 }}</option>
+            </select>
+            <span class="pretty-input-glow" aria-hidden="true" />
+          </div>
         </div>
       </div>
 
       <div class="row">
         <div class="field">
           <label>截止时间</label>
-          <input v-model="dueAtLocal" type="datetime-local" />
+          <div class="pretty-input-wrap">
+            <input v-model="dueAtLocal" class="pretty-input" type="datetime-local" />
+            <span class="pretty-input-glow" aria-hidden="true" />
+          </div>
         </div>
         <div class="field">
           <label>全天</label>
@@ -317,7 +332,10 @@ const rrulePresets = [
         </li>
       </ul>
       <div class="add-subtask">
-        <input v-model="newSubtaskTitle" placeholder="新增子任务…" @keydown.enter="addSub" />
+        <div class="pretty-input-wrap" style="flex:1">
+          <input v-model="newSubtaskTitle" class="pretty-input" placeholder="新增子任务…" @keydown.enter="addSub" />
+          <span class="pretty-input-glow" aria-hidden="true" />
+        </div>
         <button class="btn-secondary" @click="addSub">+ 添加</button>
       </div>
 
@@ -375,25 +393,40 @@ const rrulePresets = [
           <div v-if="remErr" class="auth-error">{{ remErr }}</div>
           <div class="field">
             <label>标题（默认沿用任务标题）</label>
-            <input v-model="remTitle" />
+            <div class="pretty-input-wrap">
+              <input v-model="remTitle" class="pretty-input" />
+              <span class="pretty-input-glow" aria-hidden="true" />
+            </div>
           </div>
           <div class="field">
             <label>重复（预设）</label>
-            <select v-model="remRRulePreset">
-              <option v-for="p in rrulePresets" :key="p.label" :value="p.value">{{ p.label }}</option>
-            </select>
+            <div class="pretty-input-wrap">
+              <select v-model="remRRulePreset" class="pretty-input">
+                <option v-for="p in rrulePresets" :key="p.label" :value="p.value">{{ p.label }}</option>
+              </select>
+              <span class="pretty-input-glow" aria-hidden="true" />
+            </div>
           </div>
           <div class="field">
             <label>或自定义 RRULE（优先级高于预设）</label>
-            <input v-model="remRRuleCustom" placeholder="例如：FREQ=DAILY;INTERVAL=2" />
+            <div class="pretty-input-wrap">
+              <input v-model="remRRuleCustom" class="pretty-input" placeholder="例如：FREQ=DAILY;INTERVAL=2" />
+              <span class="pretty-input-glow" aria-hidden="true" />
+            </div>
           </div>
           <div v-if="!effectiveRRule" class="field">
             <label>触发时间（单次）</label>
-            <input v-model="remTriggerLocal" type="datetime-local" />
+            <div class="pretty-input-wrap">
+              <input v-model="remTriggerLocal" class="pretty-input" type="datetime-local" />
+              <span class="pretty-input-glow" aria-hidden="true" />
+            </div>
           </div>
           <div v-else class="field">
             <label>起始时间（dtstart，周期从这里展开）</label>
-            <input v-model="remDtstartLocal" type="datetime-local" />
+            <div class="pretty-input-wrap">
+              <input v-model="remDtstartLocal" class="pretty-input" type="datetime-local" />
+              <span class="pretty-input-glow" aria-hidden="true" />
+            </div>
           </div>
           <div class="field">
             <label>通道</label>

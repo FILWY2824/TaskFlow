@@ -12,7 +12,7 @@ import { DEFAULT_TIMEZONE } from '@/timezones'
 
 const props = defineProps<{
   filter?: TodoFilterName
-  filterGroup?: 'schedule' | 'archive'
+  filterGroup?: 'schedule'
   listId?: number
   titleZh?: string
 }>()
@@ -27,7 +27,6 @@ watch(
   () => props.filterGroup,
   (g) => {
     if (g === 'schedule') currentFilter.value = 'today'
-    else if (g === 'archive') currentFilter.value = 'completed'
   },
   { immediate: true },
 )
@@ -36,6 +35,9 @@ const activeFilter = computed<TodoFilterName>(() => {
   if (props.filterGroup) return currentFilter.value
   return props.filter || 'today'
 })
+
+// 当前是否处于"无日期"视图（限制：新建时不写入日期、不允许周期）
+const isNoDateView = computed(() => activeFilter.value === 'no_date')
 
 const editing = ref<Todo | null>(null)
 const errMsg = ref('')
@@ -121,7 +123,11 @@ function openAdd() {
   addRecurInterval.value = 1
   addRecurUnit.value = 'DAILY'
   addErr.value = ''
-  if (activeFilter.value === 'today') {
+  // 「无日期」视图：保持日期为空，且禁用周期；其它视图：根据筛选预填一个合理的截止时间
+  if (isNoDateView.value) {
+    // 显式置空，防御重复打开后的脏值
+    addDueLocal.value = ''
+  } else if (activeFilter.value === 'today') {
     const d = new Date()
     d.setHours(23, 59, 0, 0)
     addDueLocal.value = toLocalInputValue(d)
@@ -135,6 +141,11 @@ function openAdd() {
     activeFilter.value === 'recent_month' ||
     activeFilter.value === 'this_week'
   ) {
+    const d = new Date()
+    d.setHours(23, 59, 0, 0)
+    addDueLocal.value = toLocalInputValue(d)
+  } else if (props.filterGroup === 'schedule') {
+    // 日程组的其它分支（如 all），同样默认给一个今天 23:59
     const d = new Date()
     d.setHours(23, 59, 0, 0)
     addDueLocal.value = toLocalInputValue(d)
@@ -164,6 +175,17 @@ async function submitAdd() {
   if (!addTitle.value.trim()) {
     addErr.value = '任务标题不能为空'
     return
+  }
+  // 「无日期」视图：永远不写入日期 / 不允许周期
+  if (isNoDateView.value) {
+    addDueLocal.value = ''
+    addIsRecurring.value = false
+  } else if (props.filterGroup === 'schedule') {
+    // 日程视图：日期为必填
+    if (!addDueLocal.value) {
+      addErr.value = '日程任务必须填写截止日期'
+      return
+    }
   }
   if (addIsRecurring.value && !addDueLocal.value) {
     addErr.value = '周期日程必须设置一个起始的截止时间'
@@ -264,10 +286,6 @@ const statusLabel = computed(() => {
       <button :class="{ active: currentFilter === 'recent_month' }" @click="currentFilter = 'recent_month'">近一个月</button>
       <button :class="{ active: currentFilter === 'all' }" @click="currentFilter = 'all'">全部</button>
     </div>
-    <div v-if="filterGroup === 'archive'" class="segment-control">
-      <button :class="{ active: currentFilter === 'completed' }" @click="currentFilter = 'completed'">已完成</button>
-      <button :class="{ active: currentFilter === 'overdue' }" @click="currentFilter = 'overdue'">已过期</button>
-    </div>
 
     <div v-if="activeFilter !== 'completed'" class="add-bar">
       <button class="btn-primary add-task-btn" @click="openAdd">
@@ -348,6 +366,12 @@ const statusLabel = computed(() => {
           </header>
           <div class="modal-body">
             <div v-if="addErr" class="auth-error">{{ addErr }}</div>
+            <div v-if="isNoDateView" class="no-date-hint">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              「无日期」任务只用于"想做但没排期"的事项；不会出现在日程里，需要排期时进入任务后再补上时间即可。
+            </div>
 
             <!-- ============ 标题：自定义漂亮输入框 ============ -->
             <div class="pretty-field">
@@ -452,14 +476,15 @@ const statusLabel = computed(() => {
               </div>
             </div>
 
-            <!-- ============ 截止时间 ============ -->
-            <div class="pretty-field">
+            <!-- ============ 截止时间（无日期视图下完全隐藏） ============ -->
+            <div v-if="!isNoDateView" class="pretty-field">
               <label class="pretty-field-label">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                 </svg>
                 截止时间
-                <span class="optional">可选</span>
+                <span v-if="filterGroup === 'schedule'" class="required">*</span>
+                <span v-else class="optional">可选</span>
               </label>
               <div class="pretty-input-wrap pretty-date-wrap">
                 <svg class="pretty-date-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -468,11 +493,14 @@ const statusLabel = computed(() => {
                 <input v-model="addDueLocal" class="pretty-input pretty-date-input" type="datetime-local" />
                 <span class="pretty-input-glow" aria-hidden="true" />
               </div>
-              <div class="form-hint muted">时区跟随账号设置（可在「设置 → 时区」中修改）</div>
+              <div class="form-hint muted">
+                时区跟随账号设置（可在「设置 → 时区」中修改）
+                <template v-if="filterGroup === 'schedule'"> · 日程任务必须设置时间</template>
+              </div>
             </div>
 
-            <!-- ============ 周期：一次性 / 周期性 ============ -->
-            <div class="pretty-field">
+            <!-- ============ 周期：一次性 / 周期性（无日期视图下完全隐藏） ============ -->
+            <div v-if="!isNoDateView" class="pretty-field">
               <label class="pretty-field-label">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -924,6 +952,18 @@ const statusLabel = computed(() => {
 
 /* form-hint 复用 */
 .form-hint { font-size: 11.5px; }
+
+/* 「无日期」视图新建任务时的解释横幅 */
+.no-date-hint {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--tg-primary) 8%, transparent);
+  color: var(--tg-primary);
+  border: 1.5px solid color-mix(in srgb, var(--tg-primary) 28%, transparent);
+  border-radius: var(--tg-radius-md);
+  font-size: 12.5px; font-weight: 600; line-height: 1.55;
+}
+.no-date-hint svg { flex-shrink: 0; margin-top: 2px; }
 
 @media (max-width: 600px) {
   .add-bar-hint { display: none; }

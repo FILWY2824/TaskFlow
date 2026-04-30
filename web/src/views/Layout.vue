@@ -37,10 +37,10 @@ function pickStatus(s: TodoStatusFilter) {
   showStatusMenu.value = false
 }
 
-// 状态筛选按钮只在「日程相关」页面才显示
+// 状态筛选按钮在「日程相关」与「无日期」页面都显示
 const showsStatusFilter = computed(() => {
   const n = String(route.name || '')
-  return n === 'schedule' || n === 'list' || n === 'uncategorized' || n === 'all'
+  return n === 'schedule' || n === 'list' || n === 'uncategorized' || n === 'all' || n === 'no-date'
 })
 
 // 点击外部时关闭菜单
@@ -93,9 +93,9 @@ watch(() => route.fullPath, () => {
 })
 
 // 侧栏：移除「全部任务」与「我的分类」整段；分类入口移到顶栏按钮 + 弹层。
+// 移除「完成 / 过期」入口（已下线 archive 页面）；状态筛选改用顶栏的状态按钮在每个视图里使用。
 const sidebarFilters = [
   { name: 'schedule', label: '日程', icon: 'calendar' },
-  { name: 'archive', label: '完成 / 过期', icon: 'archive' },
   { name: 'no-date', label: '无日期', icon: 'circle' },
 ] as const
 
@@ -328,7 +328,32 @@ const inCategoryView = computed(
             <span class="cat-btn-label">分类</span>
             <span v-if="data.lists.length" class="cat-btn-count">{{ data.lists.length }}</span>
           </button>
-          <input v-model="search" type="search" placeholder="搜索任务…" @keydown.enter="submitSearch" />
+          <!-- 搜索框：手写样式 + 内嵌图标，避免使用浏览器原生 search 控件 -->
+          <div class="topbar-search" :class="{ 'has-value': !!search }">
+            <svg class="topbar-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input
+              v-model="search"
+              type="text"
+              class="topbar-search-input"
+              placeholder="搜索任务…"
+              @keydown.enter="submitSearch"
+            />
+            <button
+              v-if="search"
+              type="button"
+              class="topbar-search-clear"
+              aria-label="清空"
+              @click="search = ''; submitSearch()"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
       <section class="content">
@@ -460,14 +485,17 @@ const inCategoryView = computed(
 
             <div class="field">
               <label>名称</label>
-              <input
-                v-model="listForm.name"
-                class="modern-input"
-                autofocus
-                maxlength="60"
-                placeholder="例如：工作 / 学习 / 生活…"
-                @keydown.enter="submitList"
-              />
+              <div class="pretty-input-wrap">
+                <input
+                  v-model="listForm.name"
+                  class="pretty-input"
+                  autofocus
+                  maxlength="60"
+                  placeholder="例如：工作 / 学习 / 生活…"
+                  @keydown.enter="submitList"
+                />
+                <span class="pretty-input-glow" aria-hidden="true" />
+              </div>
             </div>
 
             <div class="field">
@@ -529,7 +557,6 @@ function pageTitle(route: RouteLocationNormalizedLoaded, lists: _List[] = []): s
   }
   const m: Record<string, string> = {
     schedule: '日程',
-    archive: '完成 / 过期',
     'no-date': '无日期',
     uncategorized: '未分类',
     all: '全部任务',
@@ -925,4 +952,83 @@ function navIcon(name: string): string {
   border: 2px dashed var(--tg-divider-strong);
 }
 .custom-color:hover { border-color: var(--tg-primary); }
+
+/* ====== 顶栏搜索（手写样式 / 自定义控件） ====== */
+.topbar-search {
+  --st-color: var(--tg-text-tertiary);
+  position: relative;
+  display: inline-flex; align-items: center;
+  width: 220px;
+  padding: 0 10px 0 36px;
+  background: var(--tg-bg-elev);
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-pill);
+  transition: width var(--tg-trans), border-color var(--tg-trans-fast),
+              color var(--tg-trans-fast), box-shadow var(--tg-trans-fast),
+              background var(--tg-trans-fast);
+}
+.topbar-search:hover {
+  border-color: var(--tg-divider-strong);
+  background: color-mix(in srgb, var(--tg-primary) 2%, var(--tg-bg-elev));
+}
+.topbar-search:focus-within {
+  width: 280px;
+  border-color: var(--tg-primary);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--tg-primary) 14%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--tg-primary) 18%, transparent);
+}
+.topbar-search-icon {
+  position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--tg-text-tertiary);
+  transition: color var(--tg-trans-fast), transform var(--tg-trans-fast);
+  pointer-events: none;
+}
+.topbar-search:focus-within .topbar-search-icon {
+  color: var(--tg-primary);
+  transform: translateY(-50%) scale(1.05);
+}
+.topbar-search-input {
+  flex: 1; min-width: 0;
+  padding: 9px 0;
+  background: transparent;
+  border: none; outline: none;
+  color: var(--tg-text);
+  font-family: inherit;
+  font-size: 13.5px; font-weight: 500;
+  caret-color: var(--tg-primary);
+}
+.topbar-search-input::placeholder {
+  color: var(--tg-text-tertiary);
+  font-weight: 400;
+  transition: opacity var(--tg-trans-fast);
+}
+.topbar-search-input:focus::placeholder { opacity: 0.55; }
+.topbar-search-clear {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  margin-left: 4px;
+  padding: 0;
+  background: var(--tg-hover);
+  color: var(--tg-text-tertiary);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background var(--tg-trans-fast), color var(--tg-trans-fast),
+              transform var(--tg-trans-fast);
+}
+.topbar-search-clear:hover {
+  background: color-mix(in srgb, var(--tg-danger) 14%, var(--tg-hover));
+  color: var(--tg-danger);
+  transform: scale(1.08);
+}
+
+@media (max-width: 720px) {
+  .topbar-search { width: 150px; }
+  .topbar-search:focus-within { width: 200px; }
+}
+@media (max-width: 540px) {
+  .topbar-search { display: none; }
+}
 </style>

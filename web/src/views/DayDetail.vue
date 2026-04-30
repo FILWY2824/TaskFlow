@@ -557,18 +557,25 @@ function shiftDay(delta: number) {
 
             <div class="form-field">
               <label>标题 <span class="required">*</span></label>
-              <input
-                v-model="addTitle"
-                placeholder="任务名称…"
-                autofocus
-                maxlength="200"
-                @keydown.enter="submitAdd"
-              />
+              <div class="pretty-input-wrap">
+                <input
+                  v-model="addTitle"
+                  class="pretty-input"
+                  placeholder="任务名称…"
+                  autofocus
+                  maxlength="200"
+                  @keydown.enter="submitAdd"
+                />
+                <span class="pretty-input-glow" aria-hidden="true" />
+              </div>
             </div>
 
             <div class="form-field">
               <label>描述（可选）</label>
-              <textarea v-model="addDescription" rows="2" placeholder="补充说明…" />
+              <div class="pretty-input-wrap">
+                <textarea v-model="addDescription" class="pretty-input pretty-textarea" rows="2" placeholder="补充说明…" />
+                <span class="pretty-input-glow" aria-hidden="true" />
+              </div>
             </div>
 
             <div class="form-field">
@@ -619,7 +626,10 @@ function shiftDay(delta: number) {
 
             <div class="form-field">
               <label>时间（可选）</label>
-              <input v-model="addTimeLocal" type="time" />
+              <div class="pretty-input-wrap">
+                <input v-model="addTimeLocal" class="pretty-input" type="time" />
+                <span class="pretty-input-glow" aria-hidden="true" />
+              </div>
               <div class="form-hint muted">不填则默认为当天 23:59</div>
             </div>
           </div>

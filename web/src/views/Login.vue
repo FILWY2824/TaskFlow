@@ -45,11 +45,17 @@ async function submit() {
       <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
       <div class="field">
         <label>邮箱</label>
-        <input v-model="email" type="email" autocomplete="email" autofocus required />
+        <div class="pretty-input-wrap">
+          <input v-model="email" class="pretty-input" type="email" autocomplete="email" autofocus required />
+          <span class="pretty-input-glow" aria-hidden="true" />
+        </div>
       </div>
       <div class="field">
         <label>密码</label>
-        <input v-model="password" type="password" autocomplete="current-password" required />
+        <div class="pretty-input-wrap">
+          <input v-model="password" class="pretty-input" type="password" autocomplete="current-password" required />
+          <span class="pretty-input-glow" aria-hidden="true" />
+        </div>
       </div>
       <div class="actions">
         <button type="submit" class="btn-primary" :disabled="loading">
