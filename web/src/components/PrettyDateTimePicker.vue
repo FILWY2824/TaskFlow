@@ -35,6 +35,55 @@ const open = ref(false)
 const triggerRef = ref<HTMLElement | null>(null)
 const popRef = ref<HTMLElement | null>(null)
 
+// ---------- 弹层定位 ----------
+// 之前的实现把弹层放在触发按钮的子元素内，用 position: absolute 定位。
+// 这样会被祖先的 modal 容器（modal-body 设了 overflow-y: auto, 浏览器会把
+// overflow-x 也当成 auto）裁掉，导致用户看到的只是被截断一半的"时间盘"。
+//
+// 现在改成：用 <Teleport to="body"> 把弹层挂到 <body> 下，并用 position: fixed
+// 配合"以触发按钮为锚"的运行时坐标，自动处理上 / 下方向、左右越界的情况。
+// 这样无论触发器嵌套在多深的 overflow 容器里都能完整地展示出来。
+const popStyle = ref<Record<string, string>>({})
+const POP_GAP = 8                       // 与触发按钮的间距
+const POP_DESKTOP_W = 580               // 与 CSS 中 .pdt-pop 默认宽度保持一致
+const POP_DESKTOP_H_EST = 460           // 弹层估计高度 (用于上下翻转判断)
+
+function recomputePopPosition() {
+  if (!open.value || !triggerRef.value) return
+  // 移动端 (<= 480px) 使用底部抽屉式布局, 不需要 JS 定位 —— CSS 已经把它
+  // 钉到屏幕底部.
+  if (window.innerWidth <= 480) {
+    popStyle.value = {}
+    return
+  }
+  const r = triggerRef.value.getBoundingClientRect()
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const pad = 12
+  const popW = Math.min(POP_DESKTOP_W, vw - pad * 2)
+
+  // 水平: 默认与触发器左边对齐, 右越界则贴右边
+  let left = r.left
+  if (left + popW > vw - pad) left = vw - pad - popW
+  if (left < pad) left = pad
+
+  // 垂直: 默认在触发器下方, 空间不够就放上方
+  const spaceBelow = vh - r.bottom - POP_GAP - pad
+  const spaceAbove = r.top - POP_GAP - pad
+  let top: number
+  if (spaceBelow >= POP_DESKTOP_H_EST || spaceBelow >= spaceAbove) {
+    top = r.bottom + POP_GAP
+  } else {
+    top = Math.max(pad, r.top - POP_GAP - POP_DESKTOP_H_EST)
+  }
+  popStyle.value = {
+    position: 'fixed',
+    top: `${top}px`,
+    left: `${left}px`,
+    width: `${popW}px`,
+  }
+}
+
 // 当前正在浏览的"月"，与 selected 解耦：用户可能在浏览 5 月但 selected 是 3 月某天
 const browseDate = ref(new Date())
 // 日历"已选"日期；和时间分开存
@@ -275,9 +324,51 @@ function scrollWheelsToSelected() {
 //      并平滑对齐到正中。
 //   2. 不主动节流滚动事件 —— 让 CSS 的 scroll-snap 先做粗对齐,
 //      JS 只负责把状态同步到 selected。
+//   3. 对于鼠标滚轮 / 触控板这类"惯性极强"的输入, 浏览器一次 wheel 事件
+//      会带来 100+ 像素的 scroll, 一滑就跳过好几档. 因此我们额外拦截
+//      wheel 事件: 阻止默认滚动, 改为"每个滚轮刻度精确步进 1 档".
+//      触摸滑动 / 拖拽滚动 不会触发 wheel, 仍走原生路径 + scroll-snap.
 const HOUR_STEP_PX = 36
 let hourScrollTimer: number | null = null
 let minuteScrollTimer: number | null = null
+
+// 鼠标滚轮专用: 把"惯性滚动"折算成"逐档跳", 并节流防抖避免一次滚轮事件
+// 累积成多次 step. 我们累计 deltaY, 达到阈值才动一档.
+const WHEEL_THRESHOLD = 24
+let hourWheelAcc = 0
+let minuteWheelAcc = 0
+let wheelCooldownTimer: number | null = null
+function onHourWheel(e: WheelEvent) {
+  e.preventDefault()
+  hourWheelAcc += e.deltaY
+  // 累积到阈值就步进一档. 每次只动一档, 哪怕一次惯性滑动 deltaY 很大,
+  // 也会因为 cooldown 而被截断 —— 这正是用户想要的"精确感".
+  while (Math.abs(hourWheelAcc) >= WHEEL_THRESHOLD) {
+    const dir = hourWheelAcc > 0 ? 1 : -1
+    stepHour(dir as 1 | -1)
+    hourWheelAcc -= dir * WHEEL_THRESHOLD
+  }
+  // 余量在 cooldown 后清零, 避免"滚到一半被冻住"的体感.
+  if (wheelCooldownTimer) window.clearTimeout(wheelCooldownTimer)
+  wheelCooldownTimer = window.setTimeout(() => {
+    hourWheelAcc = 0
+    minuteWheelAcc = 0
+  }, 180)
+}
+function onMinuteWheel(e: WheelEvent) {
+  e.preventDefault()
+  minuteWheelAcc += e.deltaY
+  while (Math.abs(minuteWheelAcc) >= WHEEL_THRESHOLD) {
+    const dir = minuteWheelAcc > 0 ? 1 : -1
+    stepMinute(dir as 1 | -1)
+    minuteWheelAcc -= dir * WHEEL_THRESHOLD
+  }
+  if (wheelCooldownTimer) window.clearTimeout(wheelCooldownTimer)
+  wheelCooldownTimer = window.setTimeout(() => {
+    hourWheelAcc = 0
+    minuteWheelAcc = 0
+  }, 180)
+}
 function onHourScroll() {
   if (!hourListRef.value) return
   if (hourScrollTimer) window.clearTimeout(hourScrollTimer)
@@ -387,7 +478,10 @@ function toggleOpen() {
         1,
       )
     }
-    nextTick(() => scrollWheelsToSelected())
+    nextTick(() => {
+      recomputePopPosition()
+      scrollWheelsToSelected()
+    })
   }
 }
 function close() { open.value = false }
@@ -410,13 +504,23 @@ function onKey(e: KeyboardEvent) {
     close()
   }
 }
+function onWindowChange() {
+  if (open.value) recomputePopPosition()
+}
 onMounted(() => {
   document.addEventListener('mousedown', onDocClick)
   document.addEventListener('keydown', onKey)
+  // 弹层用 fixed 定位 + 锚点是触发按钮, 滚动 / 缩放窗口时需要重新算位置.
+  // 用 capture: true 这样能监听到所有滚动容器, 避免被 modal-body 之类的内层
+  // 滚动容器吞掉.
+  window.addEventListener('resize', onWindowChange)
+  window.addEventListener('scroll', onWindowChange, true)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onDocClick)
   document.removeEventListener('keydown', onKey)
+  window.removeEventListener('resize', onWindowChange)
+  window.removeEventListener('scroll', onWindowChange, true)
 })
 </script>
 
@@ -449,9 +553,17 @@ onBeforeUnmount(() => {
       </span>
     </button>
 
-    <!-- ============ 弹层 ============ -->
-    <Transition name="pdt-pop">
-      <div v-if="open" ref="popRef" class="pdt-pop">
+    <!-- ============ 弹层 ============
+         挂到 <body> 下用 fixed 定位, 这样既能逃出 modal 容器的 overflow 裁剪,
+         也不会被祖先的 transform / filter 影响层叠. -->
+    <Teleport to="body">
+      <Transition name="pdt-pop">
+        <div
+          v-if="open"
+          ref="popRef"
+          class="pdt-pop"
+          :style="popStyle"
+        >
         <!-- 顶部：快捷预设 -->
         <div class="pdt-presets">
           <button class="pdt-preset" @click="presetToday(23, 59)">
@@ -560,7 +672,7 @@ onBeforeUnmount(() => {
             <!-- 滚轮 (拖滑选择) -->
             <div class="pdt-wheels">
               <!-- 小时 -->
-              <div class="pdt-wheel">
+              <div class="pdt-wheel" @wheel.prevent="onHourWheel">
                 <div class="pdt-wheel-band" aria-hidden="true" />
                 <div ref="hourListRef" class="pdt-wheel-list" @scroll.passive="onHourScroll">
                   <div class="pdt-wheel-pad" />
@@ -578,7 +690,7 @@ onBeforeUnmount(() => {
               </div>
               <span class="pdt-wheel-sep">:</span>
               <!-- 分钟 -->
-              <div class="pdt-wheel">
+              <div class="pdt-wheel" @wheel.prevent="onMinuteWheel">
                 <div class="pdt-wheel-band" aria-hidden="true" />
                 <div ref="minuteListRef" class="pdt-wheel-list" @scroll.passive="onMinuteScroll">
                   <div class="pdt-wheel-pad" />
@@ -623,6 +735,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -709,14 +822,17 @@ onBeforeUnmount(() => {
 .pdt-trigger-caret svg { width: 16px; height: 16px; }
 .pdt-trigger.is-open .pdt-trigger-caret { transform: rotate(180deg); color: var(--tg-primary); }
 
-/* ===== 弹层 ===== */
+/* ===== 弹层 =====
+   位置 / 宽度由 JS 通过 style 绑定到组件实例上, 这里只负责"长什么样".
+   注意 Teleport 后选择器 .pdt-pop 依然能命中, 因为 scoped 样式靠 data-v-* 属性
+   匹配, 而 Teleport 不会删 data-v-*. */
 .pdt-pop {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  width: 620px;
-  max-width: calc(100vw - 32px);
-  z-index: 800;
+  /* JS 默认走 fixed; 这里给个保底, 避免在 SSR / 慢渲染瞬间样式乱跳. */
+  position: fixed;
+  top: 0; left: 0;
+  width: 580px;
+  max-width: calc(100vw - 24px);
+  z-index: 9100;
   background: var(--tg-bg-elev);
   border: 1px solid var(--tg-divider);
   border-radius: var(--tg-radius-lg);
@@ -727,10 +843,13 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-/* ===== 主体: 日历(左) + 时间(右) ===== */
+/* ===== 主体: 日历(左) + 时间(右) =====
+   收紧两列宽度以适配 580px 弹层. 之前 minmax(280, 1fr) + minmax(220, auto)
+   会让弹层最小要 ~520-540px, 在被 modal 裁过一次以后右侧"时间"就被切掉一半 —
+   连分钟都看不到. 现在固定时间列宽度 220px, 余下都给日历, 两列严格对齐. */
 .pdt-main {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(220px, auto);
+  grid-template-columns: 1fr 220px;
   gap: 0;
 }
 .pdt-main > .pdt-time {
@@ -876,12 +995,15 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.95);
 }
 
-/* ===== 时间区 ===== */
+/* ===== 时间区 =====
+   收紧 padding / 间距以适配 220px 列宽. 关键: pdt-step-row 改成允许换行的
+   flex-wrap, 这样在窄列里两组 ±按钮会自动分两行而不是被挤出列外. */
 .pdt-time {
   border-top: 1px solid var(--tg-divider);
-  padding: 12px 14px 10px;
+  padding: 12px 12px 10px;
   display: flex;
   flex-direction: column;
+  min-width: 0;        /* 防止 flex 子项撑爆父级宽度 */
 }
 .pdt-time-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -921,7 +1043,7 @@ onBeforeUnmount(() => {
 
 /* 步进按钮组 */
 .pdt-step-row {
-  display: flex; gap: 8px; justify-content: center;
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
   margin: 6px 0 8px;
 }
 .pdt-step-group {
@@ -1094,26 +1216,20 @@ onBeforeUnmount(() => {
   transform: translateY(-8px) scale(0.97);
 }
 
-/* ===== 移动端优化 ===== */
-@media (max-width: 720px) {
-  /* 两列变一列：日历在上、时间在下，便于在窄屏单手操作 */
-  .pdt-pop { width: 380px; }
-  .pdt-main {
-    grid-template-columns: 1fr;
-  }
-  .pdt-main > .pdt-time {
-    border-left: none;
-    border-top: 1px solid var(--tg-divider);
-  }
-}
-
+/* ===== 移动端优化 =====
+   设计选择: 用户明确要求时间永远在日期右边(两列布局), 因此不再把它折成
+   单列堆叠. 即使在 ~480px 宽以下也保留两列, 仅切换为"底部抽屉"形式以贴近
+   原生移动端选择器的体感. 这样选时间的入口永远不会被砍掉.
+   弹层宽度由 JS 在 recomputePopPosition() 里计算; CSS 不再硬写 width. */
 @media (max-width: 480px) {
   .pdt-pop {
-    position: fixed;
-    top: auto;
-    bottom: 0; left: 0; right: 0;
-    width: auto;
-    max-width: 100vw;
+    /* 底部抽屉:覆盖 JS 写入的 fixed 坐标. !important 用来盖过 inline style. */
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
     border-radius: var(--tg-radius-xl) var(--tg-radius-xl) 0 0;
     border-bottom: none;
     box-shadow:
@@ -1130,5 +1246,9 @@ onBeforeUnmount(() => {
     background: var(--tg-divider-strong);
   }
   .pdt-presets { padding-top: 24px; }
+  /* 在底部抽屉下日历列收紧, 但仍与时间并排 */
+  .pdt-main { grid-template-columns: 1fr 200px; }
+  .pdt-time { padding: 10px 8px 8px; }
+  .pdt-wheel { width: 60px; }
 }
 </style>

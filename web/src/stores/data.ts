@@ -86,6 +86,12 @@ export const useDataStore = defineStore('data', {
     async updateTodo(id: number, input: TodoInput) {
       const t = await todosApi.update(id, input)
       this.replaceTodo(t)
+      // BUGFIX: 编辑任务后单纯 in-place 替换会让"过滤后的列表"与最新状态脱节。
+      // 比如把任务从今天改到明天、修改分类、修改优先级 / 完成状态等，都可能让任务
+      // 应当移出/移入当前视图，而仅替换数组中那一项无法触发重新过滤。
+      // 与 createTodo 保持一致：直接重新拉取一次当前过滤下的列表，让 UI 永远显示
+      // 最新状态。后端列表查询本身很轻，性能开销可以忽略。
+      await this.loadTodos().catch(() => { /* 网络瞬时失败时保留 in-place 结果 */ })
       return t
     },
     async toggleTodoComplete(t: Todo) {
