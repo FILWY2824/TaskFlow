@@ -80,7 +80,7 @@ func (h *TelegramHandler) CreateBindToken(w http.ResponseWriter, r *http.Request
 }
 
 type bindStatusResponse struct {
-	Status    string         `json:"status"` // pending | expired | used | not_found
+	Status    string         `json:"status"` // pending | expired | bound | not_found
 	ExpiresAt *time.Time     `json:"expires_at,omitempty"`
 	Binding   *store.Binding `json:"binding,omitempty"`
 }
@@ -115,7 +115,8 @@ func (h *TelegramHandler) GetBindStatus(w http.ResponseWriter, r *http.Request) 
 	resp := bindStatusResponse{ExpiresAt: &bt.ExpiresAt}
 	switch {
 	case bt.UsedAt != nil:
-		resp.Status = "used"
+		// 历史上这里返回 "used"，但前端期望的字段是 "bound"。统一为 "bound"。
+		resp.Status = "bound"
 		// 顺带把当前用户的最新一条 binding 带回去,方便前端立刻渲染。
 		bindings, _ := h.Store.ListBindings(r.Context(), uid)
 		if n := len(bindings); n > 0 {

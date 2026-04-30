@@ -111,6 +111,14 @@ export const useNotificationsStore = defineStore('notifications', {
       this.unread = 0
     },
     pushToast(t: { id: number; title: string; body: string }) {
+      // 应用内 toast 的偏好开关由 settings 控制；关闭时直接丢弃。
+      try {
+        const raw = localStorage.getItem('todoalarm.prefs.v1')
+        if (raw) {
+          const p = JSON.parse(raw) as { inAppToast?: boolean }
+          if (p && p.inAppToast === false) return
+        }
+      } catch { /* ignore */ }
       const key = ++toastSeq
       this.toastQueue.push({ key, id: t.id, title: t.title, body: t.body })
       setTimeout(() => {
@@ -135,7 +143,16 @@ export const useNotificationsStore = defineStore('notifications', {
           // ignore
         })
         try {
-          if ('Notification' in window && Notification.permission === 'granted') {
+          // 桌面通知开关
+          let allow = true
+          try {
+            const raw = localStorage.getItem('todoalarm.prefs.v1')
+            if (raw) {
+              const p = JSON.parse(raw) as { desktopNotification?: boolean }
+              if (p && p.desktopNotification === false) allow = false
+            }
+          } catch { /* ignore */ }
+          if (allow && 'Notification' in window && Notification.permission === 'granted') {
             new Notification(ev.title, { body: ev.body || '', tag: 'todolist-' + ev.notification_id })
           }
         } catch {

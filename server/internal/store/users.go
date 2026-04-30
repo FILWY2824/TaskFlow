@@ -46,6 +46,35 @@ func (s *UserStore) GetByID(ctx context.Context, id int64) (*models.User, error)
 	return scanUser(row)
 }
 
+// Update 修改 display_name / timezone。任意为 nil 表示该字段不变。
+// 只触碰非 nil 的字段；timezone 传 "" 视为重置为 "UTC"。
+func (s *UserStore) Update(ctx context.Context, id int64, displayName, timezone *string) (*models.User, error) {
+	sets := []string{}
+	args := []any{}
+	if displayName != nil {
+		sets = append(sets, "display_name = ?")
+		args = append(args, *displayName)
+	}
+	if timezone != nil {
+		v := *timezone
+		if v == "" {
+			v = "UTC"
+		}
+		sets = append(sets, "timezone = ?")
+		args = append(args, v)
+	}
+	if len(sets) == 0 {
+		return s.GetByID(ctx, id)
+	}
+	sets = append(sets, "updated_at = CURRENT_TIMESTAMP")
+	args = append(args, id)
+	q := "UPDATE users SET " + strings.Join(sets, ", ") + " WHERE id = ?"
+	if _, err := s.DB.ExecContext(ctx, q, args...); err != nil {
+		return nil, fmt.Errorf("update user: %w", err)
+	}
+	return s.GetByID(ctx, id)
+}
+
 // GetByEmailWithHash 同时返回 password_hash。仅供登录使用,不暴露给上层 JSON。
 func (s *UserStore) GetByEmailWithHash(ctx context.Context, email string) (*models.User, string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))

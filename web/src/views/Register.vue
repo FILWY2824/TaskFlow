@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ApiError } from '@/api'
+import { TIMEZONE_GROUPS, DEFAULT_TIMEZONE } from '@/timezones'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -11,7 +12,8 @@ const email = ref('')
 const password = ref('')
 const password2 = ref('')
 const displayName = ref('')
-const timezone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai')
+// 默认中国上海。用户可在下拉里选其他常见时区，注册后还可在设置里改。
+const timezone = ref<string>(DEFAULT_TIMEZONE)
 const errMsg = ref('')
 const loading = ref(false)
 
@@ -35,7 +37,7 @@ async function submit() {
       email: email.value.trim(),
       password: password.value,
       display_name: displayName.value.trim() || undefined,
-      timezone: timezone.value || undefined,
+      timezone: timezone.value || DEFAULT_TIMEZONE,
     })
     router.replace('/')
   } catch (e) {
@@ -63,7 +65,7 @@ async function submit() {
       </div>
       <div class="field">
         <label>显示名（可选）</label>
-        <input v-model="displayName" type="text" />
+        <input v-model="displayName" type="text" maxlength="64" />
       </div>
       <div class="field">
         <label>密码（≥8 位）</label>
@@ -75,7 +77,12 @@ async function submit() {
       </div>
       <div class="field">
         <label>时区</label>
-        <input v-model="timezone" type="text" placeholder="Asia/Shanghai" />
+        <select v-model="timezone">
+          <optgroup v-for="g in TIMEZONE_GROUPS" :key="g.label" :label="g.label">
+            <option v-for="o in g.options" :key="o.value" :value="o.value">{{ o.label }}</option>
+          </optgroup>
+        </select>
+        <div class="muted" style="font-size:11.5px;margin-top:6px">注册后可在「设置 → 时区」中修改。</div>
       </div>
       <div class="actions">
         <button type="submit" class="btn-primary" :disabled="loading">

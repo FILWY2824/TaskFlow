@@ -4,8 +4,12 @@ import { pomodoro as pomoApi, todos as todosApi, ApiError } from '@/api'
 import type { PomodoroKind, PomodoroSession, Todo } from '@/types'
 import { fmtDateTime, fmtDuration } from '@/utils'
 import { useDataStore } from '@/stores/data'
+import { usePrefsStore } from '@/stores/prefs'
+import { useNotificationsStore } from '@/stores/notifications'
 
 const data = useDataStore()
+const prefs = usePrefsStore()
+const notif = useNotificationsStore()
 
 const plannedMinutes = ref(25)
 const planned = ref(25 * 60)
@@ -17,11 +21,14 @@ const kind = ref<PomodoroKind>('focus')
 const todoId = ref<number | null>(null)
 const note = ref('')
 const errMsg = ref('')
+const okMsg = ref('')
 
 const session = ref<PomodoroSession | null>(null)
 const tickHandle = ref<number | null>(null)
 const remaining = ref(0)
 const elapsed = ref(0)
+// 标记本次会话的"到点"事件已经处理过，避免重复触发自动完成。
+const expiredHandled = ref(false)
 
 const recent = ref<PomodoroSession[]>([])
 const todoOptions = ref<Todo[]>([])
@@ -40,61 +47,100 @@ const display = computed(() => {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 })
 
+// 进度环：基于"已设定时长 - 已过秒数"，但封顶到 planned。
+// 重要：自动完成关闭时，倒计时结束后我们仍按 planned 计算，不再让 elapsed 继续往上跑。
 const progress = computed(() => {
   if (!session.value || session.value.planned_duration_seconds <= 0) return 0
-  const p = elapsed.value / session.value.planned_duration_seconds
-  return Math.max(0, Math.min(1, p))
+  const eff = Math.min(elapsed.value, session.value.planned_duration_seconds)
+  return Math.max(0, Math.min(1, eff / session.value.planned_duration_seconds))
 })
 
 async function loadRecent() {
-  try {
-    recent.value = await pomoApi.list({ limit: 20 })
-  } catch (e) {
-    errMsg.value = e instanceof ApiError ? e.message : (e as Error).message
-  }
+  try { recent.value = await pomoApi.list({ limit: 20 }) }
+  catch (e) { errMsg.value = e instanceof ApiError ? e.message : (e as Error).message }
 }
 
 async function loadTodos() {
   try {
     await data.loadLists()
-    // BUGFIX: 此前用动态 await import('@/api') 重复加载模块。改静态 import。
     todoOptions.value = await todosApi.list({ limit: 200 })
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
 }
 
-onMounted(async () => {
-  await Promise.all([loadRecent(), loadTodos()])
-})
+onMounted(async () => { await Promise.all([loadRecent(), loadTodos()]) })
 onBeforeUnmount(() => {
   if (tickHandle.value) window.clearInterval(tickHandle.value)
 })
+
+function ringNotify(title: string, body: string) {
+  // 优先级：浏览器桌面通知（如果用户允许）→ 应用内 toast
+  try {
+    if (prefs.desktopNotification && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { body })
+    }
+  } catch { /* ignore */ }
+  if (prefs.inAppToast) {
+    notif.pushToast({ id: -Date.now(), title, body })
+  }
+}
 
 function startTick() {
   if (tickHandle.value) window.clearInterval(tickHandle.value)
   tickHandle.value = window.setInterval(() => {
     if (!session.value) return
     const startMs = new Date(session.value.started_at).getTime()
+    const planned = session.value.planned_duration_seconds
     elapsed.value = Math.floor((Date.now() - startMs) / 1000)
-    remaining.value = session.value.planned_duration_seconds - elapsed.value
-    if (remaining.value <= 0) {
+    remaining.value = planned - elapsed.value
+
+    if (remaining.value <= 0 && !expiredHandled.value) {
+      expiredHandled.value = true
       remaining.value = 0
-      if (tickHandle.value) {
-        window.clearInterval(tickHandle.value)
-        tickHandle.value = null
-      }
-      try {
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('🍅 番茄到点！', { body: '可以休息或继续。' })
+      // 提醒
+      ringNotify('🍅 番茄到点！', '专注时间已结束。')
+
+      if (prefs.pomodoroAutoComplete) {
+        // 自动结束：以"设定时长"为准入库，actual=planned，状态=completed。
+        // 这避免了"用户没点击 -> 用两次点击间隔时间"的问题。
+        autoCompleteOnExpire()
+      } else {
+        // 不自动结束：停在 0:00，等用户点"完成"或"放弃"
+        if (tickHandle.value) {
+          window.clearInterval(tickHandle.value)
+          tickHandle.value = null
         }
-      } catch { /* ignore */ }
+      }
     }
   }, 1000)
 }
 
+async function autoCompleteOnExpire() {
+  if (!session.value) return
+  const sid = session.value.id
+  // 立刻停 tick，避免边界 race
+  if (tickHandle.value) {
+    window.clearInterval(tickHandle.value)
+    tickHandle.value = null
+  }
+  try {
+    const s = await pomoApi.complete(sid)
+    // 用服务端返回的为准；如果服务端将 actual 设为两次点击之差，
+    // 我们也尊重它——但 UI 上"剩余时间已为 0、planned 即结束"逻辑保持。
+    session.value = null
+    elapsed.value = 0
+    remaining.value = 0
+    expiredHandled.value = false
+    recent.value.unshift(s)
+    okMsg.value = '✓ 已自动结束并入库'
+    setTimeout(() => { okMsg.value = '' }, 3000)
+  } catch (e) {
+    errMsg.value = e instanceof ApiError ? e.message : (e as Error).message
+  }
+}
+
 async function start() {
   errMsg.value = ''
+  okMsg.value = ''
   if (!plannedMinutes.value || plannedMinutes.value <= 0) {
     errMsg.value = '时长必须大于 0'
     return
@@ -109,6 +155,7 @@ async function start() {
     session.value = s
     elapsed.value = 0
     remaining.value = s.planned_duration_seconds
+    expiredHandled.value = false
     startTick()
   } catch (e) {
     errMsg.value = e instanceof ApiError ? e.message : (e as Error).message
@@ -120,14 +167,10 @@ async function complete() {
   try {
     const s = await pomoApi.complete(session.value.id)
     session.value = null
-    if (tickHandle.value) {
-      window.clearInterval(tickHandle.value)
-      tickHandle.value = null
-    }
+    expiredHandled.value = false
+    if (tickHandle.value) { window.clearInterval(tickHandle.value); tickHandle.value = null }
     recent.value.unshift(s)
-  } catch (e) {
-    errMsg.value = e instanceof ApiError ? e.message : (e as Error).message
-  }
+  } catch (e) { errMsg.value = e instanceof ApiError ? e.message : (e as Error).message }
 }
 
 async function abandon() {
@@ -136,14 +179,10 @@ async function abandon() {
   try {
     const s = await pomoApi.abandon(session.value.id)
     session.value = null
-    if (tickHandle.value) {
-      window.clearInterval(tickHandle.value)
-      tickHandle.value = null
-    }
+    expiredHandled.value = false
+    if (tickHandle.value) { window.clearInterval(tickHandle.value); tickHandle.value = null }
     recent.value.unshift(s)
-  } catch (e) {
-    errMsg.value = e instanceof ApiError ? e.message : (e as Error).message
-  }
+  } catch (e) { errMsg.value = e instanceof ApiError ? e.message : (e as Error).message }
 }
 
 function applyPreset(p: { seconds: number; kind: PomodoroKind }) {
@@ -161,6 +200,8 @@ function statusText(s: PomodoroSession): string {
 }
 
 const isActive = computed(() => !!session.value && session.value.status === 'active')
+// 当倒计时结束、且未自动完成（用户偏好关闭），UI 上要让用户能手动结束。
+const isExpiredWaiting = computed(() => isActive.value && remaining.value <= 0)
 
 // 圆环 stroke 计算
 const RADIUS = 110
@@ -170,7 +211,12 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
 
 <template>
   <div class="pomo-wrap">
-    <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
+    <Transition name="fade">
+      <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
+    </Transition>
+    <Transition name="fade">
+      <div v-if="okMsg" class="success-banner">{{ okMsg }}</div>
+    </Transition>
 
     <div class="pomo-card">
       <div class="pomo-disc">
@@ -178,18 +224,20 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
           <circle cx="130" cy="130" :r="RADIUS" fill="none" stroke="var(--tg-divider)" stroke-width="6" />
           <circle
             cx="130" cy="130" :r="RADIUS" fill="none"
-            stroke="var(--tg-primary)" stroke-width="6"
+            :stroke="isExpiredWaiting ? 'var(--tg-success)' : 'var(--tg-primary)'"
+            stroke-width="6"
             stroke-linecap="round"
             transform="rotate(-90 130 130)"
             :stroke-dasharray="CIRC"
             :stroke-dashoffset="dashOffset"
-            style="transition: stroke-dashoffset 1s linear"
+            style="transition: stroke-dashoffset 1s linear, stroke 0.3s"
           />
         </svg>
         <div class="pomo-disc-content">
-          <div class="pomo-time">{{ display }}</div>
+          <div class="pomo-time" :class="{ expired: isExpiredWaiting }">{{ display }}</div>
           <div v-if="isActive" class="pomo-progress-text">
-            {{ fmtDuration(elapsed) }} / {{ fmtDuration(planned) }}
+            <span v-if="isExpiredWaiting">已到点 · 待结束</span>
+            <span v-else>{{ fmtDuration(elapsed) }} / {{ fmtDuration(planned) }}</span>
           </div>
           <div v-else class="pomo-progress-text">
             {{ kind === 'focus' ? '专注' : (kind === 'short_break' ? '短休' : '长休') }}
@@ -226,6 +274,12 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
         <div class="field full-width">
           <label>备注（可选）</label>
           <input v-model="note" placeholder="比如：专注于重构 UI" @keydown.enter="start" />
+        </div>
+        <div class="field full-width pomo-pref-hint">
+          <span class="muted">
+            到点行为：<strong>{{ prefs.pomodoroAutoComplete ? '自动结束并入库' : '停留等手动结束' }}</strong>
+            <span style="margin-left:6px">（在「设置 → 提醒与通知」里调整）</span>
+          </span>
         </div>
       </div>
 
@@ -266,28 +320,30 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
 </template>
 
 <style scoped>
-.pomo-wrap { max-width: 600px; margin: 0 auto; }
+.pomo-wrap { max-width: 640px; margin: 0 auto; }
+.success-banner {
+  background: var(--tg-success-soft);
+  color: var(--tg-success);
+  padding: 10px 14px;
+  border-radius: var(--tg-radius-md);
+  font-size: 13.5px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
 .pomo-card {
   background: var(--tg-side);
   border: 1px solid var(--tg-divider);
   border-radius: var(--tg-radius-lg);
-  padding: 28px 24px;
+  padding: 32px 24px;
   margin-bottom: 24px;
   text-align: center;
+  box-shadow: var(--tg-shadow-sm);
 }
-.pomo-disc {
-  position: relative;
-  width: 260px;
-  height: 260px;
-  margin: 0 auto 24px;
-}
+.pomo-disc { position: relative; width: 260px; height: 260px; margin: 0 auto 24px; }
 .pomo-disc-content {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
 }
 .pomo-time {
   font-size: 56px;
@@ -296,7 +352,9 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
   color: var(--tg-text);
   letter-spacing: -2px;
   line-height: 1;
+  transition: color 0.3s;
 }
+.pomo-time.expired { color: var(--tg-success); }
 .pomo-progress-text {
   margin-top: 8px;
   font-size: 13px;
@@ -304,94 +362,51 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
   font-weight: 500;
 }
 .pomo-presets {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  flex-wrap: wrap;
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
   margin-bottom: 20px;
 }
-.preset-btn {
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 13px;
-}
+.preset-btn { border-radius: 999px; padding: 6px 14px; font-size: 13px; }
 .pomo-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  text-align: left;
-  margin-bottom: 20px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  text-align: left; margin-bottom: 20px;
 }
 .pomo-form .field { display: flex; flex-direction: column; gap: 6px; }
 .pomo-form .field.full-width { grid-column: span 2; }
-.pomo-form label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--tg-primary);
-}
-.pomo-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-}
-.start-btn {
-  padding: 11px 36px;
-  font-size: 14.5px;
-  border-radius: 999px;
-  min-width: 140px;
-}
+.pomo-form label { font-size: 12px; font-weight: 600; color: var(--tg-primary); }
+.pomo-pref-hint { padding-top: 4px; font-size: 12px; }
+.pomo-actions { display: flex; gap: 10px; justify-content: center; }
+.start-btn { padding: 11px 36px; font-size: 14.5px; border-radius: 999px; min-width: 140px; }
 .history-list { display: flex; flex-direction: column; gap: 6px; }
 .history-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  border-radius: var(--tg-radius-md);
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px; border-radius: var(--tg-radius-md);
   transition: background 0.15s;
 }
 .history-item:hover { background: var(--tg-hover); }
 .hi-icon {
-  font-size: 20px;
-  background: var(--tg-hover);
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-size: 20px; background: var(--tg-hover);
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
 .hi-info { flex: 1; overflow: hidden; min-width: 0; }
 .hi-title {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 14px; font-weight: 600; margin-bottom: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .hi-time { font-size: 12px; color: var(--tg-text-secondary); }
 .hi-status-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: 4px; flex-shrink: 0;
 }
 .hi-status-badge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px;
 }
 .hi-status-badge.completed { background: var(--tg-success-soft); color: var(--tg-success); }
 .hi-status-badge.abandoned { background: var(--tg-danger-soft); color: var(--tg-danger); }
 .hi-status-badge.active { background: var(--tg-primary-soft); color: var(--tg-primary); }
-.hi-duration {
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
+.hi-duration { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 600px) {
   .pomo-form { grid-template-columns: 1fr; }

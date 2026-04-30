@@ -229,6 +229,9 @@ export const auth = {
   async me(): Promise<User> {
     return request('/api/auth/me')
   },
+  async updateMe(input: { display_name?: string; timezone?: string }): Promise<User> {
+    return request('/api/auth/me', { method: 'PATCH', body: input })
+  },
 }
 
 // =============================================================

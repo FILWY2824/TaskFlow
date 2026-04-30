@@ -6,6 +6,7 @@ import { useDataStore } from '@/stores/data'
 import { useNotificationsStore } from '@/stores/notifications'
 import { ApiError } from '@/api'
 import type { List } from '@/types'
+import { installTodoDueScheduler } from '@/scheduler'
 
 const auth = useAuthStore()
 const data = useDataStore()
@@ -29,9 +30,9 @@ onMounted(async () => {
     // 401 已被 api 层处理跳走；这里仅吞掉
   }
   notif.startSSE()
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission().catch(() => {})
-  }
+  // 安装本地任务到期调度器（独立于服务端 reminder rules）
+  installTodoDueScheduler()
+  // 不再在这里主动请求 Notification 权限——统一在「设置 → 提醒与通知」里由用户决定。
 })
 
 onBeforeUnmount(() => {

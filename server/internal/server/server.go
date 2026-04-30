@@ -75,6 +75,7 @@ func BuildHandler(d Deps) http.Handler {
 
 	mux.Handle("POST /api/auth/logout", authed(authH.Logout))
 	mux.Handle("GET /api/auth/me", authed(authH.Me))
+	mux.Handle("PATCH /api/auth/me", authed(authH.UpdateMe))
 
 	// Lists
 	mux.Handle("GET /api/lists", authed(listsH.Index))

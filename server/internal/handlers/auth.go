@@ -166,6 +166,49 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, user)
 }
 
+type updateMeRequest struct {
+	DisplayName *string `json:"display_name,omitempty"`
+	Timezone    *string `json:"timezone,omitempty"`
+}
+
+// UpdateMe PATCH /api/auth/me
+//
+// 仅允许用户修改自己的 display_name / timezone。邮箱/密码改动走单独流程。
+// 时区使用 IANA 名称，例如 Asia/Shanghai。空字符串视为未提供。
+func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	uid := middleware.UserIDFrom(r.Context())
+	var req updateMeRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	var displayName, timezone *string
+	if req.DisplayName != nil {
+		v := strings.TrimSpace(*req.DisplayName)
+		if utf8.RuneCountInString(v) > 64 {
+			writeError(w, http.StatusBadRequest, "bad_request", "display_name too long")
+			return
+		}
+		displayName = &v
+	}
+	if req.Timezone != nil {
+		v := strings.TrimSpace(*req.Timezone)
+		if v != "" {
+			if _, err := time.LoadLocation(v); err != nil {
+				writeError(w, http.StatusBadRequest, "bad_request", "invalid timezone")
+				return
+			}
+		}
+		timezone = &v
+	}
+	user, err := h.Users.Update(r.Context(), uid, displayName, timezone)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, user)
+}
+
 func (h *AuthHandler) issueAndWrite(w http.ResponseWriter, r *http.Request, userID int64, deviceID string, user any, status int) {
 	now := time.Now().UTC()
 	access, accessExp, err := h.Issuer.IssueAccessToken(userID, now)

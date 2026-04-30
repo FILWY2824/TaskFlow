@@ -87,5 +87,19 @@ export const useAuthStore = defineStore('auth', {
         // ignore
       }
     },
+    async updateProfile(input: { display_name?: string; timezone?: string }) {
+      const me = await auth.updateMe(input)
+      this.user = me
+      const t = loadTokens()
+      if (t) {
+        saveTokens(t, me)
+        await tauri.setTokens({
+          access_token: t.accessToken,
+          refresh_token: t.refreshToken,
+          timezone: me.timezone,
+        })
+      }
+      return me
+    },
   },
 })

@@ -2,7 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import type { ReminderRule, Subtask, Todo } from '@/types'
 import { useDataStore } from '@/stores/data'
+import { useAuthStore } from '@/stores/auth'
 import { reminders as remindersApi, ApiError } from '@/api'
+import { DEFAULT_TIMEZONE } from '@/timezones'
 import {
   fmtDateTime,
   fmtRelative,
@@ -22,6 +24,7 @@ const emit = defineEmits<{
 }>()
 
 const data = useDataStore()
+const authStore = useAuthStore()
 
 // 表单字段
 const title = ref(props.todo.title)
@@ -31,7 +34,8 @@ const priority = ref(props.todo.priority)
 const effort = ref(props.todo.effort)
 const dueAtLocal = ref(toDatetimeLocal(props.todo.due_at ? new Date(props.todo.due_at) : null))
 const dueAllDay = ref(props.todo.due_all_day)
-const tz = ref(props.todo.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone)
+// 时区永远跟随当前账号设置（在"设置 → 时区"里统一管理）；这里只读不可编辑。
+const tz = ref(authStore.user?.timezone || props.todo.timezone || DEFAULT_TIMEZONE)
 
 const errMsg = ref('')
 const saving = ref(false)
@@ -69,7 +73,7 @@ watch(
     effort.value = props.todo.effort
     dueAtLocal.value = toDatetimeLocal(props.todo.due_at ? new Date(props.todo.due_at) : null)
     dueAllDay.value = props.todo.due_all_day
-    tz.value = props.todo.timezone
+    tz.value = authStore.user?.timezone || props.todo.timezone || DEFAULT_TIMEZONE
     errMsg.value = ''
     await Promise.all([data.loadSubtasks(props.todo.id), data.loadReminders(props.todo.id)]).catch(() => {})
   },
@@ -264,9 +268,12 @@ const rrulePresets = [
         </div>
       </div>
 
-      <div class="field">
-        <label>时区</label>
-        <input v-model="tz" placeholder="Asia/Shanghai" />
+      <!-- 时区不再在此处编辑：统一遵循"设置 → 时区"。 -->
+      <div class="muted tz-hint">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        时间按账号时区 <strong>{{ tz }}</strong> 解析。如需修改，请到「设置 → 时区」。
       </div>
 
       <hr />
