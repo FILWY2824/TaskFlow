@@ -2,6 +2,13 @@ import { defineStore } from 'pinia'
 import { lists as listsApi, todos as todosApi, subtasks as subtasksApi, reminders as remindersApi } from '@/api'
 import type { List, ReminderRule, Subtask, Todo, TodoFilterName, TodoInput } from '@/types'
 
+// 顶栏「完成状态」筛选：在已经按日期/分类过滤出的任务中再做一层客户端筛选。
+//   all      — 全部（默认）
+//   open     — 未完成
+//   done     — 已完成
+//   expired  — 已过期（未完成且 due_at 在过去）
+export type TodoStatusFilter = 'all' | 'open' | 'done' | 'expired'
+
 export const useDataStore = defineStore('data', {
   state: () => ({
     lists: [] as List[],
@@ -10,6 +17,9 @@ export const useDataStore = defineStore('data', {
     todos: [] as Todo[],
     todosLoading: false,
     currentFilter: { name: 'today' as TodoFilterName, listId: undefined as number | undefined, search: '' },
+
+    // 由顶栏筛选按钮控制；不会触发 reload，仅做前端二次过滤。
+    statusFilter: 'all' as TodoStatusFilter,
 
     selectedTodoId: null as number | null,
     subtasksByTodo: {} as Record<number, Subtask[]>,
@@ -36,6 +46,11 @@ export const useDataStore = defineStore('data', {
     async removeList(id: number) {
       await listsApi.remove(id)
       this.lists = this.lists.filter((x) => x.id !== id)
+    },
+
+    // ------ Status filter (client-side) ------
+    setStatusFilter(s: TodoStatusFilter) {
+      this.statusFilter = s
     },
 
     // ------ Todos ------

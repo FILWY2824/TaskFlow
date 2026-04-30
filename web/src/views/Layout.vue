@@ -2,7 +2,7 @@
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useDataStore } from '@/stores/data'
+import { useDataStore, type TodoStatusFilter } from '@/stores/data'
 import { useNotificationsStore } from '@/stores/notifications'
 import { ApiError } from '@/api'
 import type { List } from '@/types'
@@ -16,6 +16,41 @@ const route = useRoute()
 
 const search = ref('')
 const sidebarOpen = ref(false)
+
+// ---------- 顶栏：状态筛选下拉（完成 / 未完成 / 过期 / 全部） ----------
+const showStatusMenu = ref(false)
+const statusMenuRef = ref<HTMLElement | null>(null)
+
+const STATUS_OPTIONS: { value: TodoStatusFilter; label: string; color: string; icon: string }[] = [
+  { value: 'all',     label: '全部',   color: 'var(--tg-text-secondary)', icon: 'list' },
+  { value: 'open',    label: '未完成', color: 'var(--tg-primary)',        icon: 'circle' },
+  { value: 'done',    label: '已完成', color: 'var(--tg-success)',        icon: 'check' },
+  { value: 'expired', label: '已过期', color: 'var(--tg-danger)',         icon: 'alert' },
+]
+
+const currentStatus = computed(() =>
+  STATUS_OPTIONS.find((o) => o.value === data.statusFilter) || STATUS_OPTIONS[0],
+)
+
+function pickStatus(s: TodoStatusFilter) {
+  data.setStatusFilter(s)
+  showStatusMenu.value = false
+}
+
+// 状态筛选按钮只在「日程相关」页面才显示
+const showsStatusFilter = computed(() => {
+  const n = String(route.name || '')
+  return n === 'schedule' || n === 'list' || n === 'uncategorized' || n === 'all'
+})
+
+// 点击外部时关闭菜单
+function onDocClick(e: MouseEvent) {
+  if (!showStatusMenu.value) return
+  const t = e.target as Node
+  if (statusMenuRef.value && !statusMenuRef.value.contains(t)) {
+    showStatusMenu.value = false
+  }
+}
 
 // ---------- 分类管理面板（右侧主页面区域弹出） ----------
 const showCatPanel = ref(false)
@@ -45,10 +80,12 @@ onMounted(async () => {
   }
   notif.startSSE()
   installTodoDueScheduler()
+  document.addEventListener('mousedown', onDocClick)
 })
 
 onBeforeUnmount(() => {
   notif.stopSSE()
+  document.removeEventListener('mousedown', onDocClick)
 })
 
 watch(() => route.fullPath, () => {
@@ -146,6 +183,11 @@ function gotoUncategorized() {
   router.push({ name: 'uncategorized' })
   closeCatPanel()
 }
+// 「全部分类」：回到 schedule 视图（按日期/状态浏览，不限定分类）
+function gotoAllCategories() {
+  router.push({ name: 'schedule' })
+  closeCatPanel()
+}
 
 const userInitial = computed(() => {
   const u = auth.user
@@ -231,6 +273,47 @@ const inCategoryView = computed(
         </button>
         <div class="title">{{ pageTitle(route, data.lists) }}</div>
         <div class="topbar-actions">
+          <!-- 状态筛选（完成 / 未完成 / 过期 / 全部） -->
+          <div v-if="showsStatusFilter" ref="statusMenuRef" class="status-menu">
+            <button
+              class="status-btn"
+              :class="{ 'is-active': data.statusFilter !== 'all', 'is-open': showStatusMenu }"
+              type="button"
+              :style="{ '--st-color': currentStatus.color }"
+              :title="`状态：${currentStatus.label}`"
+              @click="showStatusMenu = !showStatusMenu"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+              </svg>
+              <span class="status-btn-label">{{ currentStatus.label }}</span>
+              <span class="status-btn-dot" />
+              <svg class="status-btn-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            <Transition name="popover">
+              <div v-if="showStatusMenu" class="status-pop">
+                <div class="status-pop-title">按状态筛选</div>
+                <button
+                  v-for="o in STATUS_OPTIONS"
+                  :key="o.value"
+                  type="button"
+                  class="status-pop-item"
+                  :class="{ 'is-selected': data.statusFilter === o.value }"
+                  :style="{ '--st-color': o.color }"
+                  @click="pickStatus(o.value)"
+                >
+                  <span class="status-pop-dot" />
+                  <span class="status-pop-label">{{ o.label }}</span>
+                  <svg v-if="data.statusFilter === o.value" class="status-pop-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+              </div>
+            </Transition>
+          </div>
+
           <!-- 分类管理按钮（取代左侧栏的分类列表） -->
           <button
             class="cat-btn"
@@ -284,6 +367,23 @@ const inCategoryView = computed(
             </div>
 
             <ul class="cat-list">
+              <!-- 「全部分类」：跳回 schedule 视图，不限定分类 -->
+              <li class="cat-list-item is-all" @click="gotoAllCategories">
+                <span class="cat-list-dot is-all" />
+                <div class="cat-list-info">
+                  <div class="cat-list-name">
+                    全部分类
+                    <span class="cat-list-tag">查看所有任务</span>
+                  </div>
+                  <div class="cat-list-sub muted">不按分类过滤，按日期 / 状态浏览</div>
+                </div>
+                <span class="cat-list-arrow" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </span>
+              </li>
+
               <!-- 默认且不可删除的「未分类」 -->
               <li class="cat-list-item is-default" @click="gotoUncategorized">
                 <span class="cat-list-dot is-uncat" />
@@ -410,11 +510,11 @@ import type { RouteLocationNormalizedLoaded } from 'vue-router'
 import type { List as _List } from '@/types'
 
 function pageTitle(route: RouteLocationNormalizedLoaded, lists: _List[] = []): string {
-  // 在 list/:id 视图下显示具体分类名称
+  // 在 list/:id 视图下直接显示分类名（用顶栏标题作为唯一指示，避免与正文里的卡片重复）
   if (route.name === 'list') {
     const id = Number(route.params.id)
     const l = lists.find((x) => x.id === id)
-    return l ? `分类 · ${l.name}` : '分类'
+    return l ? l.name : '分类'
   }
   // 单日详情：显示「YYYY 年 M 月 D 日 · 周X」
   if (route.name === 'day') {
@@ -476,7 +576,116 @@ function navIcon(name: string): string {
 </script>
 
 <style scoped>
-/* ====== 顶栏“分类”按钮 ====== */
+/* ====== 顶栏「状态筛选」按钮 + 下拉 ====== */
+.status-menu { position: relative; }
+
+.status-btn {
+  --st-color: var(--tg-text-secondary);
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 12px 8px 14px;
+  background: var(--tg-bg-elev);
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-pill);
+  color: var(--tg-text-secondary);
+  font-size: 13.5px; font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--tg-trans-fast), color var(--tg-trans-fast),
+              background var(--tg-trans-fast), transform var(--tg-trans-fast),
+              box-shadow var(--tg-trans-fast);
+}
+.status-btn:hover {
+  border-color: var(--st-color);
+  color: var(--st-color);
+  transform: translateY(-1px);
+  box-shadow: var(--tg-shadow-sm);
+}
+.status-btn:active { transform: translateY(0); }
+.status-btn.is-active {
+  background: color-mix(in srgb, var(--st-color) 12%, var(--tg-bg-elev));
+  border-color: color-mix(in srgb, var(--st-color) 50%, transparent);
+  color: var(--st-color);
+}
+.status-btn.is-open {
+  border-color: var(--st-color);
+  color: var(--st-color);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--st-color) 14%, transparent),
+    var(--tg-shadow-sm);
+}
+.status-btn-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--st-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-color) 22%, transparent);
+}
+.status-btn-caret {
+  color: var(--tg-text-tertiary);
+  transition: transform var(--tg-trans-fast), color var(--tg-trans-fast);
+}
+.status-btn.is-open .status-btn-caret {
+  transform: rotate(180deg);
+  color: var(--st-color);
+}
+
+.status-pop {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  min-width: 180px;
+  padding: 6px;
+  background: var(--tg-bg-elev);
+  border: 1px solid var(--tg-divider);
+  border-radius: var(--tg-radius-md);
+  box-shadow: var(--tg-shadow-lg);
+  z-index: 30;
+}
+.status-pop-title {
+  padding: 8px 12px 6px;
+  font-size: 11px; font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tg-text-tertiary);
+}
+.status-pop-item {
+  --st-color: var(--tg-text-secondary);
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  background: transparent;
+  color: var(--tg-text);
+  border: none;
+  border-radius: var(--tg-radius-sm);
+  font-size: 13.5px; font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--tg-trans-fast), color var(--tg-trans-fast);
+}
+.status-pop-item:hover {
+  background: color-mix(in srgb, var(--st-color) 8%, transparent);
+  color: var(--st-color);
+}
+.status-pop-item.is-selected {
+  background: color-mix(in srgb, var(--st-color) 12%, transparent);
+  color: var(--st-color);
+}
+.status-pop-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--st-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-color) 22%, transparent);
+  flex-shrink: 0;
+}
+.status-pop-label { flex: 1; }
+.status-pop-check { color: var(--st-color); flex-shrink: 0; }
+
+.popover-enter-active, .popover-leave-active {
+  transition: opacity var(--tg-trans-fast), transform var(--tg-trans-fast);
+  transform-origin: top right;
+}
+.popover-enter-from, .popover-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.97);
+}
+
+/* ====== 顶栏"分类"按钮 ====== */
 .cat-btn {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 8px 14px;
@@ -514,6 +723,8 @@ function navIcon(name: string): string {
 @media (max-width: 600px) {
   .cat-btn-label { display: none; }
   .cat-btn { padding: 8px; }
+  .status-btn-label { display: none; }
+  .status-btn { padding: 8px 10px; }
 }
 
 /* ====== 分类管理面板（弹层） ====== */
@@ -603,6 +814,19 @@ function navIcon(name: string): string {
   background: linear-gradient(135deg,
     color-mix(in srgb, var(--tg-text-tertiary) 8%, var(--tg-bg-elev)),
     var(--tg-bg-elev));
+}
+
+/* "全部分类"项：用品牌色渐变与众不同 */
+.cat-list-item.is-all {
+  --cat-color: var(--tg-primary);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--tg-primary) 10%, var(--tg-bg-elev)),
+    color-mix(in srgb, var(--tg-accent) 6%, var(--tg-bg-elev)));
+  border-color: color-mix(in srgb, var(--tg-primary) 28%, var(--tg-divider));
+}
+.cat-list-dot.is-all {
+  background: var(--tg-grad-brand);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tg-primary) 22%, transparent);
 }
 
 .cat-list-dot {

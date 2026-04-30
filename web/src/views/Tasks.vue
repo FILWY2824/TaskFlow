@@ -3,10 +3,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDataStore } from '@/stores/data'
 import type { Todo, TodoFilterName } from '@/types'
-import { fromDatetimeLocal, toRFC3339 } from '@/utils'
+import { fromDatetimeLocal, isOverdue, toRFC3339 } from '@/utils'
 import TodoItem from '@/components/TodoItem.vue'
 import TodoEditDrawer from '@/components/TodoEditDrawer.vue'
-import { ApiError } from '@/api'
+import { ApiError, reminders as remindersApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
+import { DEFAULT_TIMEZONE } from '@/timezones'
 
 const props = defineProps<{
   filter?: TodoFilterName
@@ -16,6 +18,7 @@ const props = defineProps<{
 }>()
 
 const data = useDataStore()
+const auth = useAuthStore()
 const route = useRoute()
 
 const currentFilter = ref<TodoFilterName>('today')
@@ -55,17 +58,24 @@ onMounted(async () => {
   await data.loadLists()
 })
 
+// 应用顶栏「状态筛选」: all / open / done / expired
+function passStatus(t: Todo): boolean {
+  switch (data.statusFilter) {
+    case 'open': return !t.is_completed
+    case 'done': return t.is_completed
+    case 'expired': return isOverdue(t)
+    case 'all':
+    default: return true
+  }
+}
+
+const filteredTodos = computed(() => data.todos.filter(passStatus))
+
 const groupedTodos = computed(() => {
-  const items = data.todos
+  const items = filteredTodos.value
   const open = items.filter((t) => !t.is_completed)
   const done = items.filter((t) => t.is_completed)
   return { open, done }
-})
-
-// 当前所在的分类（在 list 路由下）
-const currentList = computed(() => {
-  if (!props.listId) return null
-  return data.lists.find((l) => l.id === props.listId) || null
 })
 
 // =========== 新建任务对话框 ==============
@@ -77,6 +87,15 @@ const PRIORITY_OPTIONS = [
   { value: 4, label: '紧急', color: 'var(--cat-rose)' },
 ]
 
+// 周期单位 → RRULE FREQ 映射
+type RecurUnit = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
+const RECUR_UNITS: { value: RecurUnit; label: string }[] = [
+  { value: 'DAILY',   label: '天' },
+  { value: 'WEEKLY',  label: '周' },
+  { value: 'MONTHLY', label: '月' },
+  { value: 'YEARLY',  label: '年' },
+]
+
 const showAddDialog = ref(false)
 const addTitle = ref('')
 const addDueLocal = ref('')
@@ -84,6 +103,10 @@ const addPriority = ref(0)
 const addListId = ref<number | null>(null)
 const addEffort = ref(0)
 const addDescription = ref('')
+// 周期相关
+const addIsRecurring = ref(false)
+const addRecurInterval = ref<number>(1)
+const addRecurUnit = ref<RecurUnit>('DAILY')
 const adding = ref(false)
 const addErr = ref('')
 
@@ -94,6 +117,9 @@ function openAdd() {
   addListId.value = props.listId ?? null
   addEffort.value = 0
   addDescription.value = ''
+  addIsRecurring.value = false
+  addRecurInterval.value = 1
+  addRecurUnit.value = 'DAILY'
   addErr.value = ''
   if (activeFilter.value === 'today') {
     const d = new Date()
@@ -109,7 +135,6 @@ function openAdd() {
     activeFilter.value === 'recent_month' ||
     activeFilter.value === 'this_week'
   ) {
-    // 这些视图默认填上今天的截止时间，方便快速登记一项
     const d = new Date()
     d.setHours(23, 59, 0, 0)
     addDueLocal.value = toLocalInputValue(d)
@@ -126,16 +151,32 @@ function toLocalInputValue(d: Date): string {
   return `${y}-${mo}-${dd}T${h}:${m}`
 }
 
+// 周期摘要文字（用于预览展示）
+const recurSummary = computed(() => {
+  if (!addIsRecurring.value) return ''
+  const n = Math.max(1, Math.floor(addRecurInterval.value || 1))
+  const unitLabel = RECUR_UNITS.find((u) => u.value === addRecurUnit.value)?.label ?? '天'
+  return n === 1 ? `每${unitLabel}` : `每 ${n} ${unitLabel}`
+})
+
 async function submitAdd() {
   addErr.value = ''
   if (!addTitle.value.trim()) {
     addErr.value = '任务标题不能为空'
     return
   }
+  if (addIsRecurring.value && !addDueLocal.value) {
+    addErr.value = '周期日程必须设置一个起始的截止时间'
+    return
+  }
+  if (addIsRecurring.value && (!addRecurInterval.value || addRecurInterval.value < 1)) {
+    addErr.value = '周期数需大于等于 1'
+    return
+  }
   adding.value = true
   try {
     const dueDate = addDueLocal.value ? fromDatetimeLocal(addDueLocal.value) : null
-    await data.createTodo({
+    const todo = await data.createTodo({
       title: addTitle.value.trim(),
       description: addDescription.value || undefined,
       priority: addPriority.value,
@@ -143,6 +184,28 @@ async function submitAdd() {
       due_at: dueDate ? toRFC3339(dueDate) : null,
       list_id: addListId.value || props.listId || null,
     })
+    // 如果是周期日程，再绑定一条 RRULE 提醒。
+    if (addIsRecurring.value && dueDate) {
+      const interval = Math.max(1, Math.floor(addRecurInterval.value || 1))
+      const rrule = `FREQ=${addRecurUnit.value};INTERVAL=${interval}`
+      try {
+        await remindersApi.create({
+          todo_id: todo.id,
+          title: todo.title,
+          rrule,
+          dtstart: toRFC3339(dueDate),
+          timezone: auth.user?.timezone || DEFAULT_TIMEZONE,
+          channel_local: true,
+          channel_telegram: false,
+          ringtone: 'default',
+          vibrate: true,
+          fullscreen: true,
+        })
+      } catch (e) {
+        // 任务已建好，提醒失败仅作提示，不阻塞流程
+        console.warn('创建周期提醒失败：', e)
+      }
+    }
     showAddDialog.value = false
   } catch (e) {
     addErr.value = e instanceof ApiError ? e.message : (e as Error).message
@@ -174,20 +237,24 @@ function onKey(e: KeyboardEvent) {
 }
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+
+// 状态筛选标签（用于空态文案）
+const statusLabel = computed(() => {
+  switch (data.statusFilter) {
+    case 'open':    return '未完成'
+    case 'done':    return '已完成'
+    case 'expired': return '已过期'
+    default:        return ''
+  }
+})
 </script>
 
 <template>
   <div class="tasks-page">
     <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
 
-    <!-- 当前分类的"头部条"，让进入某个分类时立刻能看到色彩归属 -->
-    <div v-if="currentList" class="cat-header" :style="{ '--cat-color': currentList.color || 'var(--tg-primary)' }">
-      <span class="cat-header-dot" />
-      <div class="cat-header-info">
-        <div class="cat-header-name">{{ currentList.name }}</div>
-        <div class="cat-header-meta">{{ data.todos.length }} 个任务</div>
-      </div>
-    </div>
+    <!-- 注：原来当进入某个分类（list/:id）时这里会显示一个 cat-header 卡片；
+         按需求统一改为顶栏标题展示分类名，这里不再重复呈现。 -->
 
     <div v-if="filterGroup === 'schedule'" class="segment-control">
       <button :class="{ active: currentFilter === 'today' }" @click="currentFilter = 'today'">今日</button>
@@ -195,6 +262,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <button :class="{ active: currentFilter === 'this_week' }" @click="currentFilter = 'this_week'">本周</button>
       <button :class="{ active: currentFilter === 'recent_week' }" @click="currentFilter = 'recent_week'">近一周</button>
       <button :class="{ active: currentFilter === 'recent_month' }" @click="currentFilter = 'recent_month'">近一个月</button>
+      <button :class="{ active: currentFilter === 'all' }" @click="currentFilter = 'all'">全部</button>
     </div>
     <div v-if="filterGroup === 'archive'" class="segment-control">
       <button :class="{ active: currentFilter === 'completed' }" @click="currentFilter = 'completed'">已完成</button>
@@ -213,10 +281,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
     <div v-if="data.todosLoading" class="muted" style="text-align:center;padding:32px 0">加载中…</div>
 
-    <div v-else-if="data.todos.length === 0" class="empty">
+    <div v-else-if="filteredTodos.length === 0" class="empty">
       <div class="empty-icon">✨</div>
-      <div class="empty-title">这里空空如也</div>
-      <div class="empty-hint">点上方"新增任务"，或按 <kbd>N</kbd></div>
+      <div class="empty-title">
+        {{ statusLabel ? `没有「${statusLabel}」的任务` : '这里空空如也' }}
+      </div>
+      <div class="empty-hint">
+        <template v-if="statusLabel">试试切换顶栏的状态筛选，或</template>
+        点上方"新增任务"，或按 <kbd>N</kbd>
+      </div>
     </div>
 
     <template v-else>
@@ -265,7 +338,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <div v-if="showAddDialog" class="modal-backdrop" @click.self="showAddDialog = false">
         <div class="modal-card add-modal">
           <header class="modal-head">
-            <span class="modal-title">新增任务</span>
+            <span class="modal-title">
+              <span class="modal-title-dot" />
+              新增任务
+            </span>
             <button class="btn-icon" @click="showAddDialog = false" aria-label="关闭">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -273,25 +349,56 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <div class="modal-body">
             <div v-if="addErr" class="auth-error">{{ addErr }}</div>
 
-            <div class="form-field">
-              <label>标题 <span class="required">*</span></label>
-              <input
-                v-model="addTitle"
-                placeholder="任务名称…"
-                autofocus
-                maxlength="200"
-                @keydown.enter="submitAdd"
-              />
+            <!-- ============ 标题：自定义漂亮输入框 ============ -->
+            <div class="pretty-field">
+              <label class="pretty-field-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                </svg>
+                标题
+                <span class="required">*</span>
+              </label>
+              <div class="pretty-input-wrap">
+                <input
+                  v-model="addTitle"
+                  class="pretty-input"
+                  placeholder="给任务起个名字…"
+                  autofocus
+                  maxlength="200"
+                  @keydown.enter="submitAdd"
+                />
+                <span class="pretty-input-glow" aria-hidden="true" />
+              </div>
             </div>
 
-            <div class="form-field">
-              <label>描述（可选）</label>
-              <textarea v-model="addDescription" rows="2" placeholder="补充说明…" />
+            <!-- ============ 描述：自定义 textarea ============ -->
+            <div class="pretty-field">
+              <label class="pretty-field-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+                描述
+                <span class="optional">可选</span>
+              </label>
+              <div class="pretty-input-wrap">
+                <textarea
+                  v-model="addDescription"
+                  class="pretty-input pretty-textarea"
+                  rows="2"
+                  placeholder="补充一些细节…"
+                />
+                <span class="pretty-input-glow" aria-hidden="true" />
+              </div>
             </div>
 
-            <!-- 视觉化的分类选择器：色块 chip -->
-            <div class="form-field">
-              <label>分类</label>
+            <!-- ============ 分类 ============ -->
+            <div class="pretty-field">
+              <label class="pretty-field-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 7h7l2 2h9v11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/>
+                </svg>
+                分类
+              </label>
               <div class="cat-picker">
                 <button
                   type="button"
@@ -321,9 +428,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               </div>
             </div>
 
-            <!-- 优先级 chip -->
-            <div class="form-field">
-              <label>优先级</label>
+            <!-- ============ 优先级 ============ -->
+            <div class="pretty-field">
+              <label class="pretty-field-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+                </svg>
+                优先级
+              </label>
               <div class="cat-picker">
                 <button
                   v-for="p in PRIORITY_OPTIONS"
@@ -340,10 +452,108 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               </div>
             </div>
 
-            <div class="form-field">
-              <label>截止时间（可选）</label>
-              <input v-model="addDueLocal" type="datetime-local" />
+            <!-- ============ 截止时间 ============ -->
+            <div class="pretty-field">
+              <label class="pretty-field-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                截止时间
+                <span class="optional">可选</span>
+              </label>
+              <div class="pretty-input-wrap pretty-date-wrap">
+                <svg class="pretty-date-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <input v-model="addDueLocal" class="pretty-input pretty-date-input" type="datetime-local" />
+                <span class="pretty-input-glow" aria-hidden="true" />
+              </div>
               <div class="form-hint muted">时区跟随账号设置（可在「设置 → 时区」中修改）</div>
+            </div>
+
+            <!-- ============ 周期：一次性 / 周期性 ============ -->
+            <div class="pretty-field">
+              <label class="pretty-field-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                重复
+              </label>
+              <div class="recur-toggle">
+                <button
+                  type="button"
+                  class="recur-toggle-btn"
+                  :class="{ 'is-selected': !addIsRecurring }"
+                  @click="addIsRecurring = false"
+                >
+                  <span class="recur-toggle-dot" />
+                  一次性
+                </button>
+                <button
+                  type="button"
+                  class="recur-toggle-btn"
+                  :class="{ 'is-selected': addIsRecurring }"
+                  @click="addIsRecurring = true"
+                >
+                  <span class="recur-toggle-dot is-recur" />
+                  周期性
+                </button>
+              </div>
+
+              <Transition name="recur">
+                <div v-if="addIsRecurring" class="recur-row">
+                  <span class="recur-label-pre">每</span>
+                  <div class="recur-num-wrap">
+                    <button
+                      type="button"
+                      class="recur-num-btn"
+                      :disabled="addRecurInterval <= 1"
+                      title="减"
+                      @click="addRecurInterval = Math.max(1, addRecurInterval - 1)"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </button>
+                    <input
+                      v-model.number="addRecurInterval"
+                      class="recur-num-input"
+                      type="number"
+                      min="1"
+                      max="999"
+                      inputmode="numeric"
+                    />
+                    <button
+                      type="button"
+                      class="recur-num-btn"
+                      :disabled="addRecurInterval >= 999"
+                      title="加"
+                      @click="addRecurInterval = Math.min(999, (addRecurInterval || 0) + 1)"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </button>
+                  </div>
+                  <div class="recur-unit-wrap">
+                    <button
+                      v-for="u in RECUR_UNITS"
+                      :key="u.value"
+                      type="button"
+                      class="recur-unit-btn"
+                      :class="{ 'is-selected': addRecurUnit === u.value }"
+                      @click="addRecurUnit = u.value"
+                    >{{ u.label }}</button>
+                  </div>
+                </div>
+              </Transition>
+
+              <div v-if="addIsRecurring" class="recur-summary">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                {{ recurSummary }}
+                <span v-if="!addDueLocal" class="recur-summary-warn">（请设置截止时间作为起始点）</span>
+                <span v-else class="recur-summary-meta">
+                  · 起始 {{ addDueLocal.replace('T', ' ') }}
+                </span>
+              </div>
             </div>
           </div>
           <footer class="modal-foot">
@@ -360,33 +570,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <style scoped>
 .tasks-page { position: relative; padding-bottom: 60px; }
-
-.cat-header {
-  display: flex; align-items: center; gap: 14px;
-  padding: 14px 18px;
-  margin-bottom: 18px;
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--cat-color) 14%, var(--tg-bg-elev)),
-    var(--tg-bg-elev));
-  border: 1px solid color-mix(in srgb, var(--cat-color) 30%, transparent);
-  border-radius: var(--tg-radius-lg);
-  box-shadow: var(--tg-shadow-xs);
-}
-.cat-header-dot {
-  width: 14px; height: 14px;
-  background: var(--cat-color);
-  border-radius: 50%;
-  box-shadow: 0 0 0 5px color-mix(in srgb, var(--cat-color) 18%, transparent);
-  flex-shrink: 0;
-}
-.cat-header-info { flex: 1; min-width: 0; }
-.cat-header-name {
-  font-family: 'Sora', sans-serif;
-  font-size: 17px; font-weight: 700;
-  letter-spacing: -0.018em;
-  color: color-mix(in srgb, var(--cat-color) 70%, var(--tg-text));
-}
-.cat-header-meta { font-size: 12px; color: var(--tg-text-tertiary); margin-top: 2px; }
 
 .add-bar {
   display: flex; align-items: center; gap: 14px;
@@ -417,20 +600,31 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .fab:hover { transform: translateY(-3px) scale(1.04); box-shadow: var(--tg-shadow-lg), var(--tg-shadow-glow); }
 .fab:active { transform: translateY(0) scale(1); }
 
-/* Modal */
-.add-modal { width: min(520px, 95vw); }
+/* ============== Modal head/body/foot ============== */
+.add-modal { width: min(560px, 95vw); }
 .modal-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 22px;
   border-bottom: 1px solid var(--tg-divider);
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--tg-primary) 6%, transparent),
+      color-mix(in srgb, var(--tg-accent) 6%, transparent));
 }
 .modal-title {
+  display: inline-flex; align-items: center; gap: 10px;
   font-family: 'Sora', sans-serif;
   font-size: 17px; font-weight: 700; letter-spacing: -0.018em;
 }
+.modal-title-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--tg-grad-brand);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tg-primary) 18%, transparent);
+}
 .modal-body {
   padding: 22px;
-  display: flex; flex-direction: column; gap: 16px;
+  display: flex; flex-direction: column; gap: 18px;
   max-height: 70vh; overflow-y: auto;
 }
 .modal-foot {
@@ -438,17 +632,303 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   padding: 14px 22px;
   border-top: 1px solid var(--tg-divider);
 }
-.form-field { display: flex; flex-direction: column; gap: 8px; }
-.form-field label {
+
+/* =================================================== */
+/* ============== 自定义"漂亮输入框" =================== */
+/* =================================================== */
+.pretty-field { display: flex; flex-direction: column; gap: 8px; }
+.pretty-field-label {
+  display: inline-flex; align-items: center; gap: 6px;
   font-size: 12px; font-weight: 700;
   color: var(--tg-text-secondary);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.pretty-field-label svg { color: var(--tg-primary); flex-shrink: 0; }
+.pretty-field-label .required {
+  color: var(--tg-danger); font-weight: 800;
+  text-transform: none; letter-spacing: 0;
+}
+.pretty-field-label .optional {
+  margin-left: 4px;
+  padding: 1px 8px;
+  background: var(--tg-hover);
+  color: var(--tg-text-tertiary);
+  font-size: 10px; font-weight: 700;
+  border-radius: 999px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.pretty-input-wrap {
+  position: relative;
+  border-radius: var(--tg-radius-md);
+  /* 渐变描边：通过两层 background-clip 实现 */
+  background:
+    linear-gradient(var(--tg-bg-elev), var(--tg-bg-elev)) padding-box,
+    linear-gradient(135deg, var(--tg-divider), var(--tg-divider)) border-box;
+  border: 1.5px solid transparent;
+  transition: transform var(--tg-trans-fast), box-shadow var(--tg-trans-fast),
+              background var(--tg-trans-fast);
+}
+.pretty-input-wrap:hover {
+  background:
+    linear-gradient(color-mix(in srgb, var(--tg-primary) 2%, var(--tg-bg-elev)),
+                    color-mix(in srgb, var(--tg-primary) 2%, var(--tg-bg-elev))) padding-box,
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--tg-primary) 30%, var(--tg-divider-strong)),
+      color-mix(in srgb, var(--tg-accent) 30%, var(--tg-divider-strong))) border-box;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.pretty-input-wrap:focus-within {
+  background:
+    linear-gradient(var(--tg-bg-elev), var(--tg-bg-elev)) padding-box,
+    var(--tg-grad-brand) border-box;
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--tg-primary) 14%, transparent),
+    0 6px 18px -6px color-mix(in srgb, var(--tg-primary) 38%, transparent);
+  transform: translateY(-1px);
+}
+
+.pretty-input-glow {
+  pointer-events: none;
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  background: var(--tg-grad-brand-soft);
+  opacity: 0;
+  transition: opacity var(--tg-trans-fast);
+  z-index: 0;
+}
+.pretty-input-wrap:focus-within .pretty-input-glow { opacity: 1; }
+
+/* 主输入元素 — 透明背景，描边由 wrap 提供 */
+.pretty-input {
+  position: relative; z-index: 1;
+  display: block; width: 100%;
+  padding: 13px 16px;
+  background: transparent;
+  border: none; outline: none;
+  color: var(--tg-text);
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  caret-color: var(--tg-primary);
+}
+.pretty-input::placeholder {
+  color: var(--tg-text-tertiary);
+  font-weight: 400;
+  transition: color var(--tg-trans-fast), opacity var(--tg-trans-fast);
+}
+.pretty-input:focus::placeholder { opacity: 0.55; }
+.pretty-textarea {
+  resize: vertical; min-height: 76px; line-height: 1.55;
+}
+
+/* ===== 漂亮的 datetime-local ===== */
+.pretty-date-wrap { display: flex; align-items: center; }
+.pretty-date-icon {
+  position: relative; z-index: 1;
+  margin-left: 14px;
+  color: var(--tg-primary);
+  flex-shrink: 0;
+  transition: transform var(--tg-trans-fast);
+}
+.pretty-date-wrap:focus-within .pretty-date-icon { transform: scale(1.08); }
+.pretty-date-input {
+  padding-left: 10px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: 0.01em;
+}
+/* 隐藏原生日历图标(我们已用左侧 svg 占位) */
+.pretty-date-input::-webkit-calendar-picker-indicator {
+  opacity: 0.35;
+  cursor: pointer;
+  filter: invert(35%) sepia(80%) saturate(2400%) hue-rotate(225deg) brightness(95%);
+  transition: opacity var(--tg-trans-fast), transform var(--tg-trans-fast);
+}
+.pretty-date-input:hover::-webkit-calendar-picker-indicator { opacity: 0.7; }
+.pretty-date-input:focus::-webkit-calendar-picker-indicator { opacity: 1; }
+
+/* =================================================== */
+/* =============== 周期性日程相关样式 =================== */
+/* =================================================== */
+.recur-toggle {
+  display: inline-flex;
+  padding: 4px;
+  background: var(--tg-bg-elev);
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-pill);
+  box-shadow: var(--tg-shadow-xs);
+  align-self: flex-start;
+}
+.recur-toggle-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 18px;
+  background: transparent;
+  border: none;
+  border-radius: var(--tg-radius-pill);
+  font-size: 13px; font-weight: 600;
+  color: var(--tg-text-secondary);
+  cursor: pointer;
+  transition: background var(--tg-trans), color var(--tg-trans),
+              transform var(--tg-trans-fast);
+}
+.recur-toggle-btn:hover { color: var(--tg-text); }
+.recur-toggle-btn.is-selected {
+  background: var(--tg-grad-brand);
+  color: var(--tg-on-primary);
+  box-shadow: var(--tg-shadow-sm);
+}
+.recur-toggle-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--tg-text-tertiary);
+}
+.recur-toggle-btn.is-selected .recur-toggle-dot {
+  background: rgba(255,255,255,0.95);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.25);
+}
+.recur-toggle-dot.is-recur {
+  background: linear-gradient(135deg, var(--tg-primary), var(--tg-accent));
+}
+
+.recur-row {
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--tg-primary) 6%, var(--tg-bg-elev)),
+      color-mix(in srgb, var(--tg-accent) 6%, var(--tg-bg-elev)));
+  border: 1.5px solid color-mix(in srgb, var(--tg-primary) 22%, transparent);
+  border-radius: var(--tg-radius-md);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    inset 0 0 0 1px rgba(255,255,255,0.6);
+}
+.recur-label-pre {
+  font-size: 14px; font-weight: 700;
+  color: var(--tg-text-secondary);
+}
+
+.recur-num-wrap {
+  display: inline-flex; align-items: stretch;
+  background: var(--tg-bg-elev);
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-pill);
+  overflow: hidden;
+  box-shadow: var(--tg-shadow-xs);
+  transition: border-color var(--tg-trans-fast), box-shadow var(--tg-trans-fast);
+}
+.recur-num-wrap:focus-within {
+  border-color: var(--tg-primary);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--tg-primary) 14%, transparent);
+}
+.recur-num-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px;
+  background: transparent;
+  border: none;
+  color: var(--tg-text-secondary);
+  cursor: pointer;
+  transition: background var(--tg-trans-fast), color var(--tg-trans-fast);
+}
+.recur-num-btn:hover:not(:disabled) {
+  background: var(--tg-hover);
+  color: var(--tg-primary);
+}
+.recur-num-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.recur-num-input {
+  width: 56px;
+  padding: 8px 0;
+  background: transparent;
+  border: none; outline: none;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: 15px; font-weight: 700;
+  color: var(--tg-text);
+  font-family: 'Sora', sans-serif;
+  -moz-appearance: textfield;
+}
+.recur-num-input::-webkit-outer-spin-button,
+.recur-num-input::-webkit-inner-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+
+.recur-unit-wrap {
+  display: inline-flex; gap: 4px;
+  padding: 4px;
+  background: var(--tg-bg-elev);
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-pill);
+  box-shadow: var(--tg-shadow-xs);
+}
+.recur-unit-btn {
+  padding: 6px 14px;
+  background: transparent;
+  border: none;
+  border-radius: var(--tg-radius-pill);
+  font-size: 13px; font-weight: 600;
+  color: var(--tg-text-secondary);
+  cursor: pointer;
+  min-width: 36px;
+  transition: background var(--tg-trans-fast), color var(--tg-trans-fast);
+}
+.recur-unit-btn:hover { color: var(--tg-text); }
+.recur-unit-btn.is-selected {
+  background: var(--tg-grad-brand);
+  color: var(--tg-on-primary);
+  box-shadow: var(--tg-shadow-sm);
+}
+
+.recur-summary {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  align-self: flex-start;
+  background: color-mix(in srgb, var(--tg-primary) 10%, transparent);
+  color: var(--tg-primary);
+  border: 1px solid color-mix(in srgb, var(--tg-primary) 28%, transparent);
+  border-radius: 999px;
+  font-size: 12.5px; font-weight: 700;
+}
+.recur-summary svg { flex-shrink: 0; }
+.recur-summary-meta {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--tg-primary) 70%, var(--tg-text-secondary));
+  font-variant-numeric: tabular-nums;
+}
+.recur-summary-warn {
+  font-weight: 600;
+  color: var(--tg-warn);
+}
+
+/* recur 行展开/收起动画 */
+.recur-enter-active, .recur-leave-active {
+  transition: opacity var(--tg-trans), transform var(--tg-trans),
+              max-height var(--tg-trans);
+  overflow: hidden;
+}
+.recur-enter-from, .recur-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+  max-height: 0;
+}
+.recur-enter-to, .recur-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+  max-height: 200px;
+}
+
+/* form-hint 复用 */
 .form-hint { font-size: 11.5px; }
 
 @media (max-width: 600px) {
   .add-bar-hint { display: none; }
   .fab { display: flex; }
+  .recur-row { gap: 8px; padding: 10px 12px; }
+  .recur-unit-btn { padding: 5px 10px; min-width: 32px; }
 }
 </style>
