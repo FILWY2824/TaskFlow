@@ -57,7 +57,7 @@ async function submit() {
         </svg>
       </div>
       <h2>创建账号</h2>
-      <div class="auth-subtitle">开始你在 ToDo List 的高效之旅</div>
+      <div class="auth-subtitle">开启你在 TaskFlow 的高效之旅</div>
       <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
       <div class="field">
         <label>邮箱</label>

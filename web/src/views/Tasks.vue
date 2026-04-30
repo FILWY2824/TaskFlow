@@ -52,7 +52,6 @@ watch(
 )
 
 onMounted(async () => {
-  // 必须保证 lists 已加载，否则下拉框是空的
   await data.loadLists()
 })
 
@@ -63,7 +62,21 @@ const groupedTodos = computed(() => {
   return { open, done }
 })
 
+// 当前所在的分类（在 list 路由下）
+const currentList = computed(() => {
+  if (!props.listId) return null
+  return data.lists.find((l) => l.id === props.listId) || null
+})
+
 // =========== 新建任务对话框 ==============
+const PRIORITY_OPTIONS = [
+  { value: 0, label: '无',   color: 'var(--tg-text-tertiary)' },
+  { value: 1, label: '低',   color: 'var(--cat-sky)' },
+  { value: 2, label: '中',   color: 'var(--cat-emerald)' },
+  { value: 3, label: '高',   color: 'var(--cat-amber)' },
+  { value: 4, label: '紧急', color: 'var(--cat-rose)' },
+]
+
 const showAddDialog = ref(false)
 const addTitle = ref('')
 const addDueLocal = ref('')
@@ -82,7 +95,6 @@ function openAdd() {
   addEffort.value = 0
   addDescription.value = ''
   addErr.value = ''
-  // 根据当前过滤给一个合理的默认 due_at
   if (activeFilter.value === 'today') {
     const d = new Date()
     d.setHours(23, 59, 0, 0)
@@ -138,7 +150,6 @@ async function remove(t: Todo) {
   catch (e) { errMsg.value = e instanceof ApiError ? e.message : (e as Error).message }
 }
 
-// 键盘快捷键：N 打开新建（避免与 input 冲突）
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape' && showAddDialog.value) {
     showAddDialog.value = false
@@ -160,6 +171,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   <div class="tasks-page">
     <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
 
+    <!-- 当前分类的"头部条"，让进入某个分类时立刻能看到色彩归属 -->
+    <div v-if="currentList" class="cat-header" :style="{ '--cat-color': currentList.color || 'var(--tg-primary)' }">
+      <span class="cat-header-dot" />
+      <div class="cat-header-info">
+        <div class="cat-header-name">{{ currentList.name }}</div>
+        <div class="cat-header-meta">{{ data.todos.length }} 个任务</div>
+      </div>
+    </div>
+
     <div v-if="filterGroup === 'schedule'" class="segment-control">
       <button :class="{ active: currentFilter === 'today' }" @click="currentFilter = 'today'">今日</button>
       <button :class="{ active: currentFilter === 'tomorrow' }" @click="currentFilter = 'tomorrow'">明天</button>
@@ -170,7 +190,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <button :class="{ active: currentFilter === 'overdue' }" @click="currentFilter = 'overdue'">已过期</button>
     </div>
 
-    <!-- 顶部"新增任务"按钮：明显、固定可见，避免之前 quick-add 表单空标题静默 return 的问题。 -->
     <div v-if="activeFilter !== 'completed'" class="add-bar">
       <button class="btn-primary add-task-btn" @click="openAdd">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -213,7 +232,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </div>
     </template>
 
-    <!-- 移动端 FAB：永远在右下角 -->
+    <!-- 移动端 FAB -->
     <button v-if="activeFilter !== 'completed'" class="fab" @click="openAdd" aria-label="新增任务">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -242,6 +261,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           </header>
           <div class="modal-body">
             <div v-if="addErr" class="auth-error">{{ addErr }}</div>
+
             <div class="form-field">
               <label>标题 <span class="required">*</span></label>
               <input
@@ -252,29 +272,63 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 @keydown.enter="submitAdd"
               />
             </div>
+
             <div class="form-field">
               <label>描述（可选）</label>
               <textarea v-model="addDescription" rows="2" placeholder="补充说明…" />
             </div>
-            <div class="form-grid">
-              <div class="form-field">
-                <label>优先级</label>
-                <select v-model.number="addPriority">
-                  <option :value="0">无</option>
-                  <option :value="1">低</option>
-                  <option :value="2">中</option>
-                  <option :value="3">高</option>
-                  <option :value="4">紧急</option>
-                </select>
+
+            <!-- 视觉化的分类选择器：色块 chip -->
+            <div class="form-field">
+              <label>分类</label>
+              <div class="cat-picker">
+                <button
+                  type="button"
+                  class="cat-option"
+                  :class="{ 'is-selected': addListId === null }"
+                  :style="{ '--cat-color': 'var(--tg-text-tertiary)' }"
+                  @click="addListId = null"
+                >
+                  <span class="dot" />
+                  未分类
+                </button>
+                <button
+                  v-for="l in data.lists"
+                  :key="l.id"
+                  type="button"
+                  class="cat-option"
+                  :class="{ 'is-selected': addListId === l.id }"
+                  :style="{ '--cat-color': l.color || 'var(--tg-primary)' }"
+                  @click="addListId = l.id"
+                >
+                  <span class="dot" />
+                  {{ l.name }}
+                </button>
               </div>
-              <div class="form-field">
-                <label>清单</label>
-                <select v-model.number="addListId">
-                  <option :value="null">无清单</option>
-                  <option v-for="l in data.lists" :key="l.id" :value="l.id">{{ l.name }}</option>
-                </select>
+              <div v-if="data.lists.length === 0" class="form-hint muted">
+                还没有分类。可在左侧栏「我的分类」处新建。
               </div>
             </div>
+
+            <!-- 优先级 chip -->
+            <div class="form-field">
+              <label>优先级</label>
+              <div class="cat-picker">
+                <button
+                  v-for="p in PRIORITY_OPTIONS"
+                  :key="p.value"
+                  type="button"
+                  class="cat-option"
+                  :class="{ 'is-selected': addPriority === p.value }"
+                  :style="{ '--cat-color': p.color }"
+                  @click="addPriority = p.value"
+                >
+                  <span class="dot" />
+                  {{ p.label }}
+                </button>
+              </div>
+            </div>
+
             <div class="form-field">
               <label>截止时间（可选）</label>
               <input v-model="addDueLocal" type="datetime-local" />
@@ -296,113 +350,93 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 <style scoped>
 .tasks-page { position: relative; padding-bottom: 60px; }
 
+.cat-header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--cat-color) 14%, var(--tg-bg-elev)),
+    var(--tg-bg-elev));
+  border: 1px solid color-mix(in srgb, var(--cat-color) 30%, transparent);
+  border-radius: var(--tg-radius-lg);
+  box-shadow: var(--tg-shadow-xs);
+}
+.cat-header-dot {
+  width: 14px; height: 14px;
+  background: var(--cat-color);
+  border-radius: 50%;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--cat-color) 18%, transparent);
+  flex-shrink: 0;
+}
+.cat-header-info { flex: 1; min-width: 0; }
+.cat-header-name {
+  font-family: 'Sora', sans-serif;
+  font-size: 17px; font-weight: 700;
+  letter-spacing: -0.018em;
+  color: color-mix(in srgb, var(--cat-color) 70%, var(--tg-text));
+}
+.cat-header-meta { font-size: 12px; color: var(--tg-text-tertiary); margin-top: 2px; }
+
 .add-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 18px;
 }
 .add-task-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 18px !important;
-  font-size: 14px !important;
-  font-weight: 600;
-  border-radius: var(--tg-radius-md) !important;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 20px;
+  font-size: 14px; font-weight: 600;
 }
-.add-task-btn svg { flex-shrink: 0; }
 .add-bar-hint { font-size: 12px; }
-.add-bar-hint kbd {
-  background: var(--tg-hover);
-  border: 1px solid var(--tg-divider);
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-size: 11px;
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  margin: 0 2px;
-}
 
-.empty .empty-hint kbd {
-  background: var(--tg-hover);
-  border: 1px solid var(--tg-divider);
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-size: 11px;
-  font-family: ui-monospace, SFMono-Regular, monospace;
-}
-
-/* 移动端浮动 + 按钮 */
+/* Mobile FAB */
 .fab {
   display: none;
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  width: 52px; height: 52px;
+  position: fixed; right: 18px; bottom: 18px;
+  width: 56px; height: 56px;
   border-radius: 50%;
-  background: var(--tg-primary);
-  color: #fff;
+  background: var(--tg-grad-brand);
+  color: var(--tg-on-primary);
   border: none;
   box-shadow: var(--tg-shadow-lg);
   cursor: pointer;
-  align-items: center;
-  justify-content: center;
+  align-items: center; justify-content: center;
   z-index: 50;
-  transition: transform var(--tg-trans-fast), background var(--tg-trans-fast);
+  transition: transform var(--tg-trans), box-shadow var(--tg-trans);
 }
-.fab:hover { background: var(--tg-primary-hover); transform: translateY(-2px); }
-.fab:active { transform: translateY(0); }
+.fab:hover { transform: translateY(-3px) scale(1.04); box-shadow: var(--tg-shadow-lg), var(--tg-shadow-glow); }
+.fab:active { transform: translateY(0) scale(1); }
 
-/* ============ Modal ============ */
-.add-modal { width: min(480px, 95vw); }
+/* Modal */
+.add-modal { width: min(520px, 95vw); }
 .modal-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px; border-bottom: 1px solid var(--tg-divider);
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--tg-divider);
 }
-.modal-title { font-size: 16px; font-weight: 600; }
+.modal-title {
+  font-family: 'Sora', sans-serif;
+  font-size: 17px; font-weight: 700; letter-spacing: -0.018em;
+}
 .modal-body {
-  padding: 18px 20px; display: flex; flex-direction: column; gap: 14px;
-  max-height: 65vh; overflow-y: auto;
+  padding: 22px;
+  display: flex; flex-direction: column; gap: 16px;
+  max-height: 70vh; overflow-y: auto;
 }
 .modal-foot {
   display: flex; gap: 10px; justify-content: flex-end;
-  padding: 14px 20px; border-top: 1px solid var(--tg-divider);
-  background: var(--tg-bg);
+  padding: 14px 22px;
+  border-top: 1px solid var(--tg-divider);
 }
-.form-field { display: flex; flex-direction: column; gap: 6px; }
+.form-field { display: flex; flex-direction: column; gap: 8px; }
 .form-field label {
-  font-size: 12px; font-weight: 600;
-  color: var(--tg-primary); letter-spacing: 0.2px;
+  font-size: 12px; font-weight: 700;
+  color: var(--tg-text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
-.form-field .required { color: var(--tg-danger); }
-.form-field input,
-.form-field select,
-.form-field textarea {
-  padding: 9px 12px;
-  border-radius: var(--tg-radius-sm);
-  border: 1.5px solid var(--tg-divider);
-  background: var(--tg-bg);
-  color: var(--tg-text);
-  font-size: 14px;
-  font-family: inherit;
-  transition: border-color var(--tg-trans-fast);
-  resize: vertical;
-}
-.form-field input:focus,
-.form-field select:focus,
-.form-field textarea:focus { border-color: var(--tg-primary); outline: none; }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.form-hint { font-size: 11.5px; margin-top: 2px; }
-
-.modal-enter-active, .modal-leave-active { transition: opacity 0.2s; }
-.modal-enter-from, .modal-leave-to { opacity: 0; }
-.modal-enter-active .modal-card,
-.modal-leave-active .modal-card { transition: transform 0.22s cubic-bezier(0.4,0,0.2,1), opacity 0.22s; }
-.modal-enter-from .modal-card,
-.modal-leave-to .modal-card { transform: translateY(8px) scale(0.97); opacity: 0; }
+.form-hint { font-size: 11.5px; }
 
 @media (max-width: 600px) {
-  .form-grid { grid-template-columns: 1fr; }
   .add-bar-hint { display: none; }
   .fab { display: flex; }
 }

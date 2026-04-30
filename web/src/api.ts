@@ -15,6 +15,7 @@ import type {
   TelegramBindStatus,
   TelegramBindToken,
   TelegramBinding,
+  TelegramConfig,
   Todo,
   TodoInput,
   User,
@@ -370,6 +371,10 @@ export const notifications = {
 // API: telegram
 // =============================================================
 export const telegram = {
+  async getConfig(): Promise<TelegramConfig> {
+    // 此端点不需要登录态——前端在绑定页打开时即可探测
+    return request('/api/telegram/config', { noAuth: true })
+  },
   async createBindToken(): Promise<TelegramBindToken> {
     return request('/api/telegram/bind-token', { method: 'POST' })
   },

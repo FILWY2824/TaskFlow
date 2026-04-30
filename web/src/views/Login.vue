@@ -41,7 +41,7 @@ async function submit() {
         </svg>
       </div>
       <h2>欢迎回来</h2>
-      <div class="auth-subtitle">登录到 ToDo List 继续您的任务管理</div>
+      <div class="auth-subtitle">登录到 TaskFlow，继续你高效的一天</div>
       <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
       <div class="field">
         <label>邮箱</label>

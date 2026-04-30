@@ -152,6 +152,11 @@ export interface NotificationDelivery {
 }
 
 // === Telegram ===
+export interface TelegramConfig {
+  enabled: boolean
+  bot_username: string
+}
+
 export interface TelegramBindToken {
   token: string
   expires_at: string

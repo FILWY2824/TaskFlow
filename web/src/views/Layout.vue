@@ -15,39 +15,49 @@ const router = useRouter()
 const route = useRoute()
 
 const search = ref('')
-const sidebarOpen = ref(false) // 移动端侧栏开关
+const sidebarOpen = ref(false)
 
-// ---- 清单对话框（新建 / 重命名通用）----
+// ---------- 分类（List）对话框 ----------
 const showListDialog = ref(false)
-const editingListId = ref<number | null>(null) // null 表示新建
-const listForm = ref({ name: '', color: '#3390ec' })
+const editingListId = ref<number | null>(null)
+const listForm = ref({ name: '', color: '#6366f1' })
 const errMsg = ref('')
+
+// 9 种预设色（与 style.css 中 --cat-* 对应）
+const PRESET_COLORS = [
+  { hex: '#f43f5e', label: '玫红' },
+  { hex: '#fb7185', label: '珊瑚' },
+  { hex: '#f59e0b', label: '琥珀' },
+  { hex: '#10b981', label: '翠绿' },
+  { hex: '#14b8a6', label: '蓝绿' },
+  { hex: '#0ea5e9', label: '天蓝' },
+  { hex: '#6366f1', label: '靛蓝' },
+  { hex: '#8b5cf6', label: '紫罗兰' },
+  { hex: '#d946ef', label: '桃红' },
+]
 
 onMounted(async () => {
   try {
     await Promise.all([data.loadLists(), notif.refreshUnread()])
   } catch {
-    // 401 已被 api 层处理跳走；这里仅吞掉
+    /* 401 已被 api 层处理跳走 */
   }
   notif.startSSE()
-  // 安装本地任务到期调度器（独立于服务端 reminder rules）
   installTodoDueScheduler()
-  // 不再在这里主动请求 Notification 权限——统一在「设置 → 提醒与通知」里由用户决定。
 })
 
 onBeforeUnmount(() => {
   notif.stopSSE()
 })
 
-// 路由切换时自动关闭移动端侧栏
 watch(() => route.fullPath, () => {
   sidebarOpen.value = false
 })
 
 const sidebarFilters = [
   { name: 'schedule', label: '日程', icon: 'calendar' },
-  { name: 'all', label: '全部', icon: 'inbox' },
-  { name: 'archive', label: '完成 & 过期', icon: 'archive' },
+  { name: 'all', label: '全部任务', icon: 'inbox' },
+  { name: 'archive', label: '完成 / 过期', icon: 'archive' },
   { name: 'no-date', label: '无日期', icon: 'circle' },
 ] as const
 
@@ -68,20 +78,22 @@ async function logout() {
 }
 
 async function submitSearch() {
-  // 触发当前 Tasks 视图重新加载（视图监听 route.query.q）
-  router.push({ name: route.name as string, params: route.params, query: { ...route.query, q: search.value || undefined } })
+  router.push({
+    name: route.name as string,
+    params: route.params,
+    query: { ...route.query, q: search.value || undefined },
+  })
 }
 
-// ---- 清单对话框 ----
 function openNewList() {
   editingListId.value = null
-  listForm.value = { name: '', color: '#3390ec' }
+  listForm.value = { name: '', color: PRESET_COLORS[6].hex }
   errMsg.value = ''
   showListDialog.value = true
 }
 function openEditList(l: List) {
   editingListId.value = l.id
-  listForm.value = { name: l.name, color: l.color || '#3390ec' }
+  listForm.value = { name: l.name, color: l.color || PRESET_COLORS[6].hex }
   errMsg.value = ''
   showListDialog.value = true
 }
@@ -104,10 +116,9 @@ async function submitList() {
   }
 }
 async function removeList(l: List) {
-  if (!confirm(`删除清单 "${l.name}" ？该清单下的任务会变为无清单。`)) return
+  if (!confirm(`删除分类 "${l.name}" ？该分类下的任务会变为「未分类」。`)) return
   try {
     await data.removeList(l.id)
-    // 如果当前路由就在被删的清单页，跳回 schedule
     if (route.name === 'list' && Number(route.params.id) === l.id) {
       router.replace({ name: 'schedule' })
     }
@@ -127,14 +138,8 @@ const userEmail = computed(() => auth.user?.email || '')
 
 <template>
   <div class="app-shell">
-    <!-- Mobile backdrop -->
-    <div
-      class="sidebar-backdrop"
-      :class="{ 'is-open': sidebarOpen }"
-      @click="sidebarOpen = false"
-    ></div>
+    <div class="sidebar-backdrop" :class="{ 'is-open': sidebarOpen }" @click="sidebarOpen = false"></div>
 
-    <!-- Sidebar -->
     <aside class="sidebar" :class="{ 'is-open': sidebarOpen }">
       <div class="sidebar-header">
         <div class="brand">
@@ -143,7 +148,7 @@ const userEmail = computed(() => auth.user?.email || '')
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
           </span>
-          <span class="brand-name">ToDo List</span>
+          <span class="brand-name">TaskFlow</span>
         </div>
       </div>
 
@@ -160,29 +165,36 @@ const userEmail = computed(() => auth.user?.email || '')
         </RouterLink>
 
         <div class="group-title-row">
-          <span>我的清单</span>
-          <button class="add-btn" title="新建清单" @click="openNewList">+</button>
+          <span>我的分类</span>
+          <button class="add-btn" title="新建分类" @click="openNewList">+</button>
         </div>
-        <div
-          v-for="l in data.lists"
-          :key="l.id"
-          class="list-row"
-        >
+
+        <div v-if="data.lists.length === 0" class="cat-empty">
+          点 <strong>+</strong> 创建第一个分类
+        </div>
+
+        <div v-for="l in data.lists" :key="l.id" class="list-row">
           <RouterLink
             :to="{ name: 'list', params: { id: l.id } }"
             :class="{ active: route.name === 'list' && Number(route.params.id) === l.id }"
           >
-            <span class="nav-icon" :style="{ color: l.color || 'var(--tg-primary)' }">
-              <span class="dot" />
+            <span class="nav-icon">
+              <span class="dot" :style="{ background: l.color || 'var(--tg-primary)', color: l.color || 'var(--tg-primary)' }" />
             </span>
             <span class="nav-text">{{ l.name }}</span>
           </RouterLink>
           <div class="list-actions">
-            <button title="重命名" @click.stop="openEditList(l)">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            <button title="重命名 / 改色" @click.stop="openEditList(l)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
             </button>
-            <button title="删除清单" @click.stop="removeList(l)">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <button title="删除分类" @click.stop="removeList(l)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
             </button>
           </div>
         </div>
@@ -209,34 +221,27 @@ const userEmail = computed(() => auth.user?.email || '')
           </div>
         </div>
         <button class="btn-icon" title="退出登录" @click="logout">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
         </button>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
-        <button
-          class="menu-btn"
-          aria-label="打开侧栏"
-          @click="sidebarOpen = !sidebarOpen"
-        >
+        <button class="menu-btn" aria-label="打开侧栏" @click="sidebarOpen = !sidebarOpen">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="3" y1="6" x2="21" y2="6"/>
             <line x1="3" y1="12" x2="21" y2="12"/>
             <line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
         </button>
-        <div class="title">
-          <span>{{ pageTitle(route) }}</span>
-        </div>
+        <div class="title">{{ pageTitle(route) }}</div>
         <div class="topbar-actions">
-          <input
-            v-model="search"
-            type="search"
-            placeholder="搜索任务…"
-            @keydown.enter="submitSearch"
-          />
+          <input v-model="search" type="search" placeholder="搜索任务…" @keydown.enter="submitSearch" />
         </div>
       </header>
       <section class="content">
@@ -250,34 +255,59 @@ const userEmail = computed(() => auth.user?.email || '')
       </section>
     </main>
 
-    <!-- 新建 / 编辑清单 dialog（用 modal 风格）-->
+    <!-- 新建 / 编辑分类 dialog -->
     <Transition name="fade">
-      <div
-        v-if="showListDialog"
-        class="modal-backdrop"
-        @click.self="showListDialog = false"
-      >
-        <div class="modal-card" style="width: min(380px, 95vw)">
-          <header style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--tg-divider)">
-            <span style="font-size:16px;font-weight:600">{{ editingListId === null ? '新建清单' : '编辑清单' }}</span>
-            <button class="btn-icon" @click="showListDialog = false">
+      <div v-if="showListDialog" class="modal-backdrop" @click.self="showListDialog = false">
+        <div class="modal-card cat-modal">
+          <header class="modal-head">
+            <span class="modal-title">{{ editingListId === null ? '新建分类' : '编辑分类' }}</span>
+            <button class="btn-icon" @click="showListDialog = false" aria-label="关闭">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </header>
-          <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
+
+          <div class="modal-body">
             <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
-            <div class="field">
-              <label style="font-size:12px;font-weight:600;color:var(--tg-primary);margin-bottom:6px;display:block">名称</label>
-              <input v-model="listForm.name" autofocus @keydown.enter="submitList" />
+
+            <!-- 实时预览 -->
+            <div class="cat-preview" :style="{ '--cat-color': listForm.color }">
+              <span class="dot" />
+              <span class="name">{{ listForm.name.trim() || '分类名称' }}</span>
             </div>
+
             <div class="field">
-              <label style="font-size:12px;font-weight:600;color:var(--tg-primary);margin-bottom:6px;display:block">颜色</label>
-              <input v-model="listForm.color" type="color" />
+              <label>名称</label>
+              <input v-model="listForm.name" autofocus maxlength="60" placeholder="例如：工作 / 学习 / 生活…" @keydown.enter="submitList" />
+            </div>
+
+            <div class="field">
+              <label>颜色</label>
+              <div class="color-swatches">
+                <button
+                  v-for="c in PRESET_COLORS"
+                  :key="c.hex"
+                  type="button"
+                  class="color-swatch"
+                  :class="{ 'is-selected': listForm.color.toLowerCase() === c.hex.toLowerCase() }"
+                  :style="{ background: c.hex }"
+                  :title="c.label"
+                  @click="listForm.color = c.hex"
+                />
+                <input
+                  v-model="listForm.color"
+                  type="color"
+                  title="自定义颜色"
+                  class="custom-color"
+                />
+              </div>
             </div>
           </div>
-          <footer style="display:flex;gap:10px;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--tg-divider)">
+
+          <footer class="modal-foot">
             <button class="btn-secondary" @click="showListDialog = false">取消</button>
-            <button class="btn-primary" @click="submitList">{{ editingListId === null ? '创建' : '保存' }}</button>
+            <button class="btn-primary" @click="submitList">
+              {{ editingListId === null ? '创建' : '保存' }}
+            </button>
           </footer>
         </div>
       </div>
@@ -291,10 +321,10 @@ import type { RouteLocationNormalizedLoaded } from 'vue-router'
 function pageTitle(route: RouteLocationNormalizedLoaded): string {
   const m: Record<string, string> = {
     schedule: '日程',
-    archive: '完成 & 过期',
+    archive: '完成 / 过期',
     'no-date': '无日期',
     all: '全部任务',
-    list: '清单',
+    list: '分类',
     calendar: '日历',
     pomodoro: '番茄专注',
     stats: '数据复盘',
@@ -305,7 +335,6 @@ function pageTitle(route: RouteLocationNormalizedLoaded): string {
   return m[String(route.name || '')] || ''
 }
 
-// 用 inline SVG 替换 emoji，跨平台样式更统一。每个图标都是 24x24 viewBox 下的 currentColor 描边。
 function navIcon(name: string): string {
   const stroke = `stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`
   const wrap = (inner: string) =>
@@ -336,3 +365,87 @@ function navIcon(name: string): string {
   }
 }
 </script>
+
+<style scoped>
+.cat-empty {
+  margin: 4px 12px 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--tg-text-tertiary);
+  background: var(--tg-hover);
+  border-radius: var(--tg-radius-sm);
+  text-align: center;
+  line-height: 1.5;
+}
+.cat-empty strong {
+  display: inline-block;
+  width: 18px; height: 18px;
+  line-height: 18px;
+  text-align: center;
+  background: var(--tg-grad-brand);
+  color: var(--tg-on-primary);
+  border-radius: 5px;
+  font-weight: 800;
+  margin: 0 2px;
+  vertical-align: middle;
+}
+
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--tg-divider);
+}
+.modal-title {
+  font-family: 'Sora', sans-serif;
+  font-size: 17px; font-weight: 700;
+  letter-spacing: -0.018em;
+}
+.modal-body {
+  padding: 22px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.modal-foot {
+  display: flex; gap: 10px; justify-content: flex-end;
+  padding: 14px 22px;
+  border-top: 1px solid var(--tg-divider);
+}
+.field { display: flex; flex-direction: column; gap: 8px; }
+.field label {
+  font-size: 12px; font-weight: 700;
+  color: var(--tg-text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cat-modal { width: min(440px, 95vw); }
+.cat-preview {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--cat-color) 10%, var(--tg-bg-elev));
+  border: 1.5px solid color-mix(in srgb, var(--cat-color) 35%, transparent);
+  border-radius: var(--tg-radius-md);
+  transition: background var(--tg-trans), border-color var(--tg-trans);
+}
+.cat-preview .dot {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--cat-color);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--cat-color) 18%, transparent);
+}
+.cat-preview .name {
+  font-family: 'Sora', sans-serif;
+  font-weight: 700; font-size: 16px;
+  color: color-mix(in srgb, var(--cat-color) 70%, var(--tg-text));
+  letter-spacing: -0.01em;
+}
+
+.custom-color {
+  width: 34px; height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  background: var(--tg-bg-elev);
+  border: 2px dashed var(--tg-divider-strong);
+}
+.custom-color:hover { border-color: var(--tg-primary); }
+</style>

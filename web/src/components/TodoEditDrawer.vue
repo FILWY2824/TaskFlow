@@ -235,14 +235,36 @@ const rrulePresets = [
         <textarea v-model="description" rows="3" placeholder="补充信息（可选）" />
       </div>
 
-      <div class="row">
-        <div class="field">
-          <label>清单</label>
-          <select v-model="listId">
-            <option :value="null">无</option>
-            <option v-for="l in data.lists" :key="l.id" :value="l.id">{{ l.name }}</option>
-          </select>
+      <!-- 视觉化分类选择 -->
+      <div class="field">
+        <label>分类</label>
+        <div class="cat-picker">
+          <button
+            type="button"
+            class="cat-option"
+            :class="{ 'is-selected': listId === null }"
+            :style="{ '--cat-color': 'var(--tg-text-tertiary)' }"
+            @click="listId = null"
+          >
+            <span class="dot" />
+            未分类
+          </button>
+          <button
+            v-for="l in data.lists"
+            :key="l.id"
+            type="button"
+            class="cat-option"
+            :class="{ 'is-selected': listId === l.id }"
+            :style="{ '--cat-color': l.color || 'var(--tg-primary)' }"
+            @click="listId = l.id"
+          >
+            <span class="dot" />
+            {{ l.name }}
+          </button>
         </div>
+      </div>
+
+      <div class="row">
         <div class="field">
           <label>优先级</label>
           <select v-model.number="priority">

@@ -66,6 +66,8 @@ func BuildHandler(d Deps) http.Handler {
 
 	// Telegram webhook 是公开路由,但通过 X-Telegram-Bot-Api-Secret-Token 验证
 	mux.HandleFunc("POST /api/telegram/webhook", telegramH.Webhook)
+	// Telegram 配置探测端点：前端打开绑定页时用来判断管理员是否启用了集成
+	mux.HandleFunc("GET /api/telegram/config", telegramH.GetConfig)
 
 	// === 需要认证的路由 ===
 	requireAuth := middleware.RequireAuth(d.Issuer)

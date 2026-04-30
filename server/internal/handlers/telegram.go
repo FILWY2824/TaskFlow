@@ -52,6 +52,27 @@ type bindTokenResponse struct {
 	DeepLinkApp string    `json:"deep_link_app"` // tg://resolve?domain=<bot>&start=bind_<token>
 }
 
+// configResponse 给前端用于探测服务端是否启用了 Telegram 集成。
+type configResponse struct {
+	Enabled     bool   `json:"enabled"`
+	BotUsername string `json:"bot_username"`
+}
+
+// GetConfig GET /api/telegram/config
+//
+// 客户端在打开 Telegram 绑定页时调用,用来判断:
+//   - 服务端是否真的开启了 Telegram 集成(bot_token + bot_username 都有)
+//   - bot_username 是什么(用来在 UI 里展示 "@xxx_bot",或拼 deep link 兜底)
+//
+// 不开启 Telegram 的部署也能正常用 App,只是绑定页会显示"管理员未启用"。
+func (h *TelegramHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
+	resp := configResponse{
+		Enabled:     h.Bot != nil && h.Bot.Enabled() && h.BotUsername != "",
+		BotUsername: h.BotUsername,
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // CreateBindToken POST /api/telegram/bind-token
 //
 // 让登录用户获取一次性 bind_token,并附带可直接打开 Telegram 的 deep link。
@@ -61,6 +82,18 @@ type bindTokenResponse struct {
 //  2. 在浏览器/手机上打开 deep_link,用户在 Telegram 客户端按 Start;
 //  3. 客户端轮询 /api/telegram/bind-status?token=... 直到 status=bound。
 func (h *TelegramHandler) CreateBindToken(w http.ResponseWriter, r *http.Request) {
+	// 先校验:服务端没配 bot,生成 token 也是无意义的(deep link 会拼成 "https://t.me/?start=..."),
+	// 直接给前端一个明确错误,前端可据此渲染"管理员未配置"提示。
+	if h.Bot == nil || !h.Bot.Enabled() {
+		writeError(w, http.StatusServiceUnavailable, "telegram_disabled",
+			"服务端未配置 Telegram 机器人(bot_token 为空)。请联系管理员在 config.toml 的 [telegram] 段填好 bot_token / bot_username / webhook_secret 后重启服务。")
+		return
+	}
+	if h.BotUsername == "" {
+		writeError(w, http.StatusServiceUnavailable, "telegram_disabled",
+			"服务端配置了 bot_token 但缺少 bot_username,无法生成绑定链接。请联系管理员补全配置。")
+		return
+	}
 	uid := middleware.UserIDFrom(r.Context())
 	bt, err := h.Store.CreateBindToken(r.Context(), uid, h.BindTokenTTL)
 	if err != nil {
@@ -71,10 +104,8 @@ func (h *TelegramHandler) CreateBindToken(w http.ResponseWriter, r *http.Request
 		Token:       bt.Token,
 		ExpiresAt:   bt.ExpiresAt,
 		BotUsername: h.BotUsername,
-	}
-	if h.BotUsername != "" {
-		resp.DeepLinkWeb = fmt.Sprintf("https://t.me/%s?start=%s%s", h.BotUsername, telegram.BindPayloadPrefix, bt.Token)
-		resp.DeepLinkApp = fmt.Sprintf("tg://resolve?domain=%s&start=%s%s", h.BotUsername, telegram.BindPayloadPrefix, bt.Token)
+		DeepLinkWeb: fmt.Sprintf("https://t.me/%s?start=%s%s", h.BotUsername, telegram.BindPayloadPrefix, bt.Token),
+		DeepLinkApp: fmt.Sprintf("tg://resolve?domain=%s&start=%s%s", h.BotUsername, telegram.BindPayloadPrefix, bt.Token),
 	}
 	writeJSON(w, http.StatusCreated, resp)
 }
