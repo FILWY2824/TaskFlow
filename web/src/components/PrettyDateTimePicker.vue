@@ -36,53 +36,18 @@ const triggerRef = ref<HTMLElement | null>(null)
 const popRef = ref<HTMLElement | null>(null)
 
 // ---------- 弹层定位 ----------
-// 之前的实现把弹层放在触发按钮的子元素内，用 position: absolute 定位。
-// 这样会被祖先的 modal 容器（modal-body 设了 overflow-y: auto, 浏览器会把
-// overflow-x 也当成 auto）裁掉，导致用户看到的只是被截断一半的"时间盘"。
+// 早期实现里, 我们曾用 "锚定到触发按钮 + JS 计算 fixed 坐标" 的方式让
+// 弹层在按钮下方展开. 但当触发按钮位于一个居中的 modal 表单底部时,
+// 锚定在按钮左下角的弹层会明显地"偏左 / 偏下", 与表单本身不对称, 观感很怪.
 //
-// 现在改成：用 <Teleport to="body"> 把弹层挂到 <body> 下，并用 position: fixed
-// 配合"以触发按钮为锚"的运行时坐标，自动处理上 / 下方向、左右越界的情况。
-// 这样无论触发器嵌套在多深的 overflow 容器里都能完整地展示出来。
-const popStyle = ref<Record<string, string>>({})
-const POP_GAP = 8                       // 与触发按钮的间距
-const POP_DESKTOP_W = 580               // 与 CSS 中 .pdt-pop 默认宽度保持一致
-const POP_DESKTOP_H_EST = 460           // 弹层估计高度 (用于上下翻转判断)
-
-function recomputePopPosition() {
-  if (!open.value || !triggerRef.value) return
-  // 移动端 (<= 480px) 使用底部抽屉式布局, 不需要 JS 定位 —— CSS 已经把它
-  // 钉到屏幕底部.
-  if (window.innerWidth <= 480) {
-    popStyle.value = {}
-    return
-  }
-  const r = triggerRef.value.getBoundingClientRect()
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  const pad = 12
-  const popW = Math.min(POP_DESKTOP_W, vw - pad * 2)
-
-  // 水平: 默认与触发器左边对齐, 右越界则贴右边
-  let left = r.left
-  if (left + popW > vw - pad) left = vw - pad - popW
-  if (left < pad) left = pad
-
-  // 垂直: 默认在触发器下方, 空间不够就放上方
-  const spaceBelow = vh - r.bottom - POP_GAP - pad
-  const spaceAbove = r.top - POP_GAP - pad
-  let top: number
-  if (spaceBelow >= POP_DESKTOP_H_EST || spaceBelow >= spaceAbove) {
-    top = r.bottom + POP_GAP
-  } else {
-    top = Math.max(pad, r.top - POP_GAP - POP_DESKTOP_H_EST)
-  }
-  popStyle.value = {
-    position: 'fixed',
-    top: `${top}px`,
-    left: `${left}px`,
-    width: `${popW}px`,
-  }
-}
+// 现在改成: 在 <body> 下铺一层全屏 overlay (.pdt-overlay), 用 flex 把
+// 弹层 (.pdt-pop) 在视口中居中. 这样:
+//   1. 弹层始终在视口正中, 与背后的居中表单天然对齐, 不再有"偏一边"的违和感.
+//   2. overlay 自带 backdrop-filter: blur, 把背后的表单虚化 / 压暗,
+//      把用户注意力聚焦到时间盘上.
+//   3. overlay 自己捕获 mousedown -- 因为它通过 Teleport 挂到 <body> 下,
+//      与表单的 modal-backdrop 是 DOM 兄弟节点, 事件不会冒泡到 modal-backdrop
+//      的 @click.self 上. 所以"点击表盘外区域"只会关闭表盘, 不会关闭表单.
 
 // 当前正在浏览的"月"，与 selected 解耦：用户可能在浏览 5 月但 selected 是 3 月某天
 const browseDate = ref(new Date())
@@ -479,7 +444,6 @@ function toggleOpen() {
       )
     }
     nextTick(() => {
-      recomputePopPosition()
       scrollWheelsToSelected()
     })
   }
@@ -504,23 +468,13 @@ function onKey(e: KeyboardEvent) {
     close()
   }
 }
-function onWindowChange() {
-  if (open.value) recomputePopPosition()
-}
 onMounted(() => {
   document.addEventListener('mousedown', onDocClick)
   document.addEventListener('keydown', onKey)
-  // 弹层用 fixed 定位 + 锚点是触发按钮, 滚动 / 缩放窗口时需要重新算位置.
-  // 用 capture: true 这样能监听到所有滚动容器, 避免被 modal-body 之类的内层
-  // 滚动容器吞掉.
-  window.addEventListener('resize', onWindowChange)
-  window.addEventListener('scroll', onWindowChange, true)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onDocClick)
   document.removeEventListener('keydown', onKey)
-  window.removeEventListener('resize', onWindowChange)
-  window.removeEventListener('scroll', onWindowChange, true)
 })
 </script>
 
@@ -554,15 +508,24 @@ onBeforeUnmount(() => {
     </button>
 
     <!-- ============ 弹层 ============
-         挂到 <body> 下用 fixed 定位, 这样既能逃出 modal 容器的 overflow 裁剪,
-         也不会被祖先的 transform / filter 影响层叠. -->
+         挂到 <body> 下铺一层全屏 overlay, 用 flex 把弹层在视口中居中.
+         好处:
+           - 弹层与背后居中的表单天然对齐, 不再"偏一边".
+           - overlay 自带 backdrop-filter: blur, 把表单虚化 / 压暗,
+             把注意力集中到表盘上.
+           - overlay 自己捕获 mousedown -- 因为通过 Teleport 挂到 <body> 下,
+             与表单的 modal-backdrop 是 DOM 兄弟, 事件不冒泡到表单的
+             @click.self 上, 所以"点击表盘外区域"只关闭表盘, 不关闭表单. -->
     <Teleport to="body">
       <Transition name="pdt-pop">
         <div
           v-if="open"
+          class="pdt-overlay"
+          @mousedown.self="close"
+        >
+        <div
           ref="popRef"
           class="pdt-pop"
-          :style="popStyle"
         >
         <!-- 顶部：快捷预设 -->
         <div class="pdt-presets">
@@ -733,8 +696,9 @@ onBeforeUnmount(() => {
             完成
           </button>
         </div>
-      </div>
-    </Transition>
+        </div><!-- /.pdt-pop -->
+        </div><!-- /.pdt-overlay -->
+      </Transition>
     </Teleport>
   </div>
 </template>
@@ -823,16 +787,29 @@ onBeforeUnmount(() => {
 .pdt-trigger.is-open .pdt-trigger-caret { transform: rotate(180deg); color: var(--tg-primary); }
 
 /* ===== 弹层 =====
-   位置 / 宽度由 JS 通过 style 绑定到组件实例上, 这里只负责"长什么样".
-   注意 Teleport 后选择器 .pdt-pop 依然能命中, 因为 scoped 样式靠 data-v-* 属性
-   匹配, 而 Teleport 不会删 data-v-*. */
-.pdt-pop {
-  /* JS 默认走 fixed; 这里给个保底, 避免在 SSR / 慢渲染瞬间样式乱跳. */
+   .pdt-overlay   是全屏遮罩, flex 把 .pdt-pop 居中, 同时虚化 / 压暗背后的表单.
+   .pdt-pop       是真正的时间选择面板, 由 overlay 用 flex 居中, 不再用 JS 定位.
+   注意 Teleport 后 scoped 选择器依然能命中, 因为 scoped 样式靠 data-v-* 属性
+   匹配, Teleport 不会删 data-v-*. */
+.pdt-overlay {
   position: fixed;
-  top: 0; left: 0;
-  width: 580px;
-  max-width: calc(100vw - 24px);
+  inset: 0;
   z-index: 9100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  /* 半透明 + 模糊: 把背后的表单虚化, 让用户聚焦在时间盘上 */
+  background: rgba(15, 23, 42, 0.32);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.pdt-pop {
+  position: relative;
+  width: 580px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
   background: var(--tg-bg-elev);
   border: 1px solid var(--tg-divider);
   border-radius: var(--tg-radius-lg);
@@ -840,7 +817,6 @@ onBeforeUnmount(() => {
     0 28px 80px -20px rgba(15, 23, 42, 0.30),
     0 12px 36px -8px rgba(15, 23, 42, 0.14),
     0 0 0 1px rgba(99, 102, 241, 0.06) inset;
-  overflow: hidden;
 }
 
 /* ===== 主体: 日历(左) + 时间(右) =====
@@ -1202,34 +1178,41 @@ onBeforeUnmount(() => {
   box-shadow: 0 6px 16px -3px rgba(99, 102, 241, 0.5);
 }
 
-/* ===== Transition ===== */
+/* ===== Transition =====
+   外层 overlay 做淡入淡出, 内层 .pdt-pop 自己再叠一个轻微的"弹"动效, 让面板
+   出现时有质感, 但不会干扰 overlay 的 backdrop-filter 渐变. */
 .pdt-pop-enter-active {
-  transition: opacity var(--tg-trans-fast), transform var(--tg-trans);
-  transform-origin: top left;
+  transition: opacity 200ms ease, backdrop-filter 200ms ease;
 }
 .pdt-pop-leave-active {
-  transition: opacity var(--tg-trans-fast), transform var(--tg-trans-fast);
-  transform-origin: top left;
+  transition: opacity 160ms ease, backdrop-filter 160ms ease;
 }
 .pdt-pop-enter-from, .pdt-pop-leave-to {
   opacity: 0;
-  transform: translateY(-8px) scale(0.97);
+}
+.pdt-pop-enter-active .pdt-pop {
+  animation: pdt-pop-in 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes pdt-pop-in {
+  from { transform: translateY(8px) scale(0.96); opacity: 0; }
+  to   { transform: translateY(0)    scale(1);    opacity: 1; }
 }
 
 /* ===== 移动端优化 =====
    设计选择: 用户明确要求时间永远在日期右边(两列布局), 因此不再把它折成
    单列堆叠. 即使在 ~480px 宽以下也保留两列, 仅切换为"底部抽屉"形式以贴近
    原生移动端选择器的体感. 这样选时间的入口永远不会被砍掉.
-   弹层宽度由 JS 在 recomputePopPosition() 里计算; CSS 不再硬写 width. */
+   现在弹层位置由 overlay 的 flex 控制 (居中 / 贴底), 不再依赖 JS 定位. */
 @media (max-width: 480px) {
+  .pdt-overlay {
+    align-items: flex-end;
+    justify-content: stretch;
+    padding: 0;
+  }
   .pdt-pop {
-    /* 底部抽屉:覆盖 JS 写入的 fixed 坐标. !important 用来盖过 inline style. */
-    top: auto !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    width: 100vw !important;
-    max-width: 100vw !important;
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 88vh;
     border-radius: var(--tg-radius-xl) var(--tg-radius-xl) 0 0;
     border-bottom: none;
     box-shadow:
@@ -1250,5 +1233,13 @@ onBeforeUnmount(() => {
   .pdt-main { grid-template-columns: 1fr 200px; }
   .pdt-time { padding: 10px 8px 8px; }
   .pdt-wheel { width: 60px; }
+  /* 移动端从底部弹起的动效 */
+  .pdt-pop-enter-active .pdt-pop {
+    animation: pdt-pop-in-mobile 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes pdt-pop-in-mobile {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
 }
 </style>
