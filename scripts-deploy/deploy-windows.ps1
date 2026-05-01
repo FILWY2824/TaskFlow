@@ -1,4 +1,4 @@
-# deploy-windows.ps1 — Windows 桌面客户端 (Tauri v2) 编译/打包
+﻿# deploy-windows.ps1 — Windows 桌面客户端 (Tauri v2) 编译/打包
 #
 # 干什么:
 #   1) 检查 Node.js / Rust / cargo / MSVC 工具链 / WebView2

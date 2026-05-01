@@ -1,4 +1,4 @@
-# deploy-web.ps1 — Web 前端 + Go 后端 一键编译/启动
+﻿# deploy-web.ps1 — Web 前端 + Go 后端 一键编译/启动
 #
 # 干什么:
 #   1) 检查 Node.js / Go / npm 是否齐全

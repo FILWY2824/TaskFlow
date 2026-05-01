@@ -1,4 +1,4 @@
-# deploy-android.ps1 — Android 客户端 (Kotlin / Compose) 编译/打包
+﻿# deploy-android.ps1 — Android 客户端 (Kotlin / Compose) 编译/打包
 #
 # 干什么:
 #   1) 检查 JDK 17 / ANDROID_HOME / SDK 平台
