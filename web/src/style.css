@@ -819,6 +819,13 @@ button { cursor: pointer; }
   font-variant-numeric: tabular-nums;
 }
 .sidebar nav a .badge.danger { background: var(--tg-danger-soft); color: var(--tg-danger); }
+.sidebar nav a .badge.admin-badge {
+  background: linear-gradient(135deg, #6366f1, #d946ef);
+  color: #fff;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+  padding: 0 8px;
+}
 .sidebar nav a.active .badge { background: var(--tg-on-primary); color: var(--tg-primary); }
 
 .sidebar nav .group-title,

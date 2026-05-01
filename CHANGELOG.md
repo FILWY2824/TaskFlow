@@ -2,6 +2,22 @@
 
 参见 `server/CHANGELOG.md` 的详细变更记录。本文件用于记录跨 server / web / android / windows 的整体里程碑。
 
+## v0.5.0 (unreleased) — 管理面板 + Docker 部署
+
+- **后端:管理员能力**
+  - migration v5:`users` 加 `is_admin` / `is_disabled`,新表 `audit_logs`(管理员动作时间线)。
+  - 启动时根据 `ADMIN_EMAIL` / `ADMIN_PASSWORD` 引导首位管理员 —— 已存在则提升,不存在则创建。已存在管理员的密码不会被 `.env` 默认值覆盖。
+  - 新中间件 `RequireAdmin`;新路由 `/api/admin/*`(系统状态、用户管理、审计、数据清理、配置摘要)。所有写操作都会记一条审计。
+  - `is_disabled` 用户在本地登录、refresh、OAuth finalize 三条入口都被拒绝,被禁用时会立即撤销其 refresh token。
+  - 配置层支持 `TASKFLOW_JWT_SECRET` 等环境变量覆盖 TOML 中的敏感字段,便于容器化部署。
+- **前端:管理面板视图**
+  - 新视图 `views/Admin.vue`,五个 tab:系统状态 / 用户管理 / 审计日志 / 数据清理 / 系统设置。沿用既有 `settings-card` 风格,不弹层、不抽屉,就是普通的右侧主区域内容。
+  - 仅 `is_admin` 账号能在左侧栏看到「管理」入口与 `ADMIN` 徽章,路由 + 视图双层 guard。
+  - `is_admin` / `is_disabled` 字段贯穿 `User` 类型与 `useAuthStore`。
+- **部署:Docker / docker-compose**
+  - `server/Dockerfile`(distroless / nonroot / CGO=0 静态)+ `web/Dockerfile`(Vite 构建后 nginx 反代 `/api`、`/ws`)。
+  - 仓库根新增 `docker-compose.yml` 与 `.env.example`,包含 `ADMIN_EMAIL=admin@example.com` / `ADMIN_PASSWORD=ChangeMeNow123!` 默认值。`docker compose up -d --build` 即可。
+
 ## v0.4.1 (2026-04-29)
 
 补完 v0.4.0 留下的小坑:

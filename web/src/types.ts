@@ -11,6 +11,8 @@ export interface User {
   email: string
   display_name: string
   timezone: string
+  is_admin: boolean
+  is_disabled: boolean
   created_at: string
   updated_at: string
 }
@@ -295,3 +297,124 @@ export type TodoFilterName =
   | 'completed'
   | 'scheduled'     // 日程·全部：所有"有日期"的任务（包含已完成；不包含无日期）
   | 'all'
+
+// === 管理面板（仅管理员可见）===
+
+// /api/admin/system —— 进程 / 数据库 / 磁盘 / 内存快照。
+export interface AdminMemoryInfo {
+  alloc_bytes: number
+  total_alloc_bytes: number
+  sys_bytes: number
+  heap_inuse_bytes: number
+  heap_idle_bytes: number
+  num_gc: number
+}
+export interface AdminDiskInfo {
+  path: string
+  total_bytes: number
+  free_bytes: number
+  used_bytes: number
+  used_percent: number
+}
+export interface AdminDBInfo {
+  path: string
+  file_size_bytes: number
+  wal_file_size_bytes: number
+  page_count: number
+  page_size: number
+  user_count: number
+  todo_count: number
+  list_count: number
+  reminder_count: number
+  notification_count: number
+  pomodoro_count: number
+  audit_count: number
+}
+export interface AdminSystemInfo {
+  version: string
+  go_version: string
+  os: string
+  arch: string
+  num_cpu: number
+  num_goroutine: number
+  started_at: string
+  uptime_seconds: number
+  now: string
+  oauth_enabled: boolean
+  memory: AdminMemoryInfo
+  disk: AdminDiskInfo
+  database: AdminDBInfo
+}
+
+// /api/admin/users —— 列表条目带 todo 计数与最近活跃时间。
+export interface AdminUserRow extends User {
+  todo_count: number
+  last_login_at?: string | null
+}
+export interface AdminUserListResponse {
+  items: AdminUserRow[]
+  total: number
+  limit: number
+  offset: number
+}
+
+// /api/admin/audit
+export interface AuditLogEntry {
+  id: number
+  actor_id?: number | null
+  actor_email: string
+  action: string
+  target_type: string
+  target_id: string
+  detail: string
+  ip: string
+  created_at: string
+}
+export interface AuditListResponse {
+  items: AuditLogEntry[]
+  total: number
+  limit: number
+  offset: number
+}
+
+// /api/admin/settings —— 当前生效配置摘要(只读)。
+export interface AdminSettingsView {
+  oauth_enabled: boolean
+  oauth_provider?: string
+  oauth_redirect_url?: string
+  telegram_bot_enabled: boolean
+  telegram_bot_username?: string
+  access_ttl_seconds: number
+  refresh_ttl_seconds: number
+  bcrypt_cost: number
+  scheduler_tick_seconds: number
+  scheduler_batch_size: number
+  scheduler_disabled: boolean
+  server_listen: string
+  database_path: string
+  admin_bootstrap_email?: string
+}
+
+// /api/admin/cleanup
+export type CleanupScope =
+  | 'completed_todos'
+  | 'soft_deleted_todos'
+  | 'soft_deleted_lists'
+  | 'old_notifications'
+  | 'old_pomodoros'
+  | 'expired_refresh'
+  | 'audit_logs'
+  | 'vacuum'
+
+export interface CleanupRequest {
+  scope: CleanupScope
+  days?: number
+  confirm?: boolean
+  dry_run?: boolean
+}
+export interface CleanupResponse {
+  scope: CleanupScope
+  affected: number
+  dry_run: boolean
+  message?: string
+}

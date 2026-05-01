@@ -162,6 +162,11 @@ func (h *OAuthHandler) Finalize(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
+	// 被禁用的账号:与本地登录一致,这里也直接拒绝。已发的 handoff 不能换出新会话。
+	if user.IsDisabled {
+		writeError(w, http.StatusUnauthorized, "account_disabled", "account disabled, contact admin")
+		return
+	}
 
 	// 复用 AuthHandler 的签发逻辑 —— 直接构造一个临时 AuthHandler 调 issueAndWrite
 	// 会引入循环;干脆把签发流程内联在这里,与 auth.go 保持同形态。

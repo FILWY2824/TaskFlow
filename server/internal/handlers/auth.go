@@ -102,6 +102,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid email or password")
 		return
 	}
+	// 被禁用的账号:不返回精确原因,避免暴露用户存在性。仍走 401。
+	if user.IsDisabled {
+		writeError(w, http.StatusUnauthorized, "account_disabled", "account disabled, contact admin")
+		return
+	}
 	h.issueAndWrite(w, r, user.ID, req.DeviceID, user, http.StatusOK)
 }
 
@@ -124,6 +129,12 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	user, err := h.Users.GetByID(r.Context(), uid)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid_refresh_token", "user no longer exists")
+		return
+	}
+	if user.IsDisabled {
+		// 被禁用:撤销该用户全部 refresh token,断绝再用此 token 重新刷出来的可能。
+		_ = h.RefreshTokens.RevokeAllForUser(r.Context(), uid)
+		writeError(w, http.StatusUnauthorized, "account_disabled", "account disabled")
 		return
 	}
 	// 刷新 = 旋转:撤销旧 refresh,签发新对。

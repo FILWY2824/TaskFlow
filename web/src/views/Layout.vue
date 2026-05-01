@@ -109,6 +109,14 @@ const sidebarTools = [
   { name: 'settings', label: '设置', icon: 'gear' },
 ] as const
 
+// 管理员专属入口:只有当前账号 is_admin = true 时,侧栏才会渲染这一栏。
+// 路由 / 视图本身也都再做了 guard,这里只是 UI 层面隐藏入口。
+const adminTools = [
+  { name: 'admin', label: '管理面板', icon: 'shield' },
+] as const
+
+const showAdminTools = computed(() => !!auth.user?.is_admin)
+
 const isActive = (name: string) => route.name === name
 
 async function logout() {
@@ -255,6 +263,20 @@ const inCategoryView = computed(
           <span class="nav-text">{{ t.label }}</span>
           <span v-if="t.name === 'notifications' && notif.unread > 0" class="badge danger">{{ notif.unread }}</span>
         </RouterLink>
+
+        <template v-if="showAdminTools">
+          <div class="group-title">管理</div>
+          <RouterLink
+            v-for="t in adminTools"
+            :key="t.name"
+            :to="{ name: t.name }"
+            :class="{ active: isActive(t.name) }"
+          >
+            <span class="nav-icon" v-html="navIcon(t.icon)" />
+            <span class="nav-text">{{ t.label }}</span>
+            <span class="badge admin-badge" aria-label="管理员入口">ADMIN</span>
+          </RouterLink>
+        </template>
       </nav>
 
       <div class="footer">
@@ -580,6 +602,7 @@ function pageTitle(route: RouteLocationNormalizedLoaded, lists: _List[] = []): s
     notifications: '通知中心',
     telegram: 'Telegram 绑定',
     settings: '设置',
+    admin: '管理面板',
   }
   return m[String(route.name || '')] || ''
 }
@@ -609,6 +632,8 @@ function navIcon(name: string): string {
       return wrap(`<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>`)
     case 'gear':
       return wrap(`<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>`)
+    case 'shield':
+      return wrap(`<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`)
     default:
       return wrap('')
   }

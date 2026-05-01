@@ -1,0 +1,42 @@
+# TaskFlow 服务端配置 —— 容器内默认配置
+#
+# 容器 ENTRYPOINT 默认用 /etc/taskflow/config.toml。
+# 真正会变的密钥 / 第三方凭证(JWT_SECRET / OAUTH_* / TELEGRAM_* / ADMIN_*)走环境变量,
+# 不写在这个文件里;.env 由 docker-compose 加载注入容器进程环境。
+#
+# 注意:
+#   - jwt_secret 默认是占位字符串,生产部署务必通过 .env 设置 TASKFLOW_JWT_SECRET 并
+#     在 entrypoint 里覆盖,或直接挂载替换本文件。本仓库的 docker-compose.yml 已通过 env
+#     注入了 JWT_SECRET 占位,详见 docker-compose.yml 的注释。
+#   - 数据库路径固定到 /data,容器外用宿主卷挂载持久化。
+
+[server]
+listen = "0.0.0.0:8080"
+shutdown_timeout_seconds = 15
+write_timeout_seconds = 30
+read_timeout_seconds = 30
+
+[database]
+path = "/data/taskflow.db"
+
+[auth]
+# 默认占位 —— 启动前请通过 .env 的 TASKFLOW_JWT_SECRET 覆盖,见 entrypoint。
+jwt_secret = "CHANGE_ME_TO_A_LONG_RANDOM_SECRET_AT_LEAST_32_BYTES"
+access_ttl_seconds = 900
+refresh_ttl_seconds = 2592000
+bcrypt_cost = 11
+
+[log]
+level = "info"
+
+[telegram]
+# 容器内默认关闭 telegram。需要时在 .env 里填 TASKFLOW_TG_BOT_TOKEN 等并通过卷挂载替换 config。
+bot_token = ""
+bot_username = ""
+webhook_secret = ""
+bind_token_ttl_seconds = 600
+
+[scheduler]
+tick_interval_seconds = 5
+batch_size = 200
+disabled = false

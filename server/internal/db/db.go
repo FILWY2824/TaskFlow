@@ -104,6 +104,7 @@ var migrations = []migration{
 	{Version: 2, SQL: schemaV2},
 	{Version: 3, SQL: schemaV3},
 	{Version: 4, SQL: schemaV4},
+	{Version: 5, SQL: schemaV5},
 }
 
 const schemaV1 = `
@@ -356,4 +357,34 @@ ALTER TABLE users ADD COLUMN oauth_subject TEXT NOT NULL DEFAULT '';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oauth_identity
     ON users(oauth_provider, oauth_subject)
     WHERE oauth_provider != '' AND oauth_subject != '';
+`
+
+// schemaV5 —— 管理员 / 审计日志(管理面板新增)。
+//
+// 设计要点:
+//   - users 加 is_admin / is_disabled 两列。is_admin=1 才能调 /api/admin/* 路由;
+//     is_disabled=1 的账号不能登录(本地登录) / 不能刷新 token,但记录保留。
+//   - audit_logs 记录管理员动作(谁在什么时刻对什么对象做了什么),供管理面板"审计"标签页
+//     回看。actor_id=NULL 表示系统动作(如 .env 引导建管理员)。
+//   - 管理员邮箱可以通过 .env 的 ADMIN_EMAIL/ADMIN_PASSWORD 在首次启动时引导;
+//     已存在的同邮箱用户会被提升为管理员(密码不会被覆盖,见 EnsureBootstrapAdmin)。
+const schemaV5 = `
+ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN is_disabled INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_users_is_admin ON users(is_admin) WHERE is_admin = 1;
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    actor_email TEXT NOT NULL DEFAULT '',
+    action TEXT NOT NULL,
+    target_type TEXT NOT NULL DEFAULT '',
+    target_id TEXT NOT NULL DEFAULT '',
+    detail TEXT NOT NULL DEFAULT '',
+    ip TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action, created_at);
 `

@@ -99,6 +99,37 @@ sudo /tmp/deploy/scripts/install.sh \
 
 `install.sh` 会:创建系统用户 → 复制二进制 / Web → 写 systemd unit → 写 nginx → 申请 Let's Encrypt 证书 → 注册 cron 备份。
 
+### Docker 部署(单机一键)
+
+仓库根目录提供了 `docker-compose.yml`,把后端 + nginx + 静态前端打包成两个容器:
+
+```bash
+cp .env.example .env       # 至少修改 TASKFLOW_JWT_SECRET、ADMIN_PASSWORD
+docker compose up -d --build
+# 浏览器打开 http://localhost:8080
+```
+
+变量说明见 [`.env.example`](.env.example);要点:
+
+- `TASKFLOW_JWT_SECRET`(必填,32 字符以上随机串):`openssl rand -hex 32`
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD`:首次启动时引导出一个管理员账号(默认 `admin@example.com` / `ChangeMeNow123!`)。**上线后请立即在管理面板里改密码,然后从 `.env` 中清空 `ADMIN_PASSWORD`。**
+
+数据持久化在仓库目录下的 `./data`(SQLite)与 `./backup`(备份),容器删除后数据保留。
+
+### 管理面板(管理员独占)
+
+满足 `is_admin=true` 的账号会在左侧栏看到「管理面板」入口,提供:
+
+- 系统状态:进程 / 内存 / 磁盘(数据库分区)/ 数据库大小与各表行数
+- 用户管理:增删改、提升管理员、禁用/启用、按邮箱搜索
+- 审计日志:所有管理员动作的可搜索时间线
+- 数据清理:已完成任务、软删任务、旧通知、过期 token、`VACUUM`,均支持"试运行"
+- 系统设置:当前生效配置摘要(只读)
+
+服务端会写一份 `audit_logs` 表;首次启动时 `bootstrapAdmin()` 根据 `ADMIN_EMAIL/ADMIN_PASSWORD`
+建管理员或把已存在用户提升为管理员(密码不会被覆盖)。
+
+
 ---
 
 ## 端定位(规格 §2)

@@ -60,6 +60,41 @@ func RequireAuth(issuer *auth.Issuer) func(http.Handler) http.Handler {
 	}
 }
 
+// AdminChecker 用来在 RequireAdmin 中查询当前用户是否管理员。
+// 之所以抽象成接口而不直接拿 *store.UserStore,是为了让测试可以用桩对象,
+// 同时避免 middleware 包反向依赖 store 包。
+type AdminChecker interface {
+	IsAdmin(ctx context.Context, userID int64) (bool, error)
+}
+
+// RequireAdmin 在 RequireAuth 之后再加一道:当前用户必须是管理员才放行。
+// 不是管理员 -> 403 forbidden。查询 DB 失败 -> 503,避免在数据库故障时把所有请求当成管理员。
+func RequireAdmin(checker AdminChecker) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			uid := UserIDFrom(r.Context())
+			if uid == 0 {
+				writeAuthError(w, "login required")
+				return
+			}
+			ok, err := checker.IsAdmin(r.Context(), uid)
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = w.Write([]byte(`{"error":{"code":"db_unavailable","message":"failed to verify admin"}}`))
+				return
+			}
+			if !ok {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(`{"error":{"code":"forbidden","message":"admin only"}}`))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func writeAuthError(w http.ResponseWriter, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
@@ -144,6 +179,9 @@ func Chain(mws ...func(http.Handler) http.Handler) func(http.Handler) http.Handl
 		return h
 	}
 }
+
+// ClientIP 返回最佳猜测的来源 IP(可被反向代理覆盖)。供审计日志记录使用。
+func ClientIP(r *http.Request) string { return clientIP(r) }
 
 func clientIP(r *http.Request) string {
 	if v := r.Header.Get("X-Real-IP"); v != "" {

@@ -1,6 +1,12 @@
 import type {
+  AdminSettingsView,
+  AdminSystemInfo,
+  AdminUserListResponse,
+  AuditListResponse,
   AuthConfig,
   AuthResponse,
+  CleanupRequest,
+  CleanupResponse,
   DailyBucket,
   List,
   Notification,
@@ -519,5 +525,65 @@ export const prefsApi = {
     return request(`/api/me/preferences/${encodeURIComponent(scope)}/${encodeURIComponent(key)}`, {
       method: 'DELETE',
     })
+  },
+}
+
+// =============================================================
+// API: admin (仅管理员账号有权访问;非管理员调用会 403)
+//
+// 后端路由位于 /api/admin/*。本模块只是个简单的 typed wrapper,前端在
+// 进入管理面板前会先用 useAuthStore().user.is_admin 做 UI 守卫。
+// =============================================================
+
+export interface AdminUserPatchInput {
+  is_admin?: boolean
+  is_disabled?: boolean
+}
+
+export interface AdminCreateUserInput {
+  email: string
+  password: string
+  display_name?: string
+  timezone?: string
+  is_admin?: boolean
+}
+
+export const adminApi = {
+  // 系统状态:进程、内存、磁盘、数据库统计
+  async system(): Promise<AdminSystemInfo> {
+    return request('/api/admin/system')
+  },
+  // 当前生效配置摘要(只读)
+  async settings(): Promise<AdminSettingsView> {
+    return request('/api/admin/settings')
+  },
+  // 用户管理
+  async listUsers(query: { search?: string; limit?: number; offset?: number } = {}): Promise<AdminUserListResponse> {
+    return request('/api/admin/users', { query })
+  },
+  async createUser(body: AdminCreateUserInput): Promise<User> {
+    return request('/api/admin/users', { method: 'POST', body })
+  },
+  async patchUser(id: number, body: AdminUserPatchInput): Promise<User> {
+    return request(`/api/admin/users/${id}`, { method: 'PATCH', body })
+  },
+  async deleteUser(id: number): Promise<void> {
+    return request(`/api/admin/users/${id}`, { method: 'DELETE' })
+  },
+  // 审计
+  async listAudit(query: {
+    search?: string
+    action?: string
+    actor_id?: number
+    from?: string
+    to?: string
+    limit?: number
+    offset?: number
+  } = {}): Promise<AuditListResponse> {
+    return request('/api/admin/audit', { query })
+  },
+  // 数据清理。destructive 操作必须传 confirm=true,否则后端会拒绝。
+  async cleanup(body: CleanupRequest): Promise<CleanupResponse> {
+    return request('/api/admin/cleanup', { method: 'POST', body })
   },
 }

@@ -115,11 +115,25 @@ type SchedulerConfig struct {
 //
 // OAuth 配置不在 TOML 里,而是从环境变量(可选地通过 .env 文件)读取 ——
 // 调用方负责在调用 Load 之前先 LoadEnvFile(),见 cmd/server/main.go。
+//
+// 此外,以下敏感字段也允许通过环境变量覆盖 TOML 中的值,让 docker / k8s 部署
+// 时不必把秘密刻进镜像或挂载文件:
+//
+//	TASKFLOW_JWT_SECRET     -> [auth] jwt_secret
+//	TASKFLOW_DB_PATH        -> [database] path
+//	TASKFLOW_LISTEN         -> [server] listen
+//	TASKFLOW_LOG_LEVEL      -> [log] level
+//	TASKFLOW_TG_BOT_TOKEN   -> [telegram] bot_token
+//	TASKFLOW_TG_BOT_USER    -> [telegram] bot_username
+//	TASKFLOW_TG_WEBHOOK_SEC -> [telegram] webhook_secret
+//
+// 任意字段非空时即覆盖。空字符串视为"沿用 TOML 值"。
 func Load(path string) (*Config, error) {
 	cfg := defaults()
 	if _, err := toml.DecodeFile(path, cfg); err != nil {
 		return nil, fmt.Errorf("load config %s: %w", path, err)
 	}
+	applyEnvOverrides(cfg)
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
@@ -136,6 +150,32 @@ func Load(path string) (*Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+// applyEnvOverrides 把 TASKFLOW_* 系列环境变量的非空值覆盖到 Config 中。
+// 见 Load 文档注释里的列表。
+func applyEnvOverrides(c *Config) {
+	if v := os.Getenv("TASKFLOW_JWT_SECRET"); v != "" {
+		c.Auth.JWTSecret = v
+	}
+	if v := os.Getenv("TASKFLOW_DB_PATH"); v != "" {
+		c.Database.Path = v
+	}
+	if v := os.Getenv("TASKFLOW_LISTEN"); v != "" {
+		c.Server.Listen = v
+	}
+	if v := os.Getenv("TASKFLOW_LOG_LEVEL"); v != "" {
+		c.Log.Level = v
+	}
+	if v := os.Getenv("TASKFLOW_TG_BOT_TOKEN"); v != "" {
+		c.Telegram.BotToken = v
+	}
+	if v := os.Getenv("TASKFLOW_TG_BOT_USER"); v != "" {
+		c.Telegram.BotUsername = v
+	}
+	if v := os.Getenv("TASKFLOW_TG_WEBHOOK_SEC"); v != "" {
+		c.Telegram.WebhookSecret = v
+	}
 }
 
 func defaults() *Config {

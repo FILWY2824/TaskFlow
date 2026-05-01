@@ -49,6 +49,14 @@ const routes: RouteRecordRaw[] = [
       { path: 'notifications', name: 'notifications', component: () => import('@/views/NotificationsView.vue') },
       { path: 'telegram', name: 'telegram', component: () => import('@/views/Telegram.vue') },
       { path: 'settings', name: 'settings', component: () => import('@/views/Settings.vue') },
+      // 管理面板:仅 is_admin = true 的账号可见。路由层做一次 guard,
+      // 视图本身也再校验一次,双保险。
+      {
+        path: 'admin',
+        name: 'admin',
+        component: () => import('@/views/Admin.vue'),
+        meta: { adminOnly: true },
+      },
     ],
   },
   // BUGFIX: 此前 catchAll 重定向到不存在的路由 'today'，任意未匹配的 URL 都会导航失败。
@@ -68,6 +76,10 @@ router.beforeEach((to) => {
   // 公开路由 + 已登录：除了 alarm 这种"独立窗口"，其他公开页跳到默认视图。
   // BUGFIX: 此前这里也是不存在的 'today'，已登录用户访问 /login 会卡住。
   if (to.meta.public && authStore.isAuthenticated && !to.meta.standalone) {
+    return { name: 'schedule' }
+  }
+  // 管理员专属路由:非管理员一律踢回日程,避免渲染 admin 视图浪费请求。
+  if (to.meta.adminOnly && !authStore.user?.is_admin) {
     return { name: 'schedule' }
   }
 })

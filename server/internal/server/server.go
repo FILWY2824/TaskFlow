@@ -33,6 +33,7 @@ type Deps struct {
 	Pomos         *store.PomodoroStore
 	Stats         *store.StatsStore
 	Prefs         *store.PreferenceStore
+	Audit         *store.AuditStore
 
 	Bot           *telegram.Client
 	BotUsername   string
@@ -45,6 +46,14 @@ type Deps struct {
 	// /api/auth/config 返回 oauth_enabled=false。两者必须成对出现(都设或都不设)。
 	OAuthProvider *oauth.Provider
 	OAuthPending  *oauth.PendingStore
+
+	// 管理面板:数据库文件路径(给 /api/admin/system 报磁盘占用)、进程启动时间(报 uptime)、版本字符串。
+	DBPath    string
+	StartedAt time.Time
+	Version   string
+
+	// 管理面板设置摘要(GET /api/admin/settings)。Server 装配时按需提供。
+	SettingsView func() handlers.SettingsView
 }
 
 // BuildHandler 构建顶层 http.Handler。
@@ -178,6 +187,34 @@ func BuildHandler(d Deps) http.Handler {
 	mux.Handle("PUT /api/me/preferences", authed(prefsH.PutBulk))
 	mux.Handle("PUT /api/me/preferences/{scope}/{key}", authed(prefsH.PutOne))
 	mux.Handle("DELETE /api/me/preferences/{scope}/{key}", authed(prefsH.DeleteOne))
+
+	// === 管理面板路由(管理员独占) ===
+	//
+	// RequireAdmin 在 RequireAuth 之后再加一道权限闸,非管理员一律 403。
+	// 所有写操作都会写一条 audit_log。
+	if d.Audit != nil {
+		adminH := handlers.NewAdminHandler(
+			d.DB, d.Issuer, d.Users, d.RefreshTokens, d.Audit,
+			d.Logger, d.DBPath, d.StartedAt, d.Version, oauthEnabled,
+		)
+		if d.SettingsView != nil {
+			adminH.SetSettingsProvider(d.SettingsView)
+		}
+		requireAdmin := middleware.RequireAdmin(d.Users)
+		admined := func(h http.HandlerFunc) http.Handler {
+			// 链路:RequireAuth -> RequireAdmin -> 业务 handler。
+			// 都是 func(http.Handler) http.Handler,直接组合即可。
+			return requireAuth(requireAdmin(h))
+		}
+		mux.Handle("GET /api/admin/system", admined(adminH.System))
+		mux.Handle("GET /api/admin/settings", admined(adminH.Settings))
+		mux.Handle("GET /api/admin/users", admined(adminH.ListUsers))
+		mux.Handle("POST /api/admin/users", admined(adminH.CreateUser))
+		mux.Handle("PATCH /api/admin/users/{id}", admined(adminH.PatchUser))
+		mux.Handle("DELETE /api/admin/users/{id}", admined(adminH.DeleteUser))
+		mux.Handle("GET /api/admin/audit", admined(adminH.ListAudit))
+		mux.Handle("POST /api/admin/cleanup", admined(adminH.Cleanup))
+	}
 
 	// 顶层 middleware:Recover -> Logger -> CORS -> mux
 	chain := middleware.Chain(

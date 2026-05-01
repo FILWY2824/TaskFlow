@@ -17,6 +17,7 @@ import (
 	"github.com/youruser/taskflow/internal/config"
 	"github.com/youruser/taskflow/internal/db"
 	"github.com/youruser/taskflow/internal/events"
+	"github.com/youruser/taskflow/internal/handlers"
 	"github.com/youruser/taskflow/internal/oauth"
 	"github.com/youruser/taskflow/internal/scheduler"
 	"github.com/youruser/taskflow/internal/server"
@@ -24,7 +25,7 @@ import (
 	"github.com/youruser/taskflow/internal/telegram"
 )
 
-var version = "0.3.0"
+var version = "0.5.0"
 
 func main() {
 	cfgPath := flag.String("config", "config.toml", "path to config file")
@@ -95,6 +96,11 @@ func main() {
 	pomos := store.NewPomodoroStore(database, syncEvents)
 	stats := store.NewStatsStore(database)
 	prefs := store.NewPreferenceStore(database)
+	audits := store.NewAuditStore(database)
+
+	// 启动管理员引导:读 ADMIN_EMAIL / ADMIN_PASSWORD,确保至少有一个管理员账号。
+	// 已存在同邮箱用户 -> 提升为管理员(不改密码);不存在 -> 用 ADMIN_PASSWORD 建一个新管理员。
+	bootstrapAdmin(logger, users, issuer)
 
 	// Telegram 客户端 —— 即使没配 token 也安全:Enabled() 返回 false,各处会跳过。
 	bot := telegram.NewClient(cfg.Telegram.BotToken, "")
@@ -169,6 +175,8 @@ func main() {
 		defer stopOAuthGC()
 	}
 
+	startedAt := time.Now().UTC()
+
 	handler := server.BuildHandler(server.Deps{
 		DB:            database,
 		Issuer:        issuer,
@@ -185,6 +193,7 @@ func main() {
 		Pomos:         pomos,
 		Stats:         stats,
 		Prefs:         prefs,
+		Audit:         audits,
 		Bot:           bot,
 		BotUsername:   cfg.Telegram.BotUsername,
 		WebhookSecret: cfg.Telegram.WebhookSecret,
@@ -192,6 +201,27 @@ func main() {
 		Hub:           hub,
 		OAuthProvider: oauthProvider,
 		OAuthPending:  oauthPending,
+		DBPath:        cfg.Database.Path,
+		StartedAt:     startedAt,
+		Version:       version,
+		SettingsView: func() handlers.SettingsView {
+			return handlers.SettingsView{
+				OAuthEnabled:        cfg.OAuth.Enabled,
+				OAuthProvider:       cfg.OAuth.Provider,
+				OAuthRedirectURL:    cfg.OAuth.RedirectURL,
+				BotEnabled:          bot.Enabled(),
+				BotUsername:         cfg.Telegram.BotUsername,
+				AccessTTLSeconds:    cfg.Auth.AccessTTLSeconds,
+				RefreshTTLSeconds:   cfg.Auth.RefreshTTLSeconds,
+				BcryptCost:          cfg.Auth.BcryptCost,
+				SchedulerTick:       cfg.Scheduler.TickIntervalSeconds,
+				SchedulerBatch:      cfg.Scheduler.BatchSize,
+				SchedulerDisabled:   cfg.Scheduler.Disabled,
+				ServerListen:        cfg.Server.Listen,
+				DatabasePath:        cfg.Database.Path,
+				AdminBootstrapEmail: os.Getenv("ADMIN_EMAIL"),
+			}
+		},
 	})
 
 	// HTTP 服务器
@@ -318,4 +348,65 @@ func newLogger(level string) *slog.Logger {
 	}
 	h := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl})
 	return slog.New(h)
+}
+
+// bootstrapAdmin 在启动时根据 .env 中的 ADMIN_EMAIL / ADMIN_PASSWORD 引导一个管理员账号。
+//
+// 行为:
+//   - ADMIN_EMAIL 为空 -> 不做任何事(也不报错)。
+//   - 用户已存在且已是管理员 -> 跳过(不改密码)。
+//   - 用户已存在但不是管理员 -> 提升为管理员(不改密码,日志里记一笔)。
+//   - 用户不存在 -> 用 ADMIN_PASSWORD 建一个新管理员;ADMIN_PASSWORD 为空时报错并退出。
+//
+// 设计上不在管理员已经存在时再用 ADMIN_PASSWORD 强制改密码 —— 否则
+// 把 .env 的密码忘改回默认值会无声覆盖现有强密码;若你确实想强制重置,
+// 可以先在管理面板里删掉这个用户,然后下次启动会重新创建。
+func bootstrapAdmin(logger *slog.Logger, users *store.UserStore, issuer *auth.Issuer) {
+	email := strings.TrimSpace(os.Getenv("ADMIN_EMAIL"))
+	if email == "" {
+		return
+	}
+	password := os.Getenv("ADMIN_PASSWORD")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// 已存在 -> 仅确保 is_admin = 1。
+	if existing, _, err := users.GetByEmailWithHash(ctx, email); err == nil {
+		if existing.IsAdmin && !existing.IsDisabled {
+			logger.Info("admin bootstrap: user already an admin, skipping",
+				"email", email, "user_id", existing.ID)
+			return
+		}
+		if _, err := users.EnsureAdminByEmail(ctx, email); err != nil {
+			logger.Error("admin bootstrap: promote existing user failed",
+				"email", email, "err", err)
+			return
+		}
+		logger.Warn("admin bootstrap: existing user promoted to admin (password not changed)",
+			"email", email)
+		return
+	} else if !errors.Is(err, store.ErrNotFound) {
+		logger.Error("admin bootstrap: lookup failed", "email", email, "err", err)
+		return
+	}
+
+	// 不存在 -> 必须有密码才能建。
+	if len(password) < 8 {
+		logger.Error("admin bootstrap: ADMIN_EMAIL set but ADMIN_PASSWORD missing/too short " +
+			"(>= 8 chars required) — refusing to create admin")
+		return
+	}
+	hash, err := issuer.HashPassword(password)
+	if err != nil {
+		logger.Error("admin bootstrap: hash password failed", "err", err)
+		return
+	}
+	u, err := users.CreateAdmin(ctx, email, hash, "", "")
+	if err != nil {
+		logger.Error("admin bootstrap: create admin failed", "email", email, "err", err)
+		return
+	}
+	logger.Warn("admin bootstrap: created initial admin from .env — CHANGE THE PASSWORD ASAP",
+		"email", email, "user_id", u.ID)
 }

@@ -9,6 +9,8 @@ type User struct {
 	Email       string    `json:"email"`
 	DisplayName string    `json:"display_name"`
 	Timezone    string    `json:"timezone"`
+	IsAdmin     bool      `json:"is_admin"`
+	IsDisabled  bool      `json:"is_disabled"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -107,4 +109,20 @@ type PomodoroSession struct {
 	Note                   string     `json:"note"`
 	CreatedAt              time.Time  `json:"created_at"`
 	UpdatedAt              time.Time  `json:"updated_at"`
+}
+
+// AuditLog 管理员操作审计记录(管理面板新增)。
+//
+// actor_id = NULL 表示系统动作(如启动时根据 .env 引导建管理员)。
+// detail 是结构化或简短描述,客户端展示原文,不强制 JSON。
+type AuditLog struct {
+	ID         int64     `json:"id"`
+	ActorID    *int64    `json:"actor_id,omitempty"`
+	ActorEmail string    `json:"actor_email"`
+	Action     string    `json:"action"`
+	TargetType string    `json:"target_type"`
+	TargetID   string    `json:"target_id"`
+	Detail     string    `json:"detail"`
+	IP         string    `json:"ip"`
+	CreatedAt  time.Time `json:"created_at"`
 }

@@ -1,0 +1,89 @@
+# =============================================================
+# TaskFlow —— docker-compose 一键部署(开发 / 单机生产)
+#
+# 启动:
+#   cp .env.example .env      # 修改 ADMIN_*、JWT_SECRET 等
+#   docker compose up -d --build
+#
+# 服务:
+#   server  —— Go 后端,内部端口 8080,数据卷 ./data
+#   web     —— nginx 静态托管 + /api 反代到 server,对外暴露 ${WEB_PORT:-8080}
+#
+# 备份:容器卷 ./data 与 ./backup 挂在仓库根目录下,用 deploy/scripts/backup.sh
+# (在宿主机上运行即可,不需要进容器)。
+# =============================================================
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    image: taskflow-server:local
+    container_name: taskflow-server
+    restart: unless-stopped
+    # 内部网络;外部统一通过 web 服务暴露
+    expose:
+      - "8080"
+    environment:
+      # ---- 必须 ----
+      TASKFLOW_JWT_SECRET: ${TASKFLOW_JWT_SECRET:?TASKFLOW_JWT_SECRET is required (>=32 random hex chars)}
+
+      # ---- 启动管理员 ----
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+
+      # ---- 可选 ----
+      TASKFLOW_LOG_LEVEL: ${TASKFLOW_LOG_LEVEL:-info}
+      TASKFLOW_TG_BOT_TOKEN: ${TASKFLOW_TG_BOT_TOKEN:-}
+      TASKFLOW_TG_BOT_USER: ${TASKFLOW_TG_BOT_USER:-}
+      TASKFLOW_TG_WEBHOOK_SEC: ${TASKFLOW_TG_WEBHOOK_SEC:-}
+
+      # ---- OAuth(默认关闭。打开请把 OAUTH_ENABLED=true 并填齐 6 个字段) ----
+      OAUTH_ENABLED: ${OAUTH_ENABLED:-false}
+      OAUTH_PROVIDER: ${OAUTH_PROVIDER:-}
+      OAUTH_AUTHORIZE_URL: ${OAUTH_AUTHORIZE_URL:-}
+      OAUTH_TOKEN_URL: ${OAUTH_TOKEN_URL:-}
+      OAUTH_USERINFO_URL: ${OAUTH_USERINFO_URL:-}
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-}
+      OAUTH_REDIRECT_URL: ${OAUTH_REDIRECT_URL:-}
+      OAUTH_FRONTEND_REDIRECT_URL: ${OAUTH_FRONTEND_REDIRECT_URL:-}
+      OAUTH_SCOPES: ${OAUTH_SCOPES:-openid profile email}
+
+      # 让进程内部 SQLite 走容器宿主时区(数据按 UTC 存,这里只影响日志)
+      TZ: ${TZ:-UTC}
+
+    volumes:
+      - ./data:/data
+      - ./backup:/backup
+
+    healthcheck:
+      # distroless 没 shell;用 nc 也不行 —— Go 后端的 /healthz 由 web 容器代为探测就够,
+      # 这里给一个最朴素的 TCP 探测:start_period 给 5s 让进程拉起。
+      test: ["CMD", "/taskflow-server", "-version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+    networks:
+      - taskflow-net
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    image: taskflow-web:local
+    container_name: taskflow-web
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      # 默认对外 8080。如果要直接挂在 80 端口(单机生产、无外层反代),改成 "80:80"。
+      - "${WEB_PORT:-8080}:80"
+    networks:
+      - taskflow-net
+
+networks:
+  taskflow-net:
+    driver: bridge

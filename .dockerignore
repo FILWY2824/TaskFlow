@@ -1,0 +1,35 @@
+# 不送进任何 docker build context
+.git
+.gitignore
+
+# 数据 / 备份(运行期产物)
+data/
+backup/
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# 本地敏感
+.env
+server/.env
+
+# 构建产物
+web/dist/
+web/node_modules/
+node_modules/
+server/taskflow-server
+server/taskflow-server-linux-*
+
+# Android / Tauri / Windows(不参与 docker 构建)
+android/
+windows/
+
+# 编辑器 / OS
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# 镜像构建会自己拷需要的部分,不要把这些也带进 server/web 子上下文
+*.log
