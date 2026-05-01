@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/youruser/todoalarm/internal/events"
-	"github.com/youruser/todoalarm/internal/middleware"
+	"github.com/youruser/taskflow/internal/events"
+	"github.com/youruser/taskflow/internal/middleware"
 )
 
 // SSEHandler 提供 GET /ws/events:Server-Sent Events 流。

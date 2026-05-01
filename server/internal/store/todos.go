@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youruser/todoalarm/internal/models"
+	"github.com/youruser/taskflow/internal/models"
 )
 
 type TodoStore struct {

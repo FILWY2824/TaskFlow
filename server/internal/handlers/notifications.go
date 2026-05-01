@@ -3,8 +3,8 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/youruser/todoalarm/internal/middleware"
-	"github.com/youruser/todoalarm/internal/store"
+	"github.com/youruser/taskflow/internal/middleware"
+	"github.com/youruser/taskflow/internal/store"
 )
 
 type NotificationsHandler struct {

@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/youruser/todoalarm/internal/auth"
-	"github.com/youruser/todoalarm/internal/events"
-	"github.com/youruser/todoalarm/internal/handlers"
-	"github.com/youruser/todoalarm/internal/middleware"
-	"github.com/youruser/todoalarm/internal/store"
-	"github.com/youruser/todoalarm/internal/telegram"
+	"github.com/youruser/taskflow/internal/auth"
+	"github.com/youruser/taskflow/internal/events"
+	"github.com/youruser/taskflow/internal/handlers"
+	"github.com/youruser/taskflow/internal/middleware"
+	"github.com/youruser/taskflow/internal/store"
+	"github.com/youruser/taskflow/internal/telegram"
 )
 
 // Deps 是构造路由所需的全部依赖。
@@ -31,6 +31,7 @@ type Deps struct {
 	Notifications *store.NotificationStore
 	Pomos         *store.PomodoroStore
 	Stats         *store.StatsStore
+	Prefs         *store.PreferenceStore
 
 	Bot           *telegram.Client
 	BotUsername   string
@@ -57,6 +58,7 @@ func BuildHandler(d Deps) http.Handler {
 	sseH := handlers.NewSSEHandler(d.Hub)
 	pomoH := handlers.NewPomodoroHandler(d.Pomos)
 	statsH := handlers.NewStatsHandler(d.Stats, d.Users)
+	prefsH := handlers.NewPreferencesHandler(d.Prefs)
 
 	// === 公开路由(不需要认证) ===
 	mux.HandleFunc("GET /healthz", healthH.Health)
@@ -146,6 +148,13 @@ func BuildHandler(d Deps) http.Handler {
 	mux.Handle("GET /api/stats/daily", authed(statsH.Daily))
 	mux.Handle("GET /api/stats/weekly", authed(statsH.Weekly))
 	mux.Handle("GET /api/stats/pomodoro", authed(statsH.Pomodoro))
+
+	// 跨端用户偏好(规格 §17 阶段 13):每端只展示自己 scope 的开关,
+	// 但全部都经过这一组路由持久化到服务端,登录到任何端都能拿到完整集合。
+	mux.Handle("GET /api/me/preferences", authed(prefsH.List))
+	mux.Handle("PUT /api/me/preferences", authed(prefsH.PutBulk))
+	mux.Handle("PUT /api/me/preferences/{scope}/{key}", authed(prefsH.PutOne))
+	mux.Handle("DELETE /api/me/preferences/{scope}/{key}", authed(prefsH.DeleteOne))
 
 	// 顶层 middleware:Recover -> Logger -> CORS -> mux
 	chain := middleware.Chain(

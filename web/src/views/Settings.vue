@@ -5,11 +5,18 @@ import { usePrefsStore } from '@/stores/prefs'
 import { fmtDateTime } from '@/utils'
 import { TIMEZONE_GROUPS, DEFAULT_TIMEZONE } from '@/timezones'
 import { ApiError } from '@/api'
+import { isTauri } from '@/tauri'
 
 const auth = useAuthStore()
 const prefs = usePrefsStore()
 const ok = ref('')
 const err = ref('')
+
+// 判断当前运行环境:
+//   Web 浏览器 -> 渲染 "Web 通知" 卡片
+//   Tauri    -> 渲染 "Windows 通知" 卡片
+// (Android 端走原生 Compose Settings,不会经过本文件,所以这里不需要 android 分支)
+const isWindows = computed(() => isTauri())
 
 // ---- 时区 ----
 const tz = ref<string>(auth.user?.timezone || DEFAULT_TIMEZONE)
@@ -55,7 +62,7 @@ const themeMode = ref<ThemeMode>('auto')
 
 function readSavedTheme(): ThemeMode {
   try {
-    const v = localStorage.getItem('todolist.theme')
+    const v = localStorage.getItem('taskflow.theme')
     if (v === 'light' || v === 'dark') return v
   } catch { /* ignore */ }
   return 'auto'
@@ -63,10 +70,10 @@ function readSavedTheme(): ThemeMode {
 function applyTheme(m: ThemeMode) {
   if (m === 'auto') {
     document.documentElement.removeAttribute('data-theme')
-    try { localStorage.removeItem('todolist.theme') } catch { /* ignore */ }
+    try { localStorage.removeItem('taskflow.theme') } catch { /* ignore */ }
   } else {
     document.documentElement.setAttribute('data-theme', m)
-    try { localStorage.setItem('todolist.theme', m) } catch { /* ignore */ }
+    try { localStorage.setItem('taskflow.theme', m) } catch { /* ignore */ }
   }
 }
 function chooseTheme(m: ThemeMode) {
@@ -189,17 +196,26 @@ async function toggleDesktopNotification(v: boolean) {
       </div>
     </div>
 
-    <div class="settings-card">
+    <!-- =============================================================
+         Web 端通知与提醒（仅在浏览器中渲染）
+         =============================================================
+         规格 §17 阶段 13:每端只展示自己 scope 的通知开关。这里是 'web' scope。
+         Windows / Android 的开关在各自客户端的"设置"里;那些设置不会出现在
+         本卡片里,但在数据库 user_preferences(scope='windows' / 'android') 里照常持久化。 -->
+    <div v-if="!isWindows" class="settings-card">
       <div class="card-head">
-        <h3>提醒与通知</h3>
-        <p class="card-hint">所有提醒类开关都在这里统一管理，其他页面会按这里的设置走。</p>
+        <h3>Web 通知与提醒</h3>
+        <p class="card-hint">
+          这一组开关只对当前的<strong>浏览器</strong>生效。Windows / Android 客户端有各自独立的通知设置,
+          但所有平台的偏好都会同步保存到你的账户。
+        </p>
       </div>
       <div class="card-body">
         <div class="toggle-row">
           <div class="toggle-text">
-            <div class="toggle-title">桌面系统通知</div>
+            <div class="toggle-title">浏览器桌面通知</div>
             <div class="toggle-desc">
-              到点时弹出操作系统级通知。当前权限：
+              到点时弹出操作系统级通知。需要先授予浏览器通知权限。当前权限：
               <span :class="perm === 'granted' ? 'success-text' : (perm === 'denied' ? 'danger-text' : 'muted')">{{ permLabel }}</span>
               <button v-if="supportsNotification && perm === 'default'" class="btn-ghost btn-xs" style="margin-left:6px" @click="requestPerm">请求权限</button>
             </div>
@@ -213,7 +229,7 @@ async function toggleDesktopNotification(v: boolean) {
         <div class="toggle-row">
           <div class="toggle-text">
             <div class="toggle-title">应用内提示</div>
-            <div class="toggle-desc">在右下角弹出小卡片提醒。</div>
+            <div class="toggle-desc">在浏览器右下角弹出小卡片提醒(不依赖系统通知权限)。</div>
           </div>
           <label class="switch">
             <input type="checkbox" :checked="prefs.inAppToast"
@@ -224,7 +240,7 @@ async function toggleDesktopNotification(v: boolean) {
         <div class="toggle-row">
           <div class="toggle-text">
             <div class="toggle-title">任务截止本地提醒</div>
-            <div class="toggle-desc">当任务到达截止时间，本地弹窗提醒。</div>
+            <div class="toggle-desc">当任务到达截止时间,在浏览器内本地弹窗提醒。</div>
           </div>
           <label class="switch">
             <input type="checkbox" :checked="prefs.todoDueToast"
@@ -235,7 +251,7 @@ async function toggleDesktopNotification(v: boolean) {
         <div class="toggle-row">
           <div class="toggle-text">
             <div class="toggle-title">番茄到点自动结束</div>
-            <div class="toggle-desc">关闭后，倒计时结束会停留在 0:00 等你手动点"完成"。开启时按设定时长直接结束并入库。</div>
+            <div class="toggle-desc">关闭后,倒计时结束会停留在 0:00 等你手动点"完成"。开启时按设定时长直接结束并入库。</div>
           </div>
           <label class="switch">
             <input type="checkbox" :checked="prefs.pomodoroAutoComplete"
@@ -246,7 +262,96 @@ async function toggleDesktopNotification(v: boolean) {
         <div class="toggle-row">
           <div class="toggle-text">
             <div class="toggle-title">番茄到点声音</div>
-            <div class="toggle-desc">仅在桌面端 (Tauri) 生效。</div>
+            <div class="toggle-desc">浏览器 web audio 蜂鸣。需要标签页处于活动状态(后台标签页可能被节流)。</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" :checked="prefs.pomodoroSound"
+              @change="(e) => prefs.set('pomodoroSound', (e.target as HTMLInputElement).checked)" />
+            <span class="slider" />
+          </label>
+        </div>
+        <p class="card-hint" style="margin-top: 14px;">
+          <strong>说明:</strong> 浏览器是沙箱环境,不能像 Windows / Android 那样在锁屏 / 后台被杀时仍然响铃。
+          如果需要"不依赖浏览器开着也能到点叫醒"的强提醒,请使用 Windows 或 Android 客户端。
+        </p>
+      </div>
+    </div>
+
+    <!-- =============================================================
+         Windows 端通知与提醒（仅在 Tauri WebView 中渲染）
+         =============================================================
+         scope='windows':桌面端独有的开关(系统 Toast / 总在最前 / rodio 响铃)。 -->
+    <div v-else class="settings-card">
+      <div class="card-head">
+        <h3>Windows 通知与强提醒</h3>
+        <p class="card-hint">
+          这一组开关只对当前的 <strong>Windows 桌面端</strong> 生效。Web / Android 客户端有各自独立的通知设置,
+          但所有平台的偏好都会同步保存到你的账户。
+        </p>
+      </div>
+      <div class="card-body">
+        <div class="toggle-row">
+          <div class="toggle-text">
+            <div class="toggle-title">系统 Toast 通知</div>
+            <div class="toggle-desc">
+              到点时通过 Windows 操作中心弹出系统通知,即使应用窗口没有获得焦点也会出现。
+              如果系统通知被关掉,请到 <em>Windows 设置 → 系统 → 通知</em> 中重新允许 TaskFlow。
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" :checked="prefs.desktopNotification"
+              @change="(e) => prefs.set('desktopNotification', (e.target as HTMLInputElement).checked)" />
+            <span class="slider" />
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-text">
+            <div class="toggle-title">"总在最前"强提醒窗</div>
+            <div class="toggle-desc">到点弹出顶置窗口,直到你点"停止"才消失。即使你正在玩游戏 / 看视频也会盖在最上面。</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" :checked="prefs.alwaysOnTopAlarm"
+              @change="(e) => prefs.set('alwaysOnTopAlarm', (e.target as HTMLInputElement).checked)" />
+            <span class="slider" />
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-text">
+            <div class="toggle-title">应用内提示</div>
+            <div class="toggle-desc">在窗口右下角弹出小卡片提醒(配合系统 Toast 双保险)。</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" :checked="prefs.inAppToast"
+              @change="(e) => prefs.set('inAppToast', (e.target as HTMLInputElement).checked)" />
+            <span class="slider" />
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-text">
+            <div class="toggle-title">任务截止本地提醒</div>
+            <div class="toggle-desc">任务到达截止时间时本地弹窗(独立于服务端 reminder)。</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" :checked="prefs.todoDueToast"
+              @change="(e) => prefs.set('todoDueToast', (e.target as HTMLInputElement).checked)" />
+            <span class="slider" />
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-text">
+            <div class="toggle-title">番茄到点自动结束</div>
+            <div class="toggle-desc">关闭后,倒计时结束会停留在 0:00 等你手动点"完成"。</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" :checked="prefs.pomodoroAutoComplete"
+              @change="(e) => prefs.set('pomodoroAutoComplete', (e.target as HTMLInputElement).checked)" />
+            <span class="slider" />
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-text">
+            <div class="toggle-title">到点响铃</div>
+            <div class="toggle-desc">通过 rodio 播放系统响铃,直到提醒被停止或自动超时。</div>
           </div>
           <label class="switch">
             <input type="checkbox" :checked="prefs.pomodoroSound"

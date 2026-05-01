@@ -1,4 +1,4 @@
-module github.com/youruser/todoalarm
+module github.com/youruser/taskflow
 
 go 1.22
 

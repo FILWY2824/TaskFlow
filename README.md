@@ -23,7 +23,7 @@
 ## 仓库结构
 
 ```
-todoalarm/
+taskflow/
 ├── server/                  # Go 后端 (Go 1.22+, SQLite WAL)
 │   ├── cmd/server/main.go
 │   ├── internal/            # store / handlers / middleware / scheduler / sse / telegram / pomodoro / stats
@@ -40,13 +40,13 @@ todoalarm/
 ├── android/                 # Android 原生(Kotlin 2.0 / Compose Material3)
 │   ├── app/
 │   │   ├── build.gradle.kts
-│   │   └── src/main/{AndroidManifest.xml,res/,java/com/example/todoalarm/...}
+│   │   └── src/main/{AndroidManifest.xml,res/,java/com/example/taskflow/...}
 │   ├── gradle/libs.versions.toml
 │   └── settings.gradle.kts
 ├── deploy/                  # 阶段 12 部署套件
 │   ├── README.md            # 完整运维手册
-│   ├── systemd/todoalarm.service
-│   ├── nginx/{todoalarm.conf,todoalarm.dev.conf}
+│   ├── systemd/taskflow.service
+│   ├── nginx/{taskflow.conf,taskflow.dev.conf}
 │   ├── scripts/{install,backup,restore,telegram-setup,certbot-renew-hook}.sh
 │   └── samples/config.production.toml
 ├── Makefile                 # 顶层编排:make server-build / web-build / windows-build / android-debug / dist
@@ -85,14 +85,14 @@ make windows-dev
 # 在本地仓库根
 make build-linux-amd64
 scp server/taskflow-server-linux-amd64 user@vps:/tmp/
-scp -r web/dist                          user@vps:/tmp/todoalarm-web
+scp -r web/dist                          user@vps:/tmp/taskflow-web
 scp -r deploy                            user@vps:/tmp/
 
 # VPS 上一键
 ssh user@vps
 sudo /tmp/deploy/scripts/install.sh \
     --binary /tmp/taskflow-server-linux-amd64 \
-    --web    /tmp/todoalarm-web \
+    --web    /tmp/taskflow-web \
     --domain todo.example.com \
     --email  you@example.com
 ```

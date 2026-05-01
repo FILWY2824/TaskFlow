@@ -13,14 +13,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/youruser/todoalarm/internal/auth"
-	"github.com/youruser/todoalarm/internal/config"
-	"github.com/youruser/todoalarm/internal/db"
-	"github.com/youruser/todoalarm/internal/events"
-	"github.com/youruser/todoalarm/internal/scheduler"
-	"github.com/youruser/todoalarm/internal/server"
-	"github.com/youruser/todoalarm/internal/store"
-	"github.com/youruser/todoalarm/internal/telegram"
+	"github.com/youruser/taskflow/internal/auth"
+	"github.com/youruser/taskflow/internal/config"
+	"github.com/youruser/taskflow/internal/db"
+	"github.com/youruser/taskflow/internal/events"
+	"github.com/youruser/taskflow/internal/scheduler"
+	"github.com/youruser/taskflow/internal/server"
+	"github.com/youruser/taskflow/internal/store"
+	"github.com/youruser/taskflow/internal/telegram"
 )
 
 var version = "0.3.0"
@@ -84,6 +84,7 @@ func main() {
 	notifications := store.NewNotificationStore(database, syncEvents)
 	pomos := store.NewPomodoroStore(database, syncEvents)
 	stats := store.NewStatsStore(database)
+	prefs := store.NewPreferenceStore(database)
 
 	// Telegram 客户端 —— 即使没配 token 也安全:Enabled() 返回 false,各处会跳过。
 	bot := telegram.NewClient(cfg.Telegram.BotToken, "")
@@ -137,6 +138,7 @@ func main() {
 		Notifications: notifications,
 		Pomos:         pomos,
 		Stats:         stats,
+		Prefs:         prefs,
 		Bot:           bot,
 		BotUsername:   cfg.Telegram.BotUsername,
 		WebhookSecret: cfg.Telegram.WebhookSecret,

@@ -102,6 +102,7 @@ type migration struct {
 var migrations = []migration{
 	{Version: 1, SQL: schemaV1},
 	{Version: 2, SQL: schemaV2},
+	{Version: 3, SQL: schemaV3},
 }
 
 const schemaV1 = `
@@ -312,4 +313,27 @@ CREATE TABLE IF NOT EXISTS pomodoro_sessions (
 CREATE INDEX IF NOT EXISTS idx_pomodoro_user ON pomodoro_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_pomodoro_started ON pomodoro_sessions(user_id, started_at);
 CREATE INDEX IF NOT EXISTS idx_pomodoro_todo ON pomodoro_sessions(todo_id);
+`
+
+// schemaV3 —— 跨端用户偏好(规格 §17:Web / Android / Windows 各自的通知与提醒开关
+// 都需要服务端持久化,但每个客户端只展示自己 scope 的开关)。
+//
+// 表设计:
+//   - 主键 (user_id, scope, key) —— 每个 scope 下 key 唯一。
+//   - scope 取值约定:'web' / 'android' / 'windows' / 'common'。
+//     'common' 用于跨端共用的非通知类偏好(主题、是否折叠已完成等);
+//     另外三者用于平台专属的通知 / 强提醒开关。
+//   - value 用 TEXT 存,客户端按需把 bool/int/json 序列化成字符串再写。
+//     这样新增偏好不需要改 schema,服务端不解释语义、只做透明键值存储。
+//   - 不做软删,DELETE 直接物理删除(没必要保留历史)。
+const schemaV3 = `
+CREATE TABLE IF NOT EXISTS user_preferences (
+	user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	scope TEXT NOT NULL,
+	key TEXT NOT NULL,
+	value TEXT NOT NULL DEFAULT '',
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY (user_id, scope, key)
+);
+CREATE INDEX IF NOT EXISTS idx_user_preferences_user_scope ON user_preferences(user_id, scope);
 `

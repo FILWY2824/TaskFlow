@@ -8,9 +8,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/youruser/todoalarm/internal/auth"
-	"github.com/youruser/todoalarm/internal/middleware"
-	"github.com/youruser/todoalarm/internal/store"
+	"github.com/youruser/taskflow/internal/auth"
+	"github.com/youruser/taskflow/internal/middleware"
+	"github.com/youruser/taskflow/internal/store"
 )
 
 type AuthHandler struct {

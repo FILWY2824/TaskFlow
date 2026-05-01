@@ -24,7 +24,7 @@ android/
 │   └── src/main/
 │       ├── AndroidManifest.xml        # 全部权限 + 4 个 component 注册
 │       ├── res/                       # strings / themes / network_security / xml / mipmap
-│       └── java/com/example/todoalarm/
+│       └── java/com/example/taskflow/
 │           ├── TaskFlowApp.kt        # Application + 手写 DI 容器
 │           ├── MainActivity.kt        # NavHost
 │           ├── ui/

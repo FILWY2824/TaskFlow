@@ -10,7 +10,7 @@ import './style.css'
 // 在 Vue 启动前应用用户偏好的主题，避免出现先白后黑的闪烁。
 ;(function applyTheme() {
   try {
-    const saved = localStorage.getItem('todolist.theme')
+    const saved = localStorage.getItem('taskflow.theme')
     if (saved === 'light' || saved === 'dark') {
       document.documentElement.setAttribute('data-theme', saved)
     }

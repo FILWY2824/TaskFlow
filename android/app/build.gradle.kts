@@ -14,11 +14,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.todoalarm"
+    namespace = "com.example.taskflow"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.example.todoalarm"
+        applicationId = "com.example.taskflow"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1

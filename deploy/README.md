@@ -9,10 +9,10 @@
 deploy/
 ├── README.md                       # 本文件
 ├── nginx/
-│   ├── todoalarm.conf              # 生产 HTTPS 反代(最终配置)
-│   └── todoalarm.dev.conf          # 仅 HTTP,本地测试用
+│   ├── taskflow.conf              # 生产 HTTPS 反代(最终配置)
+│   └── taskflow.dev.conf          # 仅 HTTP,本地测试用
 ├── systemd/
-│   └── todoalarm.service           # 后端 systemd unit
+│   └── taskflow.service           # 后端 systemd unit
 ├── scripts/
 │   ├── install.sh                  # 一键部署:复制文件、创建用户、注册 systemd
 │   ├── backup.sh                   # SQLite VACUUM INTO 备份
@@ -45,7 +45,7 @@ make build-linux-arm64                          # 适用 ARM(树莓派等)
 
 # 上传
 scp server/taskflow-server-linux-amd64 user@vps:/tmp/
-scp -r web/dist                          user@vps:/tmp/todoalarm-web
+scp -r web/dist                          user@vps:/tmp/taskflow-web
 scp -r deploy                            user@vps:/tmp/
 ```
 
@@ -56,16 +56,16 @@ ssh user@vps
 cd /tmp/deploy
 sudo ./scripts/install.sh \
     --binary /tmp/taskflow-server-linux-amd64 \
-    --web /tmp/todoalarm-web \
+    --web /tmp/taskflow-web \
     --domain todo.example.com \
     --email you@example.com
 ```
 
 `install.sh` 会:
 
-1. 创建系统用户 `todoalarm`(无 home,无 shell)
-2. 把二进制丢到 `/opt/todoalarm/taskflow-server`,`web/dist` 丢到 `/var/www/todoalarm`
-3. 写 `/opt/todoalarm/config.toml`(随机生成 JWT secret;Telegram 配置留空)
+1. 创建系统用户 `taskflow`(无 home,无 shell)
+2. 把二进制丢到 `/opt/taskflow/taskflow-server`,`web/dist` 丢到 `/var/www/taskflow`
+3. 写 `/opt/taskflow/config.toml`(随机生成 JWT secret;Telegram 配置留空)
 4. 安装 systemd unit 并 enable + start
 5. 写 nginx 配置并 reload
 6. `certbot --nginx -d todo.example.com -m you@example.com` 申请证书
@@ -76,12 +76,12 @@ sudo ./scripts/install.sh \
 在你拿到 BotFather 的 token 之后:
 
 ```bash
-sudo nano /opt/todoalarm/config.toml          # 填 bot_token / bot_username / webhook_secret
-sudo systemctl restart todoalarm
+sudo nano /opt/taskflow/config.toml          # 填 bot_token / bot_username / webhook_secret
+sudo systemctl restart taskflow
 
 sudo /tmp/deploy/scripts/telegram-setup.sh \
     --bot-token "1234:abcde…" \
-    --secret "$(grep webhook_secret /opt/todoalarm/config.toml | cut -d'"' -f2)" \
+    --secret "$(grep webhook_secret /opt/taskflow/config.toml | cut -d'"' -f2)" \
     --domain todo.example.com
 ```
 
@@ -90,30 +90,30 @@ sudo /tmp/deploy/scripts/telegram-setup.sh \
 `install.sh` 会注册一个 `cron` 任务,每天凌晨 3 点跑 `backup.sh`,保留最近 14 天:
 
 ```cron
-0 3 * * * /opt/todoalarm/backup.sh >> /var/log/todoalarm-backup.log 2>&1
+0 3 * * * /opt/taskflow/backup.sh >> /var/log/taskflow-backup.log 2>&1
 ```
 
 也可以手动跑:
 
 ```bash
-sudo /opt/todoalarm/backup.sh
+sudo /opt/taskflow/backup.sh
 ```
 
-备份输出在 `/opt/todoalarm/backup/todoalarm-YYYYMMDD-HHMMSS.db`。**不**直接 `cp .db`,而是用 `sqlite3 ... 'VACUUM INTO ...'`,正确处理 WAL。
+备份输出在 `/opt/taskflow/backup/taskflow-YYYYMMDD-HHMMSS.db`。**不**直接 `cp .db`,而是用 `sqlite3 ... 'VACUUM INTO ...'`,正确处理 WAL。
 
 ---
 
 ## 卸载
 
 ```bash
-sudo systemctl disable --now todoalarm
-sudo rm /etc/systemd/system/todoalarm.service
-sudo rm /etc/nginx/sites-enabled/todoalarm /etc/nginx/sites-available/todoalarm
+sudo systemctl disable --now taskflow
+sudo rm /etc/systemd/system/taskflow.service
+sudo rm /etc/nginx/sites-enabled/taskflow /etc/nginx/sites-available/taskflow
 sudo systemctl reload nginx
-sudo userdel todoalarm
+sudo userdel taskflow
 
 # 数据(谨慎!)
-sudo rm -rf /opt/todoalarm /var/www/todoalarm
+sudo rm -rf /opt/taskflow /var/www/taskflow
 ```
 
 ---

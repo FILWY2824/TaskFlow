@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# install.sh — 一键把 todoalarm 部署到这台 Ubuntu / Debian 机器上。
+# install.sh — 一键把 taskflow 部署到这台 Ubuntu / Debian 机器上。
 #
 # 用法:
 #   sudo ./install.sh \
-#       --binary /tmp/todoalarm-server-linux-amd64 \
-#       --web    /tmp/todoalarm-web \
+#       --binary /tmp/taskflow-server-linux-amd64 \
+#       --web    /tmp/taskflow-web \
 #       --domain todo.example.com \
 #       --email  you@example.com
 #
 # 选项:
-#   --no-tls              跳过 certbot,使用 todoalarm.dev.conf(HTTP only)
+#   --no-tls              跳过 certbot,使用 taskflow.dev.conf(HTTP only)
 #   --no-cron             跳过备份 cron 注册
 #   --listen 127.0.0.1:8080  后端监听地址(默认本回环 8080)
 #
@@ -20,9 +20,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 DEPLOY_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-INSTALL_DIR=/opt/todoalarm
-WEB_DIR=/var/www/todoalarm
-USER_NAME=todoalarm
+INSTALL_DIR=/opt/taskflow
+WEB_DIR=/var/www/taskflow
+USER_NAME=taskflow
 LISTEN="127.0.0.1:8080"
 NO_TLS=0
 NO_CRON=0
@@ -76,8 +76,8 @@ log "创建 $INSTALL_DIR 与 $WEB_DIR"
 mkdir -p "$INSTALL_DIR/data" "$INSTALL_DIR/backup" "$WEB_DIR"
 
 # === 3. 安装二进制 ===
-log "安装二进制到 $INSTALL_DIR/todoalarm-server"
-install -m 0755 "$BINARY" "$INSTALL_DIR/todoalarm-server"
+log "安装二进制到 $INSTALL_DIR/taskflow-server"
+install -m 0755 "$BINARY" "$INSTALL_DIR/taskflow-server"
 
 # === 4. 部署前端 ===
 log "复制 web 静态资源到 $WEB_DIR"
@@ -98,7 +98,7 @@ write_timeout_seconds = 30
 read_timeout_seconds = 30
 
 [database]
-path = "${INSTALL_DIR}/data/todoalarm.db"
+path = "${INSTALL_DIR}/data/taskflow.db"
 
 [auth]
 jwt_secret = "${JWT}"
@@ -135,14 +135,14 @@ chown -R www-data:www-data "$WEB_DIR"
 
 # === 8. systemd unit ===
 log "安装 systemd unit"
-install -m 0644 "$DEPLOY_DIR/systemd/todoalarm.service" /etc/systemd/system/todoalarm.service
+install -m 0644 "$DEPLOY_DIR/systemd/taskflow.service" /etc/systemd/system/taskflow.service
 systemctl daemon-reload
-systemctl enable todoalarm
-systemctl restart todoalarm
+systemctl enable taskflow
+systemctl restart taskflow
 sleep 2
-if ! systemctl is-active --quiet todoalarm; then
-    log "todoalarm.service 启动失败,最近日志:"
-    journalctl -u todoalarm -n 30 --no-pager || true
+if ! systemctl is-active --quiet taskflow; then
+    log "taskflow.service 启动失败,最近日志:"
+    journalctl -u taskflow -n 30 --no-pager || true
     err "请排查后重试" 3
 fi
 
@@ -150,14 +150,14 @@ fi
 log "安装 nginx 配置"
 if [[ "$NO_TLS" -eq 1 ]]; then
     sed "s/__DOMAIN__/$DOMAIN/g; s/_;/$DOMAIN;/g" \
-        "$DEPLOY_DIR/nginx/todoalarm.dev.conf" \
-        > /etc/nginx/sites-available/todoalarm
+        "$DEPLOY_DIR/nginx/taskflow.dev.conf" \
+        > /etc/nginx/sites-available/taskflow
 else
     sed "s/__DOMAIN__/$DOMAIN/g" \
-        "$DEPLOY_DIR/nginx/todoalarm.conf" \
-        > /etc/nginx/sites-available/todoalarm
+        "$DEPLOY_DIR/nginx/taskflow.conf" \
+        > /etc/nginx/sites-available/taskflow
 fi
-ln -sf /etc/nginx/sites-available/todoalarm /etc/nginx/sites-enabled/todoalarm
+ln -sf /etc/nginx/sites-available/taskflow /etc/nginx/sites-enabled/taskflow
 # 第一次部署时,certbot 需要先有一个 HTTP server 处理 challenge
 # 上面 generated config 里已经包含 http -> https 的 server,且 listen 80,certbot 可注入。
 nginx -t
@@ -172,20 +172,20 @@ if [[ "$NO_TLS" -eq 0 ]]; then
         --redirect
 
     # 安装 deploy hook(续签后 reload nginx)
-    install -m 0755 "$SCRIPT_DIR/certbot-renew-hook.sh" /etc/letsencrypt/renewal-hooks/deploy/todoalarm.sh
+    install -m 0755 "$SCRIPT_DIR/certbot-renew-hook.sh" /etc/letsencrypt/renewal-hooks/deploy/taskflow.sh
 fi
 
 # === 11. cron 备份 ===
 if [[ "$NO_CRON" -eq 0 ]]; then
-    CRON="0 3 * * * $USER_NAME $INSTALL_DIR/backup.sh >> /var/log/todoalarm-backup.log 2>&1"
+    CRON="0 3 * * * $USER_NAME $INSTALL_DIR/backup.sh >> /var/log/taskflow-backup.log 2>&1"
     if ! grep -qF "$INSTALL_DIR/backup.sh" /etc/crontab; then
         log "注册 cron(每天 03:00 备份,保留 14 天)"
         echo "$CRON" >> /etc/crontab
     else
         log "cron 已存在,跳过"
     fi
-    touch /var/log/todoalarm-backup.log
-    chown "$USER_NAME":"$USER_NAME" /var/log/todoalarm-backup.log
+    touch /var/log/taskflow-backup.log
+    chown "$USER_NAME":"$USER_NAME" /var/log/taskflow-backup.log
 fi
 
 # === 12. 健康自检 ===
@@ -203,13 +203,13 @@ cat <<EOF
 ==============================================================
 ✓ 部署完成
 
-  二进制:        $INSTALL_DIR/todoalarm-server
+  二进制:        $INSTALL_DIR/taskflow-server
   配置:          $INSTALL_DIR/config.toml  (chmod 600)
-  数据库:        $INSTALL_DIR/data/todoalarm.db
+  数据库:        $INSTALL_DIR/data/taskflow.db
   备份目录:      $INSTALL_DIR/backup/
   Web 静态:      $WEB_DIR
-  systemd:       systemctl status todoalarm
-  日志:          journalctl -fu todoalarm
+  systemd:       systemctl status taskflow
+  日志:          journalctl -fu taskflow
 
   访问:
 EOF
@@ -221,6 +221,6 @@ fi
 echo
 echo "  下一步(可选):配 Telegram"
 echo "    1) sudo nano $INSTALL_DIR/config.toml"
-echo "    2) sudo systemctl restart todoalarm"
+echo "    2) sudo systemctl restart taskflow"
 echo "    3) sudo $SCRIPT_DIR/telegram-setup.sh --bot-token <T> --secret <S> --domain $DOMAIN"
 echo "=============================================================="

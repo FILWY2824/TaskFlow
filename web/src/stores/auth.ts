@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { auth, clearTokens, loadTokens, loadUser, saveTokens } from '@/api'
 import { tauri } from '@/tauri'
+import { usePrefsStore } from '@/stores/prefs'
 import type { User } from '@/types'
 
 export const useAuthStore = defineStore('auth', {
@@ -35,6 +36,8 @@ export const useAuthStore = defineStore('auth', {
         refresh_token: r.refresh_token,
         timezone: r.user.timezone,
       })
+      // 登录成功后,从服务端拉一次本端 scope 的偏好(规格 §17)
+      void usePrefsStore().hydrate()
     },
     async register(input: {
       email: string
@@ -58,6 +61,7 @@ export const useAuthStore = defineStore('auth', {
         refresh_token: r.refresh_token,
         timezone: r.user.timezone,
       })
+      void usePrefsStore().hydrate()
     },
     async logout() {
       try {
@@ -83,6 +87,8 @@ export const useAuthStore = defineStore('auth', {
             timezone: me.timezone,
           })
         }
+        // 刷新页面后再 hydrate 一次 web scope 的偏好
+        void usePrefsStore().hydrate()
       } catch {
         // ignore
       }

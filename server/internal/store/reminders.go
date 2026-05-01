@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youruser/todoalarm/internal/models"
-	"github.com/youruser/todoalarm/internal/rrule"
+	"github.com/youruser/taskflow/internal/models"
+	"github.com/youruser/taskflow/internal/rrule"
 )
 
 type ReminderStore struct {

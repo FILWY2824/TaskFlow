@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youruser/todoalarm/internal/middleware"
-	"github.com/youruser/todoalarm/internal/store"
-	"github.com/youruser/todoalarm/internal/telegram"
+	"github.com/youruser/taskflow/internal/middleware"
+	"github.com/youruser/taskflow/internal/store"
+	"github.com/youruser/taskflow/internal/telegram"
 )
 
 // TelegramHandler Phase 4 的 HTTP 端点集合。

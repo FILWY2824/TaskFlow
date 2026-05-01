@@ -91,7 +91,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="todoalarm_strong_reminder_ringing" />
+                android:value="taskflow_strong_reminder_ringing" />
         </service>
 
         <!-- AlarmManager 触发的 BroadcastReceiver(精确闹钟) -->

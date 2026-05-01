@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # telegram-setup.sh — 一次性把 Telegram webhook 注册到这台 VPS。
 #
-# 前提:已经在 config.toml 里填好 bot_token / bot_username / webhook_secret 并 restart 过 todoalarm。
+# 前提:已经在 config.toml 里填好 bot_token / bot_username / webhook_secret 并 restart 过 taskflow。
 #
 # 用法:
 #   sudo ./telegram-setup.sh \
 #       --bot-token "1234567:abcdef…" \
-#       --secret "$(grep webhook_secret /opt/todoalarm/config.toml | cut -d'\"' -f2)" \
+#       --secret "$(grep webhook_secret /opt/taskflow/config.toml | cut -d'\"' -f2)" \
 #       --domain todo.example.com
 #
 # 子命令:

@@ -15,8 +15,8 @@ Thumbs.db
 # ==============================
 # Go Backend (/server)
 # ==============================
-/server/todoalarm-server
-/server/todoalarm-server-*
+/server/taskflow-server
+/server/taskflow-server-*
 /server/dist/
 /server/config.toml
 /server/data/

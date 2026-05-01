@@ -8,8 +8,8 @@
 
 set -euo pipefail
 
-INSTALL_DIR="${INSTALL_DIR:-/opt/todoalarm}"
-DB="${INSTALL_DIR}/data/todoalarm.db"
+INSTALL_DIR="${INSTALL_DIR:-/opt/taskflow}"
+DB="${INSTALL_DIR}/data/taskflow.db"
 BACKUP_DIR="${INSTALL_DIR}/backup"
 KEEP_DAYS="${KEEP_DAYS:-14}"
 
@@ -21,7 +21,7 @@ fi
 mkdir -p "$BACKUP_DIR"
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
-OUT="$BACKUP_DIR/todoalarm-$STAMP.db"
+OUT="$BACKUP_DIR/taskflow-$STAMP.db"
 
 # VACUUM INTO 会把数据全量重写到新文件(自带索引、压缩);失败时清理临时文件。
 trap 'rm -f "$OUT"' ERR
@@ -41,7 +41,7 @@ gzip -9 "$OUT"
 OUT_GZ="$OUT.gz"
 
 # 清理过期备份
-find "$BACKUP_DIR" -maxdepth 1 -type f -name 'todoalarm-*.db.gz' -mtime "+${KEEP_DAYS}" -delete 2>/dev/null || true
+find "$BACKUP_DIR" -maxdepth 1 -type f -name 'taskflow-*.db.gz' -mtime "+${KEEP_DAYS}" -delete 2>/dev/null || true
 
 SIZE="$(stat -c %s "$OUT_GZ")"
 echo "$(date -Iseconds) [OK] 备份完成 $OUT_GZ ($((SIZE / 1024)) KB)"

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youruser/todoalarm/internal/middleware"
-	"github.com/youruser/todoalarm/internal/models"
-	"github.com/youruser/todoalarm/internal/store"
+	"github.com/youruser/taskflow/internal/middleware"
+	"github.com/youruser/taskflow/internal/models"
+	"github.com/youruser/taskflow/internal/store"
 )
 
 // PomodoroHandler 番茄专注会话(规格 §11 阶段 11)。

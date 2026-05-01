@@ -68,24 +68,24 @@ android-clean:
 # 源码 tarball(分发用,客户拿到后自行编译)
 dist-src:
 	rm -rf dist
-	mkdir -p dist/todoalarm-$(VERSION)
-	cp -r server web windows android deploy dist/todoalarm-$(VERSION)/
-	cp README.md CHANGELOG.md Makefile dist/todoalarm-$(VERSION)/ 2>/dev/null || true
-	find dist/todoalarm-$(VERSION) -type d \( -name node_modules -o -name target -o -name .gradle -o -name build -o -name dist \) -prune -exec rm -rf {} +
-	cd dist && tar czf todoalarm-$(VERSION)-src.tar.gz todoalarm-$(VERSION)
-	@echo "==> dist/todoalarm-$(VERSION)-src.tar.gz"
+	mkdir -p dist/taskflow-$(VERSION)
+	cp -r server web windows android deploy dist/taskflow-$(VERSION)/
+	cp README.md CHANGELOG.md Makefile dist/taskflow-$(VERSION)/ 2>/dev/null || true
+	find dist/taskflow-$(VERSION) -type d \( -name node_modules -o -name target -o -name .gradle -o -name build -o -name dist \) -prune -exec rm -rf {} +
+	cd dist && tar czf taskflow-$(VERSION)-src.tar.gz taskflow-$(VERSION)
+	@echo "==> dist/taskflow-$(VERSION)-src.tar.gz"
 
 # 构建 server + web 后打包成可部署 tarball(给 deploy/install.sh 吃)
 dist: build
 	rm -rf dist
-	mkdir -p dist/todoalarm-$(VERSION)
-	cp server/taskflow-server dist/todoalarm-$(VERSION)/ 2>/dev/null || true
-	cp -r web/dist dist/todoalarm-$(VERSION)/web
-	cp -r deploy dist/todoalarm-$(VERSION)/
-	cp server/config.example.toml dist/todoalarm-$(VERSION)/
-	cp README.md CHANGELOG.md dist/todoalarm-$(VERSION)/ 2>/dev/null || true
-	cd dist && tar czf todoalarm-$(VERSION).tar.gz todoalarm-$(VERSION)
-	@echo "==> dist/todoalarm-$(VERSION).tar.gz"
+	mkdir -p dist/taskflow-$(VERSION)
+	cp server/taskflow-server dist/taskflow-$(VERSION)/ 2>/dev/null || true
+	cp -r web/dist dist/taskflow-$(VERSION)/web
+	cp -r deploy dist/taskflow-$(VERSION)/
+	cp server/config.example.toml dist/taskflow-$(VERSION)/
+	cp README.md CHANGELOG.md dist/taskflow-$(VERSION)/ 2>/dev/null || true
+	cd dist && tar czf taskflow-$(VERSION).tar.gz taskflow-$(VERSION)
+	@echo "==> dist/taskflow-$(VERSION).tar.gz"
 
 clean:
 	rm -rf dist

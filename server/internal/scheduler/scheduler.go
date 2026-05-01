@@ -27,10 +27,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youruser/todoalarm/internal/events"
-	"github.com/youruser/todoalarm/internal/rrule"
-	"github.com/youruser/todoalarm/internal/store"
-	"github.com/youruser/todoalarm/internal/telegram"
+	"github.com/youruser/taskflow/internal/events"
+	"github.com/youruser/taskflow/internal/rrule"
+	"github.com/youruser/taskflow/internal/store"
+	"github.com/youruser/taskflow/internal/telegram"
 )
 
 // Config 调度器参数。零值之外可调:

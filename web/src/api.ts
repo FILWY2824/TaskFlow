@@ -32,7 +32,7 @@ import type {
 // =============================================================
 
 // 注:这些 localStorage 键名带 taskflow.* 前缀(品牌即名)。如果旧版本曾用过
-// todoalarm.* 的键,升级后会被视为未登录,用户需要重新登录一次。
+// taskflow.* 的键,升级后会被视为未登录,用户需要重新登录一次。
 const KEY_ACCESS = 'taskflow.access'
 const KEY_ACCESS_EXP = 'taskflow.access_exp'
 const KEY_REFRESH = 'taskflow.refresh'
@@ -469,5 +469,45 @@ export const sync = {
   },
   async cursor(): Promise<{ cursor: number }> {
     return request('/api/sync/cursor')
+  },
+}
+
+// =============================================================
+// API: preferences (跨端用户偏好,规格 §17)
+//
+// 每端只展示自己 scope 的开关(见 stores/prefs.ts),所有持久化都经过这一组接口。
+// scope 取值:'web' | 'android' | 'windows' | 'common'。
+// =============================================================
+export interface ServerPreference {
+  scope: string
+  key: string
+  value: string
+  updated_at: string
+}
+
+export const prefsApi = {
+  async list(scope?: string): Promise<ServerPreference[]> {
+    const res = await request<{ items: ServerPreference[] }>('/api/me/preferences', {
+      query: scope ? { scope } : undefined,
+    })
+    return res.items || []
+  },
+  async putOne(scope: string, key: string, value: string): Promise<ServerPreference> {
+    return request(`/api/me/preferences/${encodeURIComponent(scope)}/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body: { value },
+    })
+  },
+  async putBulk(items: Array<{ scope: string; key: string; value: string }>): Promise<ServerPreference[]> {
+    const res = await request<{ items: ServerPreference[] }>('/api/me/preferences', {
+      method: 'PUT',
+      body: { items },
+    })
+    return res.items || []
+  },
+  async remove(scope: string, key: string): Promise<void> {
+    return request(`/api/me/preferences/${encodeURIComponent(scope)}/${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+    })
   },
 }

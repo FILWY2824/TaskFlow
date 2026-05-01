@@ -86,7 +86,7 @@ func defaults() *Config {
 			WriteTimeoutSeconds:    30,
 			ReadTimeoutSeconds:     30,
 		},
-		Database: DatabaseConfig{Path: "data/todoalarm.db"},
+		Database: DatabaseConfig{Path: "data/taskflow.db"},
 		Auth: AuthConfig{
 			AccessTTLSeconds:  900,
 			RefreshTTLSeconds: 2592000,

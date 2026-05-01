@@ -78,7 +78,7 @@ pub struct UserMe {
 impl ApiClient {
     pub fn new(base: String, token: Option<String>) -> Self {
         let http = Client::builder()
-            .user_agent("todoalarm-windows/0.4.0")
+            .user_agent("taskflow-windows/0.4.0")
             .timeout(Duration::from_secs(20))
             .build()
             .expect("build reqwest client");

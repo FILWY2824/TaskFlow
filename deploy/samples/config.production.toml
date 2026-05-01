@@ -1,7 +1,7 @@
 # TaskFlow 生产配置模板
-# install.sh 会基于这个模板生成 /opt/todoalarm/config.toml(随机注入 jwt_secret)。
+# install.sh 会基于这个模板生成 /opt/taskflow/config.toml(随机注入 jwt_secret)。
 #
-# 改完此文件需要 systemctl restart todoalarm 才生效。
+# 改完此文件需要 systemctl restart taskflow 才生效。
 
 [server]
 listen = "127.0.0.1:8080"
@@ -10,7 +10,7 @@ write_timeout_seconds = 30
 read_timeout_seconds = 30
 
 [database]
-path = "/opt/todoalarm/data/todoalarm.db"
+path = "/opt/taskflow/data/taskflow.db"
 
 [auth]
 # 生成方式:openssl rand -hex 32 (>=32 字节)

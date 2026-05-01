@@ -1,6 +1,6 @@
 # 编译产物
-todoalarm-server
-todoalarm-server-*
+taskflow-server
+taskflow-server-*
 /dist/
 
 # 实际配置(不要提交;只提交 config.example.toml)

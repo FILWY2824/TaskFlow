@@ -94,7 +94,7 @@ impl AppConfig {
     }
 }
 
-/// %APPDATA%/TaskFlow on Windows, $XDG_CONFIG_HOME/todoalarm elsewhere.
+/// %APPDATA%/TaskFlow on Windows, $XDG_CONFIG_HOME/taskflow elsewhere.
 pub fn default_app_dir() -> Result<PathBuf> {
     #[cfg(windows)]
     {
@@ -109,6 +109,6 @@ pub fn default_app_dir() -> Result<PathBuf> {
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
             .context("HOME not set")?;
-        Ok(base.join("todoalarm"))
+        Ok(base.join("taskflow"))
     }
 }

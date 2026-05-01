@@ -57,7 +57,7 @@ make run
 
 服务启动后会:
 
-1. 在 `data/todoalarm.db` 自动创建 SQLite 数据库(WAL 模式)。
+1. 在 `data/taskflow.db` 自动创建 SQLite 数据库(WAL 模式)。
 2. 应用 schema v1(11 张业务表 + sync_events)。
 3. 启动后台调度器(默认每 5 秒扫一次到期提醒)。
 4. 监听 `127.0.0.1:8080`。
@@ -535,16 +535,16 @@ curl -N -H "Authorization: Bearer $T" http://127.0.0.1:8080/ws/events
 ### systemd
 
 ```ini
-# /etc/systemd/system/todoalarm.service
+# /etc/systemd/system/taskflow.service
 [Unit]
 Description=taskflow-server
 After=network.target
 
 [Service]
 Type=simple
-User=todoalarm
-WorkingDirectory=/opt/todoalarm
-ExecStart=/opt/todoalarm/taskflow-server -config /opt/todoalarm/config.toml
+User=taskflow
+WorkingDirectory=/opt/taskflow
+ExecStart=/opt/taskflow/taskflow-server -config /opt/taskflow/config.toml
 Restart=on-failure
 RestartSec=5
 
@@ -552,7 +552,7 @@ RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/opt/todoalarm/data
+ReadWritePaths=/opt/taskflow/data
 ProtectHome=true
 
 [Install]
@@ -560,14 +560,14 @@ WantedBy=multi-user.target
 ```
 
 ```bash
-sudo useradd --system --home /opt/todoalarm --shell /usr/sbin/nologin todoalarm
-sudo mkdir -p /opt/todoalarm/data
-sudo cp taskflow-server-linux-amd64 /opt/todoalarm/taskflow-server
-sudo cp config.example.toml /opt/todoalarm/config.toml   # 编辑它,填 jwt_secret / telegram
-sudo chown -R todoalarm:todoalarm /opt/todoalarm
+sudo useradd --system --home /opt/taskflow --shell /usr/sbin/nologin taskflow
+sudo mkdir -p /opt/taskflow/data
+sudo cp taskflow-server-linux-amd64 /opt/taskflow/taskflow-server
+sudo cp config.example.toml /opt/taskflow/config.toml   # 编辑它,填 jwt_secret / telegram
+sudo chown -R taskflow:taskflow /opt/taskflow
 sudo systemctl daemon-reload
-sudo systemctl enable --now todoalarm
-sudo journalctl -fu todoalarm
+sudo systemctl enable --now taskflow
+sudo journalctl -fu taskflow
 ```
 
 ### nginx 反向代理
@@ -614,13 +614,13 @@ server {
 
 ### 备份
 
-SQLite 在 WAL 模式下要么用 `sqlite3 todoalarm.db ".backup '/backup/todoalarm-$(date +%F).db'"`,要么:
+SQLite 在 WAL 模式下要么用 `sqlite3 taskflow.db ".backup '/backup/taskflow-$(date +%F).db'"`,要么:
 
 ```bash
-sqlite3 /opt/todoalarm/data/todoalarm.db "VACUUM INTO '/backup/todoalarm.db'"
+sqlite3 /opt/taskflow/data/taskflow.db "VACUUM INTO '/backup/taskflow.db'"
 ```
 
-**不要**直接 `cp todoalarm.db`(没拷到 `-wal` 文件会拿到不完整数据)。
+**不要**直接 `cp taskflow.db`(没拷到 `-wal` 文件会拿到不完整数据)。
 
 ---
 

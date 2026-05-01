@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youruser/todoalarm/internal/auth"
+	"github.com/youruser/taskflow/internal/auth"
 )
 
 type ctxKey int

@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/youruser/todoalarm/internal/middleware"
-	"github.com/youruser/todoalarm/internal/models"
-	"github.com/youruser/todoalarm/internal/store"
+	"github.com/youruser/taskflow/internal/middleware"
+	"github.com/youruser/taskflow/internal/models"
+	"github.com/youruser/taskflow/internal/store"
 )
 
 type SyncHandler struct {

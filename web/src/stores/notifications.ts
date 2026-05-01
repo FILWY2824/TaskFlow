@@ -153,7 +153,7 @@ export const useNotificationsStore = defineStore('notifications', {
             }
           } catch { /* ignore */ }
           if (allow && 'Notification' in window && Notification.permission === 'granted') {
-            new Notification(ev.title, { body: ev.body || '', tag: 'todolist-' + ev.notification_id })
+            new Notification(ev.title, { body: ev.body || '', tag: 'taskflow-' + ev.notification_id })
           }
         } catch {
           // ignore

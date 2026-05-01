@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/youruser/todoalarm/internal/models"
+	"github.com/youruser/taskflow/internal/models"
 )
 
 type SyncEventStore struct{ DB *sql.DB }
