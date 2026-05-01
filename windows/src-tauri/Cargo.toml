@@ -5,10 +5,6 @@ description = "TaskFlow Windows desktop client"
 edition = "2021"
 rust-version = "1.75"
 
-[lib]
-name = "taskflow_tauri_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
-
 [build-dependencies]
 tauri-build = { version = "2.0", features = [] }
 
