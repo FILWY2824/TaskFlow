@@ -6,6 +6,8 @@
 //   - Moshi codegen + Kotlin reflection 0 用,所有 DTO 都标注 @JsonClass(generateAdapter = true)。
 //   - Compose 插件由 Kotlin 2.0 直接提供,不再依赖独立 compiler 版本对齐。
 
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -32,7 +34,7 @@ android {
         val defaultServer: String = run {
             val fromEnv = System.getenv("TASKFLOW_DEFAULT_SERVER_URL")?.trim().orEmpty()
             if (fromEnv.isNotEmpty()) return@run fromEnv.trimEnd('/')
-            val localProps = java.util.Properties().apply {
+            val localProps = Properties().apply {
                 val f = rootProject.file("local.properties")
                 if (f.exists()) f.inputStream().use { load(it) }
             }

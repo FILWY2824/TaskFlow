@@ -9,6 +9,8 @@ import com.example.taskflow.data.remote.PomodoroSessionDto
 import com.example.taskflow.data.remote.StatsSummaryDto
 import com.example.taskflow.data.remote.TelegramBindToken
 import com.example.taskflow.data.remote.TelegramBinding
+import com.example.taskflow.data.repository.AndroidPrefs
+import com.example.taskflow.data.repository.PreferenceRepository
 import com.example.taskflow.data.repository.Result
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -235,9 +237,6 @@ class PomodoroViewModel(private val container: AppContainer) : ViewModel() {
 }
 
 // ============== Settings ==============
-
-import com.example.taskflow.data.repository.AndroidPrefs
-import com.example.taskflow.data.repository.PreferenceRepository
 
 data class SettingsUiState(
     val serverUrl: String = "",
