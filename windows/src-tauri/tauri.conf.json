@@ -54,9 +54,7 @@
         "language": ["zh-CN", "en-US"]
       },
       "nsis": {
-        "languages": ["SimpChinese", "English"],
-        "displayLanguageSelector": true,
-        "installMode": "perUser"
+        "installMode": "currentUser"
       }
     }
   },
