@@ -35,9 +35,12 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # Audio for ringing
 rodio   = { version = "0.19", default-features = false, features = ["wav", "mp3"] }
 
-# Windows API for misc(可选,bring-window-to-foreground)
+# Windows API for misc(MessageBoxW 致命错误弹窗 + 窗口前置)
 [target.'cfg(windows)'.dependencies]
-windows  = { version = "0.58", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [features]
 default = ["custom-protocol"]

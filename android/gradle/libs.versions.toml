@@ -34,9 +34,6 @@ moshi              = "1.15.1"
 # Coroutines
 coroutines         = "1.9.0"
 
-# RRULE — pure Java port for client-side preview of周期提醒
-google-rfc-2445    = "20110304"
-
 [libraries]
 androidx-core-ktx           = { group = "androidx.core",                name = "core-ktx",                                version.ref = "core-ktx" }
 androidx-lifecycle-runtime  = { group = "androidx.lifecycle",           name = "lifecycle-runtime-ktx",                   version.ref = "lifecycle" }
@@ -82,9 +79,6 @@ moshi-codegen               = { group = "com.squareup.moshi",           name = "
 # Coroutines
 coroutines-core             = { group = "org.jetbrains.kotlinx",        name = "kotlinx-coroutines-core",                 version.ref = "coroutines" }
 coroutines-android          = { group = "org.jetbrains.kotlinx",        name = "kotlinx-coroutines-android",              version.ref = "coroutines" }
-
-# RRULE
-rfc2445                     = { group = "com.google.code.findbugs",     name = "annotations",                             version = "3.0.1u2" } # placeholder, see app/build.gradle for the real RRULE dep
 
 [plugins]
 android-application = { id = "com.android.application",                version.ref = "agp" }

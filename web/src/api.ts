@@ -36,6 +36,10 @@ import type {
 //   - access_token / refresh_token 都放 localStorage,key 名 v0.3.0 锁定。
 //   - 401 自动用 refresh 刷一次,旋转后重试一次原请求。重试仍 401 -> 通知 onUnauthorized,跳登录。
 //   - 单飞:同一时刻只发一次 refresh。其他请求等同一个 promise。
+//   - API base URL:
+//       * 浏览器(同源部署):用相对路径 ""(发到当前 origin)。
+//       * Tauri / 跨域开发:用 setApiBase(url) 设成 https://taskflow.example.com,
+//         所有 fetch 改为绝对路径,绕过 webview 的 tauri://localhost 协议。
 // =============================================================
 
 // 注:这些 localStorage 键名带 taskflow.* 前缀(品牌即名)。如果旧版本曾用过
@@ -45,6 +49,40 @@ const KEY_ACCESS_EXP = 'taskflow.access_exp'
 const KEY_REFRESH = 'taskflow.refresh'
 const KEY_REFRESH_EXP = 'taskflow.refresh_exp'
 const KEY_USER = 'taskflow.user'
+const KEY_API_BASE = 'taskflow.api_base'
+
+// API base URL —— 默认空串 = 同源相对路径(普通浏览器场景)。
+// Tauri 客户端启动时会调 setApiBase() 把它改成 "https://your-taskflow.example.com"。
+let apiBase = (() => {
+  try {
+    return localStorage.getItem(KEY_API_BASE) || ''
+  } catch {
+    return ''
+  }
+})()
+
+/** 设置 API 基址。空串 = 同源。会被持久化以便下次启动直接生效。 */
+export function setApiBase(base: string) {
+  const trimmed = (base || '').trim().replace(/\/+$/, '')
+  apiBase = trimmed
+  try {
+    if (trimmed) localStorage.setItem(KEY_API_BASE, trimmed)
+    else localStorage.removeItem(KEY_API_BASE)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getApiBase(): string {
+  return apiBase
+}
+
+/** 把一个相对 path 拼成最终 URL。已经是绝对 URL 的原样返回。 */
+export function absUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path
+  if (!apiBase) return path
+  return apiBase + (path.startsWith('/') ? path : '/' + path)
+}
 
 let onUnauthorized: (() => void) | null = null
 export function setUnauthorizedHandler(fn: () => void) {
@@ -110,7 +148,7 @@ let refreshing: Promise<Tokens> | null = null
 async function doRefresh(): Promise<Tokens> {
   const t = loadTokens()
   if (!t) throw new ApiError(401, 'no_session', '会话已过期,请重新登录')
-  const res = await fetch('/api/auth/refresh', {
+  const res = await fetch(absUrl('/api/auth/refresh'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: t.refreshToken }),
@@ -148,7 +186,7 @@ interface RequestOptions {
 }
 
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const url = buildURL(path, opts.query)
+  const url = absUrl(buildURL(path, opts.query))
   const headers: Record<string, string> = {}
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json'
   if (!opts.noAuth) {

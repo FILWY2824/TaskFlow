@@ -111,10 +111,28 @@ func unquoteEnvValue(v string) (string, error) {
 	return v, nil
 }
 
+// PublicBaseURL 返回去掉末尾斜杠的 PUBLIC_BASE_URL,没设置则空串。
+//
+// 主要用于:
+//   - LoadOAuthFromEnv 推导 redirect_url / frontend_redirect_url
+//   - 其他模块需要给浏览器拼绝对链接(下载页、邮件等)
+func PublicBaseURL() string {
+	v := strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL"))
+	return strings.TrimRight(v, "/")
+}
+
 // LoadOAuthFromEnv 把 OAUTH_* 环境变量读进 OAuthConfig 并做基本校验。
 //
 // 变量列表见 .env.example。Enabled = true 时核心字段(URLs / client_id /
 // client_secret / redirect_url)必须齐全,否则 Load 会报错并阻止启动。
+//
+// 当 PUBLIC_BASE_URL 设置而 OAUTH_REDIRECT_URL / OAUTH_FRONTEND_REDIRECT_URL
+// 未设置时,会自动按 ${PUBLIC_BASE_URL}/api/auth/oauth/callback 与
+// ${PUBLIC_BASE_URL}/oauth/callback 推导,免去用户重复填写。
+//
+// 另外做一些常见的 typo 兜底:
+//   - URL 出现 "https://https://" / "http://http://" 直接报错(用户配错时立刻显形)
+//   - URL 缺少 scheme(纯 host)时报错
 func LoadOAuthFromEnv() (OAuthConfig, error) {
 	cfg := OAuthConfig{
 		Enabled:             envBool("OAUTH_ENABLED"),
@@ -134,6 +152,35 @@ func LoadOAuthFromEnv() (OAuthConfig, error) {
 	if !cfg.Enabled {
 		return cfg, nil
 	}
+
+	// 用 PUBLIC_BASE_URL 给两个 redirect 字段提供默认值 —— 用户没填就按公网根
+	// URL 推导,这样换部署域名时改一处即可。
+	if base := PublicBaseURL(); base != "" {
+		if strings.TrimSpace(cfg.RedirectURL) == "" {
+			cfg.RedirectURL = base + "/api/auth/oauth/callback"
+		}
+		if strings.TrimSpace(cfg.FrontendRedirectURL) == "" {
+			cfg.FrontendRedirectURL = base + "/oauth/callback"
+		}
+	}
+
+	// typo 兜底:这是用户最容易踩的坑(双 https://、忘写协议头)。
+	for _, p := range []struct {
+		name string
+		val  string
+	}{
+		{"OAUTH_AUTHORIZE_URL", cfg.AuthorizeURL},
+		{"OAUTH_TOKEN_URL", cfg.TokenURL},
+		{"OAUTH_USERINFO_URL", cfg.UserInfoURL},
+		{"OAUTH_REDIRECT_URL", cfg.RedirectURL},
+		{"OAUTH_FRONTEND_REDIRECT_URL", cfg.FrontendRedirectURL},
+		{"PUBLIC_BASE_URL", PublicBaseURL()},
+	} {
+		if err := validateURLEnv(p.name, p.val); err != nil {
+			return cfg, err
+		}
+	}
+
 	missing := []string{}
 	check := func(name, v string) {
 		if strings.TrimSpace(v) == "" {
@@ -148,7 +195,8 @@ func LoadOAuthFromEnv() (OAuthConfig, error) {
 	check("OAUTH_CLIENT_SECRET", cfg.ClientSecret)
 	check("OAUTH_REDIRECT_URL", cfg.RedirectURL)
 	if len(missing) > 0 {
-		return cfg, fmt.Errorf("OAUTH_ENABLED=true but missing env vars: %v", missing)
+		return cfg, fmt.Errorf("OAUTH_ENABLED=true but missing env vars: %v "+
+			"(提示:可以只填 PUBLIC_BASE_URL,OAUTH_REDIRECT_URL / OAUTH_FRONTEND_REDIRECT_URL 会自动推导)", missing)
 	}
 	if cfg.EmailField == "" {
 		cfg.EmailField = "email"
@@ -172,6 +220,32 @@ func envBool(key string) bool {
 		return true
 	}
 	return false
+}
+
+// validateURLEnv 给一个 *_URL 类型的环境变量做最常见的 typo 兜底。
+//
+// 用户最容易写出的两种错误:
+//  1. 双 scheme:  https://https://example.com   (粘贴时多复制了一份)
+//  2. 漏 scheme:  example.com                   (后端自己 302 时会失败)
+//
+// 这两种我们直接报错并指出原因,胜过半年后用户在生产里看 "redirect 失败" 才发现。
+// 空字符串不在这里报错 —— 调用方有自己的"必填"检查。
+func validateURLEnv(name, v string) error {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil
+	}
+	low := strings.ToLower(v)
+	if strings.Contains(low, "https://https://") ||
+		strings.Contains(low, "http://http://") ||
+		strings.Contains(low, "https://http://") ||
+		strings.Contains(low, "http://https://") {
+		return fmt.Errorf("%s: 检测到重复的协议头 %q —— 请检查是否粘贴时多带了 'https://'", name, v)
+	}
+	if !strings.HasPrefix(low, "http://") && !strings.HasPrefix(low, "https://") {
+		return fmt.Errorf("%s: 必须以 http:// 或 https:// 开头,实际值 %q", name, v)
+	}
+	return nil
 }
 
 func splitScopes(v string) []string {

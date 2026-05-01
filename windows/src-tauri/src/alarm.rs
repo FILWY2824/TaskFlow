@@ -50,6 +50,9 @@ impl AlarmController {
             rule.title.clone()
         };
 
+        // 0. 主窗口拉到屏幕最前(用户明确要求"自己也应当有弹窗弹出屏幕最前已提示")。
+        notify::raise_main_window(handle);
+
         // 1. Toast — non-blocking and won't fail the pipeline if it errors.
         if let Err(e) = notify::show(handle, &title, "到点啦 ⏰") {
             log::warn!("toast for rule {} failed: {:#}", rule.id, e);

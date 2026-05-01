@@ -24,8 +24,23 @@ android {
         versionCode = 1
         versionName = "0.4.0"
 
-        // 默认服务端地址(可在设置里改)。开发时连本机后端建议用 10.0.2.2(Android 模拟器把它路由到宿主机 127.0.0.1)。
-        buildConfigField("String", "DEFAULT_SERVER_URL", "\"http://10.0.2.2:8080\"")
+        // 默认服务端地址。优先级:
+        //   1) 环境变量 TASKFLOW_DEFAULT_SERVER_URL(打包时传入,例如 GitHub Actions)
+        //   2) local.properties 里的 taskflow.default.server.url(本地开发常用)
+        //   3) 兜底 http://10.0.2.2:8080(Android 模拟器把它路由到宿主机 127.0.0.1)
+        // 用户安装后仍可在 App 设置里改,改的值会持久化到 EncryptedSharedPreferences。
+        val defaultServer: String = run {
+            val fromEnv = System.getenv("TASKFLOW_DEFAULT_SERVER_URL")?.trim().orEmpty()
+            if (fromEnv.isNotEmpty()) return@run fromEnv.trimEnd('/')
+            val localProps = java.util.Properties().apply {
+                val f = rootProject.file("local.properties")
+                if (f.exists()) f.inputStream().use { load(it) }
+            }
+            val fromLocal = localProps.getProperty("taskflow.default.server.url")?.trim().orEmpty()
+            if (fromLocal.isNotEmpty()) return@run fromLocal.trimEnd('/')
+            "http://10.0.2.2:8080"
+        }
+        buildConfigField("String", "DEFAULT_SERVER_URL", "\"$defaultServer\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -2,7 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { ApiError } from '@/api'
+import { ApiError, getApiBase } from '@/api'
+import { isTauri, tauri } from '@/tauri'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -30,17 +31,43 @@ const oauthProvider = computed(() => auth.authConfig?.oauth_provider || '')
 const oauthStartURL = computed(() => auth.authConfig?.oauth_start_url || '/api/auth/oauth/start')
 
 // 「通过认证中心登录」—— 整页跳转到后端的 start 端点,后端再 302 到认证中心。
-// 这里不能用 fetch,必须做完整的 navigation,因为浏览器需要在认证中心拿 cookie。
+//
+// 关键:在 Tauri 里 webview 跑在 tauri://localhost/,把它的 location.href 改成
+// 一个 https:// URL 不会触发跨协议跳转(Tauri 拒绝从内部协议跳到外部 https)。
+// 所以 Tauri 客户端的 OAuth 必须用"系统默认浏览器"打开,完成回调后用户回到
+// Tauri 客户端,这里通过提示让用户重启或手动回到登录页。
+//
+// 此外,即使是浏览器场景,start URL 是相对路径('/api/auth/oauth/start'),
+// 当客户端跑在 tauri://localhost 时,它会被解析成 tauri://localhost/api/...
+// —— 我们必须先把它改写成绝对的 https://taskflow.example.com/api/auth/oauth/start。
 function startOAuth() {
-  const url = oauthStartURL.value
-  // 把 redirect 参数透传给后端(目前后端不读 ;前端在 callback 完成后据此决定跳哪)。
-  // 这里用 sessionStorage 暂存目标路由,callback 视图回来后取走。
+  let url = oauthStartURL.value
+  if (!/^https?:\/\//i.test(url)) {
+    const base = getApiBase()
+    if (!base) {
+      errMsg.value = '尚未配置服务端地址,请到设置页填写后再尝试登录。'
+      return
+    }
+    url = base + (url.startsWith('/') ? url : '/' + url)
+  }
+
   const target = (route.query.redirect as string) || '/'
   try {
     sessionStorage.setItem('taskflow.oauth_redirect', target)
   } catch {
     // 隐私模式下 sessionStorage 不可用,忽略 —— 默认跳 /
   }
+
+  if (isTauri()) {
+    // 在 Tauri 客户端里,用系统默认浏览器打开。用户在浏览器登录后会被重定向回
+    // 我们的服务端 + 前端 —— 但是是浏览器里的前端。Tauri 客户端这边需要等用户
+    // 回来后手动登一次,或者我们 poll session(下个版本再做)。
+    void tauri.openExternal(url)
+    errMsg.value =
+      '已在系统浏览器中打开认证中心。\n登录完成后,请回到本程序点击"通过认证中心登录"再次确认会话。'
+    return
+  }
+
   window.location.href = url
 }
 

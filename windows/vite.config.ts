@@ -8,13 +8,19 @@ import { fileURLToPath, URL } from 'node:url'
 //   - root 设为 ../web,让 Vite 直接吃 web/index.html + web/src/。
 //   - 输出到 windows/dist,被 src-tauri/tauri.conf.json 引用。
 //   - 同时把 @ alias 指到 ../web/src,让 import 'foo from @/...' 正常工作。
-//   - 通过 publicDir 引入 windows 自己的 public/ 资源(图标等)。
+//   - base: './' —— Tauri 加载 tauri://localhost/index.html 时,资源用相对路径
+//     最稳妥;用绝对路径在某些 webview 版本上会出现 404 / 白屏。
+//   - 通过 envPrefix 让 VITE_* / TAURI_ENV_* 环境变量进 import.meta.env。
 //
 // 注:Tauri 在 dev 模式下会启动这个 vite,在 build 模式下消费 windows/dist。
 
 const webRoot = fileURLToPath(new URL('../web', import.meta.url))
 
 export default defineConfig(async () => ({
+  // Tauri 加载产物时使用 tauri://localhost/index.html;相对路径 './' 让
+  // <script src="./assets/...">、CSS、字体等都按 index.html 当前位置解析,
+  // 避免在打包后白屏。这是 Windows 客户端启动闪退/白屏最常见的元凶之一。
+  base: './',
   root: webRoot,
   plugins: [vue()],
   resolve: {
@@ -36,6 +42,9 @@ export default defineConfig(async () => ({
       '/healthz': { target: 'http://127.0.0.1:8080' },
     },
   },
+  // VITE_TASKFLOW_DEFAULT_SERVER 是关键 —— 打包时把"出厂默认服务端 URL"
+  // 烧进去,这样用户安装后第一次启动就能直接连上,不需要先到设置页填地址。
+  // 用户可以在设置里改,改的值会被 Rust 侧 config.json 持久化。
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
   build: {
     outDir: fileURLToPath(new URL('./dist', import.meta.url)),

@@ -43,7 +43,20 @@ pub struct AppConfig {
 }
 
 fn default_server_url() -> String {
-    // 默认指向开发后端;首次启动后用户在前端"设置"里填实际服务端
+    // 优先级:
+    //   1) 运行时环境变量 TASKFLOW_DEFAULT_SERVER_URL(临时覆盖)
+    //   2) 编译时 env TASKFLOW_DEFAULT_SERVER_URL(打包时由 .env 注入)
+    //   3) 兜底: http://127.0.0.1:8080(本地开发)
+    if let Ok(v) = std::env::var("TASKFLOW_DEFAULT_SERVER_URL") {
+        let v = v.trim().trim_end_matches('/');
+        if !v.is_empty() {
+            return v.to_string();
+        }
+    }
+    let baked = option_env!("TASKFLOW_DEFAULT_SERVER_URL").unwrap_or("").trim();
+    if !baked.is_empty() {
+        return baked.trim_end_matches('/').to_string();
+    }
     "http://127.0.0.1:8080".to_string()
 }
 

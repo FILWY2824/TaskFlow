@@ -10,6 +10,7 @@
     "beforeBuildCommand": "npm run build"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "label": "main",
@@ -28,7 +29,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: https: http:; font-src 'self' data:"
+      "csp": "default-src 'self' tauri: ipc: asset:; script-src 'self' 'unsafe-inline' 'unsafe-eval' tauri:; style-src 'self' 'unsafe-inline' tauri:; img-src 'self' tauri: asset: data: blob: https: http:; connect-src 'self' tauri: ipc: asset: https: http: ws: wss:; font-src 'self' tauri: data:; worker-src 'self' tauri: blob:"
     },
     "trayIcon": {
       "iconPath": "icons/tray.png",
@@ -50,11 +51,16 @@
     "longDescription": "多用户 TODO + 强提醒,Windows 端本地强提醒 + 系统托盘 + 开机启动。",
     "publisher": "TaskFlow",
     "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": false
+      },
       "wix": {
         "language": ["zh-CN", "en-US"]
       },
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"]
       }
     }
   },

@@ -53,6 +53,19 @@ export const tauri = {
   async getServerConfig() {
     return invoke<{ server_url: string; timezone: string; autostart: boolean }>('get_server_config')
   },
+  /**
+   * 取打包时烧进去的"默认服务端 URL"(env VITE_TASKFLOW_DEFAULT_SERVER /
+   * TASKFLOW_DEFAULT_SERVER_URL)。第一次启动时如果用户还没改过 server_url,
+   * 我们用这个值。空串 = 没烧入,前端走"必须先到设置页填地址"的引导。
+   */
+  async getDefaultServerUrl(): Promise<string> {
+    const v = await invoke<string>('get_default_server_url')
+    return (v || '').trim()
+  },
+  /** 把窗口拉到屏幕最前 + 抢焦点。会话过期、收到强提醒时调一下。 */
+  async bringToFront(label?: string) {
+    await invoke('bring_window_to_front', { label })
+  },
   async setAutostart(enabled: boolean) {
     await invoke('set_autostart', { enabled })
   },

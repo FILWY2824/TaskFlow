@@ -161,6 +161,44 @@ pub fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+/// 给前端用:返回打包时烧进去的"默认服务端 URL"(env VITE_TASKFLOW_DEFAULT_SERVER
+/// 或 TASKFLOW_DEFAULT_SERVER_URL),前端在第一次启动时用这个值做 server_url
+/// 的初始值。允许空 —— 空时前端走"必须先到设置页填地址"的引导。
+#[tauri::command]
+pub fn get_default_server_url() -> String {
+    // 编译时常量(由 build.rs / Cargo 注入)。运行时再叠一次环境变量,
+    // 让用户在 Windows 上启动前用 set TASKFLOW_DEFAULT_SERVER_URL=... 临时覆盖。
+    if let Ok(v) = std::env::var("TASKFLOW_DEFAULT_SERVER_URL") {
+        if !v.trim().is_empty() {
+            return v.trim().trim_end_matches('/').to_string();
+        }
+    }
+    let baked = option_env!("TASKFLOW_DEFAULT_SERVER_URL").unwrap_or("");
+    baked.trim().trim_end_matches('/').to_string()
+}
+
+/// 把主窗口拉到屏幕最前 + 抢焦点。供前端在收到强提醒、会话过期等需要
+/// "立刻看到的事情" 时调用。强提醒本身已经会开独立 alarm 窗口,这个
+/// 命令是给主窗口准备的(例如 SSE 推到一条新通知)。
+#[tauri::command]
+pub fn bring_window_to_front(label: Option<String>, app: AppHandle) -> Result<(), String> {
+    let lbl = label.unwrap_or_else(|| "main".to_string());
+    let win = app
+        .get_webview_window(&lbl)
+        .ok_or_else(|| format!("window '{}' not found", lbl))?;
+    let _ = win.show();
+    let _ = win.unminimize();
+    // 短暂置顶 -> 取消,避免一直挡其他窗口
+    let _ = win.set_always_on_top(true);
+    let _ = win.set_focus();
+    let win_clone = win.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        let _ = win_clone.set_always_on_top(false);
+    });
+    Ok(())
+}
+
 // 同步配置到 AppConfig 也在 Vue side 触发,用 `_state` 避免 unused 警告
 #[allow(dead_code)]
 fn _touch(_state: &AppConfig) {}
