@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ApiError } from '@/api'
@@ -16,6 +16,26 @@ const displayName = ref('')
 const timezone = ref<string>(DEFAULT_TIMEZONE)
 const errMsg = ref('')
 const loading = ref(false)
+const configLoading = ref(true)
+
+onMounted(async () => {
+  await auth.loadAuthConfig()
+  configLoading.value = false
+})
+
+const oauthEnabled = computed(() => auth.authConfig?.oauth_enabled === true)
+const oauthProvider = computed(() => auth.authConfig?.oauth_provider || '')
+const oauthStartURL = computed(() => auth.authConfig?.oauth_start_url || '/api/auth/oauth/start')
+
+// OAuth 模式下,「注册」与「登录」是同一回事 —— 直接把用户送到认证中心,首次登录会自动创建本地账号。
+function goToOAuth() {
+  try {
+    sessionStorage.setItem('taskflow.oauth_redirect', '/')
+  } catch {
+    /* 忽略 */
+  }
+  window.location.href = oauthStartURL.value
+}
 
 async function submit() {
   errMsg.value = ''
@@ -50,7 +70,30 @@ async function submit() {
 
 <template>
   <div class="auth-page">
-    <form class="auth-card" @submit.prevent="submit">
+    <!-- OAuth 模式:本地注册不可用,引导用户去认证中心 -->
+    <div v-if="!configLoading && oauthEnabled" class="auth-card">
+      <div class="auth-logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <h2>注册请前往认证中心</h2>
+      <div class="auth-subtitle">
+        TaskFlow 已接入统一认证<span v-if="oauthProvider">：{{ oauthProvider }}</span>。
+        在认证中心注册账号后,本应用会在你首次登录时自动创建对应的资料。
+      </div>
+      <div class="actions" style="margin-top:18px">
+        <button type="button" class="btn-primary" @click="goToOAuth">
+          前往认证中心
+        </button>
+      </div>
+      <div class="switch">
+        已有账号？<RouterLink to="/login">去登录</RouterLink>
+      </div>
+    </div>
+
+    <!-- 本地模式:保留原注册表单 -->
+    <form v-else-if="!configLoading" class="auth-card" @submit.prevent="submit">
       <div class="auth-logo" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="20 6 9 17 4 12"></polyline>
@@ -108,5 +151,9 @@ async function submit() {
         已有账号？<RouterLink to="/login">去登录</RouterLink>
       </div>
     </form>
+
+    <div v-else class="auth-card" aria-busy="true">
+      <div class="auth-subtitle" style="text-align:center">加载登录配置…</div>
+    </div>
   </div>
 </template>

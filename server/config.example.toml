@@ -25,6 +25,12 @@ refresh_ttl_seconds = 2592000  # 30 天
 # bcrypt cost (10~14)
 bcrypt_cost = 11
 
+# =============================================================
+# OAuth2 / OIDC 认证中心(可选)的配置不在这里,而是通过环境变量
+# (推荐放 .env 文件,与代码 / TOML 分离)。变量列表与含义见
+# server/.env.example。启用 OAUTH_ENABLED=true 后,本地邮箱注册/登录会被关闭。
+# =============================================================
+
 [log]
 # debug | info | warn | error
 level = "info"

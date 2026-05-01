@@ -10,6 +10,7 @@ import (
 	"github.com/youruser/taskflow/internal/events"
 	"github.com/youruser/taskflow/internal/handlers"
 	"github.com/youruser/taskflow/internal/middleware"
+	"github.com/youruser/taskflow/internal/oauth"
 	"github.com/youruser/taskflow/internal/store"
 	"github.com/youruser/taskflow/internal/telegram"
 )
@@ -39,6 +40,11 @@ type Deps struct {
 	BindTokenTTL  time.Duration
 
 	Hub *events.Hub
+
+	// OAuthProvider 与 OAuthPending 都为 nil 时,本地邮箱注册/登录走原流程,
+	// /api/auth/config 返回 oauth_enabled=false。两者必须成对出现(都设或都不设)。
+	OAuthProvider *oauth.Provider
+	OAuthPending  *oauth.PendingStore
 }
 
 // BuildHandler 构建顶层 http.Handler。
@@ -62,8 +68,25 @@ func BuildHandler(d Deps) http.Handler {
 
 	// === 公开路由(不需要认证) ===
 	mux.HandleFunc("GET /healthz", healthH.Health)
-	mux.HandleFunc("POST /api/auth/register", authH.Register)
-	mux.HandleFunc("POST /api/auth/login", authH.Login)
+
+	// 本地邮箱注册/登录:OAuth 启用时关闭(返回 403),否则保持原行为。
+	oauthEnabled := d.OAuthProvider != nil && d.OAuthPending != nil
+	if oauthEnabled {
+		oauthH := handlers.NewOAuthHandler(d.OAuthProvider, d.OAuthPending, d.Issuer, d.Users, d.RefreshTokens, d.Logger)
+		// 关闭本地凭证流(避免与认证中心账号脱节)。
+		mux.Handle("POST /api/auth/register", handlers.DisabledLocalAuthHandler())
+		mux.Handle("POST /api/auth/login", handlers.DisabledLocalAuthHandler())
+		// OAuth 流程
+		mux.HandleFunc("GET /api/auth/oauth/start", oauthH.Start)
+		mux.HandleFunc("GET /api/auth/oauth/callback", oauthH.Callback)
+		mux.HandleFunc("POST /api/auth/oauth/finalize", oauthH.Finalize)
+		mux.HandleFunc("GET /api/auth/config", oauthH.Config)
+	} else {
+		mux.HandleFunc("POST /api/auth/register", authH.Register)
+		mux.HandleFunc("POST /api/auth/login", authH.Login)
+		mux.HandleFunc("GET /api/auth/config", handlers.AuthConfigDisabled)
+	}
+	// refresh / logout 在两种模式下都用同一份(本服务自己的 JWT,与外部 IdP 无关)。
 	mux.HandleFunc("POST /api/auth/refresh", authH.Refresh)
 
 	// Telegram webhook 是公开路由,但通过 X-Telegram-Bot-Api-Secret-Token 验证

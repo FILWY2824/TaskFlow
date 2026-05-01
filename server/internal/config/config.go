@@ -15,6 +15,10 @@ type Config struct {
 	Log       LogConfig       `toml:"log"`
 	Telegram  TelegramConfig  `toml:"telegram"`
 	Scheduler SchedulerConfig `toml:"scheduler"`
+
+	// OAuth 不读 TOML —— 全部走环境变量(.env 文件 + 进程环境)。
+	// 见 LoadOAuthFromEnv 与 .env.example。
+	OAuth OAuthConfig `toml:"-"`
 }
 
 type ServerConfig struct {
@@ -39,6 +43,53 @@ type LogConfig struct {
 	Level string `toml:"level"`
 }
 
+// OAuthConfig 接入外部 OAuth2 / OpenID Connect 认证中心。
+//
+// 这一段配置完全不走 TOML —— URL、client_id、client_secret 等都比较敏感(尤其
+// secret),按惯例放到 .env 文件 / 进程环境变量里,跟 git 仓库分离。
+// 字段映射见 LoadOAuthFromEnv 与 .env.example。
+//
+// 当 Enabled = true 时:
+//   - 关闭 /api/auth/register 与 /api/auth/login 端点(返回 403)。
+//   - /api/auth/oauth/start 把用户重定向到 AuthorizeURL。
+//   - /api/auth/oauth/callback 接收授权码,调用 TokenURL 换 access_token,
+//     再调用 UserInfoURL 拉用户资料,在本库内 upsert 用户后签发本服务的 JWT。
+//
+// 各 URL 必须按你认证中心实际暴露的端点填写;不同实现 (Hydra / Keycloak /
+// Authelia / 自研) 路径不同,本服务不做猜测。
+type OAuthConfig struct {
+	// 是否启用 OAuth 登录。false 时退化为本地邮箱密码注册/登录。
+	Enabled bool
+	// 提供方标识符,会写到 users.oauth_provider 列。建议用域名,例如
+	// "teamcy.eu.cc"。改了之后已绑定的用户会被视为新用户(因此一旦上线就别动)。
+	Provider string
+	// 授权端点 (Authorization Endpoint)。浏览器会被 302 到这里。
+	AuthorizeURL string
+	// 令牌端点 (Token Endpoint)。服务端用 client_id/client_secret + code 换 access_token。
+	TokenURL string
+	// 用户信息端点 (UserInfo Endpoint)。带 Bearer access_token 调用,返回 sub/email/name 等。
+	UserInfoURL string
+	// 在认证中心创建客户端时拿到的 Client ID。
+	ClientID string
+	// 在认证中心创建客户端时拿到的 Client Secret。务必当作密码保管。
+	ClientSecret string
+	// 我方接收回调的完整 URL。必须与认证中心客户端配置里的「回调 URI」完全一致(逐字符)。
+	// 形如 https://taskflow.your-domain.com/api/auth/oauth/callback
+	RedirectURL string
+	// 授权请求的 scope 列表;留空时使用 ["openid","profile","email"]。
+	Scopes []string
+	// 服务端处理完 OAuth 后,把用户重定向回前端这个 URL,并在 hash 中带 handoff_code。
+	// 形如 https://taskflow.your-domain.com/oauth/callback
+	// 留空时取 RedirectURL 同源 + /oauth/callback。
+	FrontendRedirectURL string
+	// userinfo 响应里取「邮箱」用的 JSON 字段名,默认 "email"。
+	EmailField string
+	// userinfo 响应里取「展示名」用的 JSON 字段名,默认 "name"(再退到 "preferred_username")。
+	NameField string
+	// userinfo 响应里取「主体标识 (sub)」用的 JSON 字段名,默认 "sub"(再退到 "id")。
+	SubjectField string
+}
+
 type TelegramConfig struct {
 	// Bot 的 token,从 @BotFather 拿。空时禁用所有 telegram 功能。
 	BotToken string `toml:"bot_token"`
@@ -61,6 +112,9 @@ type SchedulerConfig struct {
 }
 
 // Load 读取配置文件并应用默认值与基本校验。
+//
+// OAuth 配置不在 TOML 里,而是从环境变量(可选地通过 .env 文件)读取 ——
+// 调用方负责在调用 Load 之前先 LoadEnvFile(),见 cmd/server/main.go。
 func Load(path string) (*Config, error) {
 	cfg := defaults()
 	if _, err := toml.DecodeFile(path, cfg); err != nil {
@@ -69,6 +123,12 @@ func Load(path string) (*Config, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
+	// OAuth 块单独从环境变量加载并校验。
+	oa, err := LoadOAuthFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	cfg.OAuth = oa
 	// 确保数据库目录存在
 	if dir := filepath.Dir(cfg.Database.Path); dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {

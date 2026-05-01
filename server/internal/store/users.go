@@ -94,6 +94,107 @@ func (s *UserStore) GetByEmailWithHash(ctx context.Context, email string) (*mode
 	return &u, hash, nil
 }
 
+// GetByOAuth 按 (provider, subject) 查找已绑定外部 IdP 的用户。
+// 不存在返回 ErrNotFound。
+func (s *UserStore) GetByOAuth(ctx context.Context, provider, subject string) (*models.User, error) {
+	provider = strings.TrimSpace(provider)
+	subject = strings.TrimSpace(subject)
+	if provider == "" || subject == "" {
+		return nil, ErrNotFound
+	}
+	row := s.DB.QueryRowContext(ctx, `
+		SELECT id, email, display_name, timezone, created_at, updated_at
+		FROM users WHERE oauth_provider = ? AND oauth_subject = ?
+	`, provider, subject)
+	return scanUser(row)
+}
+
+// UpsertOAuth 按 (provider, subject) 找用户;找不到则创建。
+//
+// 创建逻辑:
+//  1. 优先用认证中心给的 email 当本地 email;若该 email 已被本地账号占用(同一邮箱
+//     之前注册过),为避免与既有的本地账号合并造成越权,改用占位邮箱 sub@provider。
+//     管理员可以事后再决定是否手动合并。
+//  2. password_hash 留空字符串,这种用户走不通本地登录(本地登录用 bcrypt.Compare,
+//     空哈希必然失败),OAuth 流程才能进。
+//  3. timezone 默认 UTC,展示名取 displayName,空则用 email 的 local-part。
+//
+// 已存在时只更新易变字段(email / display_name);timezone 由用户自己在设置里改,
+// 不被覆盖。
+func (s *UserStore) UpsertOAuth(ctx context.Context, provider, subject, email, displayName string) (*models.User, error) {
+	provider = strings.TrimSpace(provider)
+	subject = strings.TrimSpace(subject)
+	if provider == "" || subject == "" {
+		return nil, fmt.Errorf("provider and subject required")
+	}
+	emailLow := strings.ToLower(strings.TrimSpace(email))
+	displayName = strings.TrimSpace(displayName)
+
+	// 已绑定?直接返回(并尽量同步邮箱/展示名)。
+	if u, err := s.GetByOAuth(ctx, provider, subject); err == nil {
+		// 仅在新值非空且与旧值不同时更新,避免无意义写入(也避免触发 updated_at)。
+		if (emailLow != "" && emailLow != u.Email) || (displayName != "" && displayName != u.DisplayName) {
+			newEmail := u.Email
+			if emailLow != "" {
+				newEmail = emailLow
+			}
+			newName := u.DisplayName
+			if displayName != "" {
+				newName = displayName
+			}
+			_, err := s.DB.ExecContext(ctx, `
+				UPDATE users SET email = ?, display_name = ?, updated_at = CURRENT_TIMESTAMP
+				WHERE id = ?
+			`, newEmail, newName, u.ID)
+			// 邮箱冲突(本地用户占用了同一邮箱)就不更新邮箱,只更新展示名。
+			if err != nil && isUniqueErr(err) {
+				_, _ = s.DB.ExecContext(ctx, `
+					UPDATE users SET display_name = ?, updated_at = CURRENT_TIMESTAMP
+					WHERE id = ?
+				`, newName, u.ID)
+			} else if err != nil {
+				return nil, fmt.Errorf("update oauth user: %w", err)
+			}
+		}
+		return s.GetByID(ctx, u.ID)
+	}
+
+	// 未绑定 —— 新建。
+	insertEmail := emailLow
+	if insertEmail == "" {
+		insertEmail = subject + "@" + provider
+	}
+	if displayName == "" {
+		if at := strings.IndexByte(insertEmail, '@'); at > 0 {
+			displayName = insertEmail[:at]
+		} else {
+			displayName = insertEmail
+		}
+	}
+	tryInsert := func(emailToUse string) (int64, error) {
+		res, err := s.DB.ExecContext(ctx, `
+			INSERT INTO users(email, password_hash, display_name, timezone, oauth_provider, oauth_subject)
+			VALUES (?, '', ?, 'UTC', ?, ?)
+		`, emailToUse, displayName, provider, subject)
+		if err != nil {
+			return 0, err
+		}
+		id, _ := res.LastInsertId()
+		return id, nil
+	}
+	id, err := tryInsert(insertEmail)
+	if err != nil {
+		// 邮箱已被占用 —— 退回到 sub@provider 占位邮箱,避免与本地账号无意中并列。
+		if isUniqueErr(err) && insertEmail != subject+"@"+provider {
+			id, err = tryInsert(subject + "@" + provider)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("create oauth user: %w", err)
+		}
+	}
+	return s.GetByID(ctx, id)
+}
+
 func scanUser(row *sql.Row) (*models.User, error) {
 	var u models.User
 	err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Timezone, &u.CreatedAt, &u.UpdatedAt)

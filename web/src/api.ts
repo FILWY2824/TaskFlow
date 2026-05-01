@@ -1,4 +1,5 @@
 import type {
+  AuthConfig,
   AuthResponse,
   DailyBucket,
   List,
@@ -234,6 +235,15 @@ export const auth = {
   },
   async updateMe(input: { display_name?: string; timezone?: string }): Promise<User> {
     return request('/api/auth/me', { method: 'PATCH', body: input })
+  },
+  // 公开端点:登录页用它判断后端是不是启了 OAuth(决定显示哪种登录形式)。
+  async config(): Promise<AuthConfig> {
+    return request('/api/auth/config', { noAuth: true })
+  },
+  // OAuth 流程的最后一步:前端在 /oauth/callback 拿到 fragment 里的 handoff code 后,
+  // 用它换本服务的 access/refresh token。
+  async oauthFinalize(code: string): Promise<AuthResponse> {
+    return request('/api/auth/oauth/finalize', { method: 'POST', body: { code }, noAuth: true })
   },
 }
 

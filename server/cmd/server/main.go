@@ -17,6 +17,7 @@ import (
 	"github.com/youruser/taskflow/internal/config"
 	"github.com/youruser/taskflow/internal/db"
 	"github.com/youruser/taskflow/internal/events"
+	"github.com/youruser/taskflow/internal/oauth"
 	"github.com/youruser/taskflow/internal/scheduler"
 	"github.com/youruser/taskflow/internal/server"
 	"github.com/youruser/taskflow/internal/store"
@@ -27,12 +28,21 @@ var version = "0.3.0"
 
 func main() {
 	cfgPath := flag.String("config", "config.toml", "path to config file")
+	envPath := flag.String("env", ".env", "path to .env file (optional, ignored if missing)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println(version)
 		return
+	}
+
+	// 先加载 .env(可选,文件不存在不报错),再读 config.toml。
+	// OAuth 段配置完全来自环境变量(.env / 进程环境),URL/client_id/secret 与
+	// 仓库里的 TOML 模板分离 —— 见 .env.example。
+	if err := config.LoadEnvFile(*envPath); err != nil {
+		fmt.Fprintf(os.Stderr, "load env file: %v\n", err)
+		os.Exit(2)
 	}
 
 	cfg, err := config.Load(*cfgPath)
@@ -123,6 +133,42 @@ func main() {
 
 	bindTTL := time.Duration(cfg.Telegram.BindTokenTTLSeconds) * time.Second
 
+	// OAuth 接入认证中心(可选)。disabled 时 oauthProvider/oauthPending 都是 nil,
+	// server.BuildHandler 会按本地邮箱密码模式装配路由。
+	var (
+		oauthProvider *oauth.Provider
+		oauthPending  *oauth.PendingStore
+		stopOAuthGC   func()
+	)
+	if cfg.OAuth.Enabled {
+		oauthProvider = oauth.NewProvider(
+			cfg.OAuth.Provider,
+			cfg.OAuth.AuthorizeURL,
+			cfg.OAuth.TokenURL,
+			cfg.OAuth.UserInfoURL,
+			cfg.OAuth.ClientID,
+			cfg.OAuth.ClientSecret,
+			cfg.OAuth.RedirectURL,
+			cfg.OAuth.FrontendRedirectURL,
+			cfg.OAuth.Scopes,
+			cfg.OAuth.EmailField,
+			cfg.OAuth.NameField,
+			cfg.OAuth.SubjectField,
+		)
+		// state 给浏览器跳认证中心 + 跳回的总停留时间留 10 分钟,handoff 60 秒。
+		oauthPending = oauth.NewPendingStore(10*time.Minute, 60*time.Second)
+		stopOAuthGC = startOAuthGC(oauthPending)
+		logger.Info("oauth enabled",
+			"provider", cfg.OAuth.Provider,
+			"authorize_url", cfg.OAuth.AuthorizeURL,
+			"redirect_url", cfg.OAuth.RedirectURL)
+	} else {
+		logger.Info("oauth disabled (using local email/password)")
+	}
+	if stopOAuthGC != nil {
+		defer stopOAuthGC()
+	}
+
 	handler := server.BuildHandler(server.Deps{
 		DB:            database,
 		Issuer:        issuer,
@@ -144,6 +190,8 @@ func main() {
 		WebhookSecret: cfg.Telegram.WebhookSecret,
 		BindTokenTTL:  bindTTL,
 		Hub:           hub,
+		OAuthProvider: oauthProvider,
+		OAuthPending:  oauthPending,
 	})
 
 	// HTTP 服务器
@@ -229,6 +277,25 @@ func startBackgroundCleanups(log *slog.Logger, rt *store.RefreshTokenStore, tg *
 			select {
 			case <-t.C:
 				runOnce()
+			case <-stop:
+				return
+			}
+		}
+	}()
+	return func() { close(stop) }
+}
+
+// startOAuthGC 每 5 分钟清一次 OAuth 短期凭证(state / handoff_code)。
+// 返回 stop 函数;调用方在进程退出前关闭它。
+func startOAuthGC(p *oauth.PendingStore) func() {
+	stop := make(chan struct{})
+	go func() {
+		t := time.NewTicker(5 * time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				p.GC()
 			case <-stop:
 				return
 			}

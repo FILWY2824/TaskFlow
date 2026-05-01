@@ -24,6 +24,14 @@ export interface AuthResponse {
   user: User
 }
 
+// AuthConfig 是 GET /api/auth/config 返回体。
+// 登录页据此决定显示「邮箱密码表单」还是「通过认证中心登录」按钮。
+export interface AuthConfig {
+  oauth_enabled: boolean
+  oauth_provider?: string
+  oauth_start_url?: string
+}
+
 // === List ===
 export interface List {
   id: number

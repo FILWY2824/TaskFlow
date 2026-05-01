@@ -16,6 +16,15 @@ const routes: RouteRecordRaw[] = [
     meta: { public: true },
   },
   {
+    // OAuth 回调中间页:从认证中心 -> 后端 -> 前端的链路终点。
+    // 必须 public,因为本地此时还没有 token(就是来换 token 的)。
+    // 也必须不要被「已登录就跳走」逻辑拦截 —— 标 standalone。
+    path: '/oauth/callback',
+    name: 'oauth-callback',
+    component: () => import('@/views/OAuthCallback.vue'),
+    meta: { public: true, standalone: true },
+  },
+  {
     // Tauri 强提醒窗口路由，无需认证（由 Rust 侧拉起）
     path: '/alarm',
     name: 'alarm',

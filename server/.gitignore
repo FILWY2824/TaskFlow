@@ -3,8 +3,11 @@ taskflow-server
 taskflow-server-*
 /dist/
 
-# 实际配置(不要提交;只提交 config.example.toml)
+# 实际配置(不要提交;只提交 config.example.toml 与 .env.example)
 config.toml
+.env
+.env.local
+.env.*.local
 
 # 数据库与日志
 data/

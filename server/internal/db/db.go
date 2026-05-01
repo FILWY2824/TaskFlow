@@ -103,6 +103,7 @@ var migrations = []migration{
 	{Version: 1, SQL: schemaV1},
 	{Version: 2, SQL: schemaV2},
 	{Version: 3, SQL: schemaV3},
+	{Version: 4, SQL: schemaV4},
 }
 
 const schemaV1 = `
@@ -336,4 +337,23 @@ CREATE TABLE IF NOT EXISTS user_preferences (
 	PRIMARY KEY (user_id, scope, key)
 );
 CREATE INDEX IF NOT EXISTS idx_user_preferences_user_scope ON user_preferences(user_id, scope);
+`
+
+// schemaV4 —— 外部 OAuth2 / OIDC 登录(规格新增)。
+//
+// 设计要点:
+//   - 不新建 oauth_identities 表,直接给 users 加两列;同一个用户只跟一个外部 provider
+//     绑定(单认证中心场景下绑多个意义不大)。如以后要支持多 IdP 再升级到独立表。
+//   - oauth_provider 用稳定的提供方标识符(配置中的 provider),例如 "teamcy.eu.cc"。
+//   - oauth_subject 是认证中心返回的 sub(或等价字段),配合 provider 唯一定位用户。
+//   - 部分唯一索引仅约束「绑定了 oauth 的用户」,本地用户(provider=”)不参与冲突判定。
+//   - email 不再作为 OAuth 用户的唯一定位手段,只作为可读副本(认证中心改邮箱不会让用户失联)。
+//     由于 users.email 仍是 UNIQUE,创建时若邮箱冲突,会退回到「用 sub@provider 占位」策略
+//     (见 store.UserStore.UpsertOAuth)。
+const schemaV4 = `
+ALTER TABLE users ADD COLUMN oauth_provider TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN oauth_subject TEXT NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oauth_identity
+    ON users(oauth_provider, oauth_subject)
+    WHERE oauth_provider != '' AND oauth_subject != '';
 `
