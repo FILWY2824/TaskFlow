@@ -64,7 +64,7 @@ func (h *PomodoroHandler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 	if v := q.Get("kind"); v != "" {
 		switch v {
-		case "focus", "short_break", "long_break":
+		case "focus", "short_break", "long_break", "learning", "review":
 			f.Kind = v
 		default:
 			writeError(w, http.StatusBadRequest, "bad_request", "invalid kind")

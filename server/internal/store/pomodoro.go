@@ -61,7 +61,7 @@ func (s *PomodoroStore) Create(ctx context.Context, userID int64, in PomodoroInp
 		kind = "focus"
 	}
 	switch kind {
-	case "focus", "short_break", "long_break":
+	case "focus", "short_break", "long_break", "learning", "review":
 	default:
 		return nil, fmt.Errorf("invalid kind: %s", kind)
 	}

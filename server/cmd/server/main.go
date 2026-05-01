@@ -44,7 +44,7 @@ func main() {
 	logger := newLogger(cfg.Log.Level)
 	slog.SetDefault(logger)
 
-	logger.Info("starting todoalarm-server",
+	logger.Info("starting taskflow-server",
 		"version", version,
 		"listen", cfg.Server.Listen,
 		"db_path", cfg.Database.Path,

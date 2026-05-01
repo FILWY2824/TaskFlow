@@ -79,7 +79,7 @@ dist-src:
 dist: build
 	rm -rf dist
 	mkdir -p dist/todoalarm-$(VERSION)
-	cp server/todoalarm-server dist/todoalarm-$(VERSION)/ 2>/dev/null || true
+	cp server/taskflow-server dist/todoalarm-$(VERSION)/ 2>/dev/null || true
 	cp -r web/dist dist/todoalarm-$(VERSION)/web
 	cp -r deploy dist/todoalarm-$(VERSION)/
 	cp server/config.example.toml dist/todoalarm-$(VERSION)/

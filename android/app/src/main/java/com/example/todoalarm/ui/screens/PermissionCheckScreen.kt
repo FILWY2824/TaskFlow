@@ -100,7 +100,7 @@ fun PermissionCheckScreen(onBack: () -> Unit) {
 
             Spacer(Modifier.height(24.dp))
             Text(
-                "提示:不同厂商系统(MIUI / EMUI / OriginOS / 鸿蒙)还要在 \"自启动\" / \"后台保活\" / \"锁屏显示\" 列表里再放一遍 TodoAlarm 才能保证 100% 准点。",
+                "提示:不同厂商系统(MIUI / EMUI / OriginOS / 鸿蒙)还要在 \"自启动\" / \"后台保活\" / \"锁屏显示\" 列表里再放一遍 TaskFlow 才能保证 100% 准点。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

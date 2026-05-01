@@ -33,7 +33,7 @@ fun LoginScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.Center,
         ) {
-            Text("TodoAlarm", style = MaterialTheme.typography.displaySmall)
+            Text("TaskFlow", style = MaterialTheme.typography.displaySmall)
             Spacer(Modifier.height(8.dp))
             Text("登录到你的服务端", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(24.dp))

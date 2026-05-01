@@ -161,7 +161,7 @@ func (s *Scheduler) tick() {
 func (s *Scheduler) dispatchOne(ctx context.Context, now time.Time, d *store.DueReminder) {
 	title := strings.TrimSpace(d.Title)
 	if title == "" {
-		title = "TodoAlarm 提醒"
+		title = "TaskFlow 提醒"
 	}
 	body := s.buildBody(d)
 

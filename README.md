@@ -1,4 +1,4 @@
-# TodoAlarm
+# TaskFlow
 
 > 多用户 TODO + Android / Windows 强提醒 + 全端管理系统。
 > 本仓库已完成规格文档 v2.2 的 **全部 12 个阶段**。
@@ -84,14 +84,14 @@ make windows-dev
 ```bash
 # 在本地仓库根
 make build-linux-amd64
-scp server/todoalarm-server-linux-amd64 user@vps:/tmp/
+scp server/taskflow-server-linux-amd64 user@vps:/tmp/
 scp -r web/dist                          user@vps:/tmp/todoalarm-web
 scp -r deploy                            user@vps:/tmp/
 
 # VPS 上一键
 ssh user@vps
 sudo /tmp/deploy/scripts/install.sh \
-    --binary /tmp/todoalarm-server-linux-amd64 \
+    --binary /tmp/taskflow-server-linux-amd64 \
     --web    /tmp/todoalarm-web \
     --domain todo.example.com \
     --email  you@example.com

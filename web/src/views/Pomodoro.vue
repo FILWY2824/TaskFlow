@@ -40,6 +40,8 @@ const presets: { label: string; seconds: number; kind: PomodoroKind }[] = [
   { label: '专注 50 分', seconds: 50 * 60, kind: 'focus' },
   { label: '短休 5 分', seconds: 5 * 60, kind: 'short_break' },
   { label: '长休 15 分', seconds: 15 * 60, kind: 'long_break' },
+  { label: '学习 45 分', seconds: 45 * 60, kind: 'learning' },
+  { label: '复盘 20 分', seconds: 20 * 60, kind: 'review' },
 ]
 
 const display = computed(() => {
@@ -225,6 +227,115 @@ const isExpiredWaiting = computed(() => isActive.value && remaining.value <= 0)
 const RADIUS = 110
 const CIRC = 2 * Math.PI * RADIUS
 const dashOffset = computed(() => CIRC * (1 - progress.value))
+
+// ============================================================
+// 番茄类型 → 中文标签 / emoji。新增 learning / review 两类。
+// ============================================================
+const KIND_OPTIONS: { value: PomodoroKind; label: string; emoji: string }[] = [
+  { value: 'focus',       label: '专注', emoji: '🎯' },
+  { value: 'short_break', label: '短休', emoji: '☕' },
+  { value: 'long_break',  label: '长休', emoji: '🛌' },
+  { value: 'learning',    label: '学习', emoji: '📚' },
+  { value: 'review',      label: '复盘', emoji: '🔍' },
+]
+function kindLabel(k: PomodoroKind): string {
+  return KIND_OPTIONS.find((x) => x.value === k)?.label || k
+}
+// 每种番茄类型对应一个色系,与全局分类色 token 拉齐,保证按钮组的彩色感与"分类"一致。
+function kindColor(k: PomodoroKind): string {
+  switch (k) {
+    case 'focus':       return 'var(--cat-rose)'
+    case 'short_break': return 'var(--cat-teal)'
+    case 'long_break':  return 'var(--cat-sky)'
+    case 'learning':    return 'var(--cat-violet)'
+    case 'review':      return 'var(--cat-amber)'
+    default:            return 'var(--tg-primary)'
+  }
+}
+
+// ============================================================
+// "关联任务" 选择弹窗
+// ----------------------------------------------------------------
+// 旧版本是个朴素的 <select>,任务一多就拉到很长且无法筛选。这里换成一个弹窗,
+// 内部支持:
+//   - 搜索框(按标题模糊匹配)
+//   - 日期段筛选(今日 / 明天 / 本周 / 全部),命中 due_at 落在该窗口的任务
+//   - 分类筛选(复用 .cat-picker 样式,与 DayDetail / 编辑抽屉视觉一致)
+// 选择后回填到 todoId,关闭弹窗。
+// ============================================================
+const showTodoPicker = ref(false)
+const todoPickerSearch = ref('')
+const todoPickerDateFilter = ref<'all' | 'today' | 'tomorrow' | 'week' | 'no_date'>('all')
+const todoPickerListFilter = ref<'all' | 'none' | number>('all')
+
+function openTodoPicker() {
+  // 进入时把搜索 / 筛选重置到默认("全部"),避免上次的状态残留。
+  todoPickerSearch.value = ''
+  todoPickerDateFilter.value = 'all'
+  todoPickerListFilter.value = 'all'
+  showTodoPicker.value = true
+}
+
+// 当前已选择的任务对象(用于触发器按钮上展示标题/分类色)
+const selectedTodo = computed<Todo | null>(() => {
+  if (todoId.value == null) return null
+  return todoOptions.value.find((t) => t.id === todoId.value) || null
+})
+function todoListColor(t: Todo): string {
+  if (!t.list_id) return 'var(--tg-text-tertiary)'
+  const l = data.lists.find((x) => x.id === t.list_id)
+  return l?.color || 'var(--tg-primary)'
+}
+function todoListName(t: Todo): string {
+  if (!t.list_id) return '未分类'
+  const l = data.lists.find((x) => x.id === t.list_id)
+  return l?.name || '未分类'
+}
+
+// 0:00 起算的"今日 / 明日 / 本周末"三个时间锚点
+function dateBounds(kind: 'today' | 'tomorrow' | 'week'): { from: number; to: number } {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const day = 24 * 3600 * 1000
+  if (kind === 'today') return { from: start, to: start + day }
+  if (kind === 'tomorrow') return { from: start + day, to: start + 2 * day }
+  // week: 含今日,共 7 天(直到第 7 日 24:00)
+  return { from: start, to: start + 7 * day }
+}
+
+const filteredTodoOptions = computed<Todo[]>(() => {
+  const search = todoPickerSearch.value.trim().toLowerCase()
+  const dateF = todoPickerDateFilter.value
+  const listF = todoPickerListFilter.value
+  return todoOptions.value.filter((t) => {
+    // 1) 搜索:命中标题或描述任意一段
+    if (search) {
+      const hay = (t.title + ' ' + (t.description || '')).toLowerCase()
+      if (!hay.includes(search)) return false
+    }
+    // 2) 日期窗
+    if (dateF === 'no_date') {
+      if (t.due_at) return false
+    } else if (dateF !== 'all') {
+      if (!t.due_at) return false
+      const ts = new Date(t.due_at).getTime()
+      const { from, to } = dateBounds(dateF)
+      if (ts < from || ts >= to) return false
+    }
+    // 3) 分类
+    if (listF === 'none') {
+      if (t.list_id) return false
+    } else if (listF !== 'all') {
+      if (t.list_id !== listF) return false
+    }
+    return true
+  })
+})
+
+function pickTodo(t: Todo | null) {
+  todoId.value = t ? t.id : null
+  showTodoPicker.value = false
+}
 </script>
 
 <template>
@@ -258,7 +369,7 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
             <span v-else>{{ fmtDuration(elapsed) }} / {{ fmtDuration(planned) }}</span>
           </div>
           <div v-else class="pomo-progress-text">
-            {{ kind === 'focus' ? '专注' : (kind === 'short_break' ? '短休' : '长休') }}
+            {{ kindLabel(kind) }}
           </div>
         </div>
       </div>
@@ -270,15 +381,25 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
       </div>
 
       <div v-if="!isActive" class="pomo-form">
-        <div class="field">
+        <div class="field full-width">
           <label>类型</label>
-          <div class="pretty-input-wrap">
-            <select v-model="kind" class="pretty-input">
-              <option value="focus">🎯 专注</option>
-              <option value="short_break">☕ 短休</option>
-              <option value="long_break">🛌 长休</option>
-            </select>
-            <span class="pretty-input-glow" aria-hidden="true" />
+          <!--
+            类型从 <select> 改为 cat-picker 风格的按钮组,与"分类"/"优先级"
+            视觉一致;同时新增 learning(📚 学习) / review(🔍 复盘) 两类。
+          -->
+          <div class="cat-picker pomo-kind-picker">
+            <button
+              v-for="k in KIND_OPTIONS"
+              :key="k.value"
+              type="button"
+              class="cat-option"
+              :class="{ 'is-selected': kind === k.value }"
+              :style="{ '--cat-color': kindColor(k.value) }"
+              @click="kind = k.value"
+            >
+              <span class="kind-emoji" aria-hidden="true">{{ k.emoji }}</span>
+              {{ k.label }}
+            </button>
           </div>
         </div>
         <div class="field">
@@ -288,15 +409,44 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
             <span class="pretty-input-glow" aria-hidden="true" />
           </div>
         </div>
-        <div class="field full-width">
+        <div class="field">
           <label>关联任务（可选）</label>
-          <div class="pretty-input-wrap">
-            <select v-model.number="todoId" class="pretty-input">
-              <option :value="null">不关联</option>
-              <option v-for="t in todoOptions" :key="t.id" :value="t.id">{{ t.title }}</option>
-            </select>
-            <span class="pretty-input-glow" aria-hidden="true" />
-          </div>
+          <!--
+            关联任务原本是个朴素 <select>,任务多了又长又难找。换成"按钮触发器 + 弹窗",
+            弹窗内有搜索框、日期段筛选(今/明/周/无日期)、分类筛选(cat-picker 风格)。
+          -->
+          <button
+            type="button"
+            class="todo-trigger"
+            :class="{ 'is-empty': !selectedTodo }"
+            :style="selectedTodo ? { '--cat-color': todoListColor(selectedTodo) } : {}"
+            @click="openTodoPicker"
+          >
+            <template v-if="selectedTodo">
+              <span class="todo-trigger-dot" />
+              <span class="todo-trigger-text">
+                <span class="todo-trigger-title">{{ selectedTodo.title }}</span>
+                <span class="todo-trigger-cat muted">{{ todoListName(selectedTodo) }}</span>
+              </span>
+              <span
+                class="todo-trigger-clear"
+                title="清除选择"
+                @click.stop="todoId = null"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </span>
+            </template>
+            <template v-else>
+              <span class="todo-trigger-placeholder muted">不关联,点击选择…</span>
+              <svg class="todo-trigger-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </template>
+          </button>
         </div>
         <div class="field full-width">
           <label>备注（可选）</label>
@@ -332,6 +482,172 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
         </svg>
       </RouterLink>
     </div>
+
+    <!-- ============ 关联任务 选择弹窗 ============ -->
+    <Transition name="modal">
+      <div v-if="showTodoPicker" class="modal-backdrop" @click.self="showTodoPicker = false">
+        <div class="modal-card todo-picker-modal">
+          <header class="modal-head">
+            <div class="modal-title-wrap">
+              <span class="modal-title">关联任务</span>
+              <span class="modal-subtitle">挑一个 todo 让本次番茄归到它名下;搜索 / 日期 / 分类皆可筛</span>
+            </div>
+            <button class="btn-icon" @click="showTodoPicker = false" aria-label="关闭">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </header>
+
+          <div class="modal-body todo-picker-body">
+            <!-- 搜索框 -->
+            <div class="todo-picker-search-wrap">
+              <svg class="todo-picker-search-icon" width="14" height="14" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input
+                v-model="todoPickerSearch"
+                class="todo-picker-search"
+                placeholder="按标题 / 描述搜索…"
+                autofocus
+              />
+              <button
+                v-if="todoPickerSearch"
+                class="todo-picker-search-clear"
+                title="清空"
+                @click="todoPickerSearch = ''"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- 日期段筛选 -->
+            <div class="picker-section">
+              <div class="picker-section-label">日期</div>
+              <div class="cat-picker">
+                <button
+                  type="button"
+                  class="cat-option"
+                  :class="{ 'is-selected': todoPickerDateFilter === 'all' }"
+                  :style="{ '--cat-color': 'var(--cat-sky)' }"
+                  @click="todoPickerDateFilter = 'all'"
+                ><span class="dot" />全部</button>
+                <button
+                  type="button"
+                  class="cat-option"
+                  :class="{ 'is-selected': todoPickerDateFilter === 'today' }"
+                  :style="{ '--cat-color': 'var(--cat-rose)' }"
+                  @click="todoPickerDateFilter = 'today'"
+                ><span class="dot" />今天</button>
+                <button
+                  type="button"
+                  class="cat-option"
+                  :class="{ 'is-selected': todoPickerDateFilter === 'tomorrow' }"
+                  :style="{ '--cat-color': 'var(--cat-amber)' }"
+                  @click="todoPickerDateFilter = 'tomorrow'"
+                ><span class="dot" />明天</button>
+                <button
+                  type="button"
+                  class="cat-option"
+                  :class="{ 'is-selected': todoPickerDateFilter === 'week' }"
+                  :style="{ '--cat-color': 'var(--cat-violet)' }"
+                  @click="todoPickerDateFilter = 'week'"
+                ><span class="dot" />本周内</button>
+                <button
+                  type="button"
+                  class="cat-option"
+                  :class="{ 'is-selected': todoPickerDateFilter === 'no_date' }"
+                  :style="{ '--cat-color': 'var(--tg-text-tertiary)' }"
+                  @click="todoPickerDateFilter = 'no_date'"
+                ><span class="dot" />无日期</button>
+              </div>
+            </div>
+
+            <!-- 分类筛选(完全复用 cat-picker 样式) -->
+            <div class="picker-section">
+              <div class="picker-section-label">分类</div>
+              <div class="cat-picker">
+                <button
+                  type="button"
+                  class="cat-option"
+                  :class="{ 'is-selected': todoPickerListFilter === 'all' }"
+                  :style="{ '--cat-color': 'var(--cat-sky)' }"
+                  @click="todoPickerListFilter = 'all'"
+                ><span class="dot" />全部</button>
+                <button
+                  type="button"
+                  class="cat-option"
+                  :class="{ 'is-selected': todoPickerListFilter === 'none' }"
+                  :style="{ '--cat-color': 'var(--tg-text-tertiary)' }"
+                  @click="todoPickerListFilter = 'none'"
+                ><span class="dot" />未分类</button>
+                <button
+                  v-for="l in data.lists"
+                  :key="l.id"
+                  type="button"
+                  class="cat-option"
+                  :class="{ 'is-selected': todoPickerListFilter === l.id }"
+                  :style="{ '--cat-color': l.color || 'var(--tg-primary)' }"
+                  @click="todoPickerListFilter = l.id"
+                ><span class="dot" />{{ l.name }}</button>
+              </div>
+            </div>
+
+            <!-- 任务列表(命中筛选的) -->
+            <div class="picker-section">
+              <div class="picker-section-label">
+                匹配 <span class="picker-count">{{ filteredTodoOptions.length }}</span>
+              </div>
+              <div class="todo-picker-list">
+                <button
+                  type="button"
+                  class="todo-picker-row is-none-row"
+                  :class="{ 'is-active': todoId === null }"
+                  @click="pickTodo(null)"
+                >
+                  <span class="row-dot none-dot" />
+                  <span class="row-body">
+                    <span class="row-title">不关联任何任务</span>
+                    <span class="row-sub muted">本次番茄不归属任何 todo</span>
+                  </span>
+                </button>
+                <button
+                  v-for="t in filteredTodoOptions"
+                  :key="t.id"
+                  type="button"
+                  class="todo-picker-row"
+                  :class="{ 'is-active': todoId === t.id }"
+                  :style="{ '--cat-color': todoListColor(t) }"
+                  @click="pickTodo(t)"
+                >
+                  <span class="row-dot" />
+                  <span class="row-body">
+                    <span class="row-title">{{ t.title }}</span>
+                    <span class="row-meta">
+                      <span class="row-cat">{{ todoListName(t) }}</span>
+                      <span v-if="t.due_at" class="row-due muted">
+                        · {{ new Date(t.due_at).toLocaleString() }}
+                      </span>
+                    </span>
+                  </span>
+                </button>
+                <div v-if="filteredTodoOptions.length === 0" class="todo-picker-empty muted">
+                  没有命中任何任务,试试调整搜索词或筛选项。
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <footer class="modal-foot">
+            <button class="btn-secondary" @click="showTodoPicker = false">关闭</button>
+          </footer>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -445,5 +761,275 @@ const dashOffset = computed(() => CIRC * (1 - progress.value))
   .pomo-disc { width: 220px; height: 220px; }
   .pomo-disc svg { width: 220px; height: 220px; }
   .pomo-time { font-size: 44px; }
+}
+
+/* ============================================================
+ * 番茄类型 picker(cat-picker 风格变体)
+ * ============================================================ */
+.pomo-kind-picker { gap: 6px; }
+.pomo-kind-picker .cat-option {
+  padding: 6px 12px;
+  font-size: 12.5px;
+}
+.pomo-kind-picker .kind-emoji { font-size: 14px; line-height: 1; }
+
+/* ============================================================
+ * 关联任务 触发器(单行按钮,被点击后展开弹窗)
+ * ============================================================ */
+.todo-trigger {
+  --cat-color: var(--tg-text-tertiary);
+  width: 100%;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px 9px 14px;
+  background: var(--tg-bg-elev);
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-pill);
+  cursor: pointer;
+  transition: all var(--tg-trans-fast);
+  text-align: left;
+  font-family: 'Manrope', sans-serif;
+  font-size: 13px;
+  box-shadow: var(--tg-shadow-xs);
+}
+.todo-trigger:hover {
+  border-color: color-mix(in srgb, var(--cat-color) 50%, var(--tg-divider-strong));
+  box-shadow: var(--tg-shadow-sm);
+  transform: translateY(-1px);
+}
+.todo-trigger.is-empty {
+  color: var(--tg-text-tertiary);
+}
+.todo-trigger-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--cat-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat-color) 22%, transparent);
+  flex-shrink: 0;
+}
+.todo-trigger-text {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 1px;
+  overflow: hidden;
+}
+.todo-trigger-title {
+  font-weight: 700;
+  color: var(--tg-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.todo-trigger-cat {
+  font-size: 11px;
+}
+.todo-trigger-placeholder {
+  flex: 1;
+  font-size: 13px;
+}
+.todo-trigger-clear {
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  color: var(--tg-text-tertiary);
+  transition: background var(--tg-trans-fast), color var(--tg-trans-fast);
+  flex-shrink: 0;
+}
+.todo-trigger-clear:hover {
+  background: var(--tg-press);
+  color: var(--tg-danger);
+}
+.todo-trigger-arrow {
+  color: var(--tg-text-tertiary);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+ * 关联任务 选择弹窗
+ * ============================================================ */
+.todo-picker-modal {
+  width: min(560px, 95vw);
+}
+/* —— 弹窗 head / foot(本组件不依赖外部 modal head 样式,这里独立定义) —— */
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--tg-divider);
+}
+.modal-title-wrap { display: flex; flex-direction: column; gap: 2px; }
+.modal-title {
+  font-family: 'Sora', sans-serif;
+  font-size: 16px; font-weight: 700;
+  letter-spacing: -0.018em;
+}
+.modal-subtitle {
+  font-size: 12px;
+  color: var(--tg-text-secondary);
+  font-weight: 500;
+}
+.modal-foot {
+  display: flex; gap: 10px; justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 1px solid var(--tg-divider);
+}
+
+.todo-picker-body {
+  padding: 18px 20px;
+  display: flex; flex-direction: column;
+  gap: 14px;
+  max-height: 70vh; overflow-y: auto;
+}
+
+/* —— 搜索框 —— */
+.todo-picker-search-wrap {
+  position: relative;
+  display: flex; align-items: center;
+  background: var(--tg-bg);
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-pill);
+  padding: 0 10px;
+  transition: border-color var(--tg-trans-fast), box-shadow var(--tg-trans-fast);
+}
+.todo-picker-search-wrap:focus-within {
+  border-color: var(--tg-primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tg-primary) 14%, transparent);
+}
+.todo-picker-search-icon {
+  color: var(--tg-text-tertiary);
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+.todo-picker-search {
+  flex: 1;
+  border: none; outline: none; background: transparent;
+  padding: 9px 4px;
+  font-size: 13.5px;
+  font-family: 'Manrope', sans-serif;
+  color: var(--tg-text);
+}
+.todo-picker-search-clear {
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--tg-hover);
+  color: var(--tg-text-secondary);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background var(--tg-trans-fast);
+  flex-shrink: 0;
+}
+.todo-picker-search-clear:hover { background: var(--tg-press); }
+
+/* —— 各小节(日期 / 分类 / 列表) —— */
+.picker-section { display: flex; flex-direction: column; gap: 8px; }
+.picker-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tg-text-secondary);
+  display: flex; align-items: center; gap: 8px;
+}
+.picker-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 18px; padding: 0 7px;
+  background: var(--tg-primary-soft);
+  color: var(--tg-primary);
+  font-size: 11px; font-weight: 700;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* —— 任务行列表 —— */
+.todo-picker-list {
+  display: flex; flex-direction: column;
+  gap: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.todo-picker-row {
+  --cat-color: var(--tg-text-tertiary);
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  background: var(--tg-bg-elev);
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-md);
+  cursor: pointer;
+  transition: all var(--tg-trans-fast);
+  text-align: left;
+  font-family: 'Manrope', sans-serif;
+  position: relative;
+}
+.todo-picker-row::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--cat-color);
+  border-radius: var(--tg-radius-md) 0 0 var(--tg-radius-md);
+  opacity: 0;
+  transition: opacity var(--tg-trans-fast);
+}
+.todo-picker-row:hover {
+  border-color: color-mix(in srgb, var(--cat-color) 45%, transparent);
+  background: color-mix(in srgb, var(--cat-color) 4%, var(--tg-bg-elev));
+}
+.todo-picker-row:hover::before { opacity: 0.7; }
+.todo-picker-row.is-active {
+  border-color: var(--cat-color);
+  background: color-mix(in srgb, var(--cat-color) 10%, var(--tg-bg-elev));
+}
+.todo-picker-row.is-active::before { opacity: 1; }
+
+.todo-picker-row .row-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--cat-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat-color) 22%, transparent);
+  flex-shrink: 0;
+}
+.todo-picker-row .row-dot.none-dot {
+  background: repeating-linear-gradient(
+    45deg, var(--tg-text-tertiary),
+    var(--tg-text-tertiary) 2px,
+    transparent 2px, transparent 4px
+  );
+}
+.todo-picker-row .row-body {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+  gap: 2px;
+}
+.todo-picker-row .row-title {
+  font-size: 13.5px; font-weight: 600;
+  color: var(--tg-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.todo-picker-row .row-meta,
+.todo-picker-row .row-sub {
+  font-size: 11.5px;
+  color: var(--tg-text-secondary);
+}
+.todo-picker-row .row-cat {
+  display: inline-flex; align-items: center;
+  padding: 1px 7px;
+  background: color-mix(in srgb, var(--cat-color) 12%, transparent);
+  color: color-mix(in srgb, var(--cat-color) 75%, var(--tg-text));
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 10.5px;
+}
+.todo-picker-row .row-due {
+  font-variant-numeric: tabular-nums;
+}
+.todo-picker-row.is-none-row { border-style: dashed; }
+
+.todo-picker-empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+  background: var(--tg-bg);
+  border: 1px dashed var(--tg-divider-strong);
+  border-radius: var(--tg-radius-md);
 }
 </style>

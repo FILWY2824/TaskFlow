@@ -45,7 +45,7 @@ impl AlarmController {
     /// Show toast + open alarm window + start ringing.
     pub async fn fire(&self, handle: &AppHandle, rule: CachedRule, fire_at: DateTime<Utc>) {
         let title = if rule.title.is_empty() {
-            "TodoAlarm 提醒".to_string()
+            "TaskFlow 提醒".to_string()
         } else {
             rule.title.clone()
         };
@@ -84,7 +84,7 @@ impl AlarmController {
             fire_at.to_rfc3339(),
         );
         WebviewWindowBuilder::new(handle, label.clone(), WebviewUrl::App(url.into()))
-            .title("TodoAlarm — 提醒")
+            .title("TaskFlow — 提醒")
             .inner_size(520.0, 360.0)
             .center()
             .always_on_top(true)

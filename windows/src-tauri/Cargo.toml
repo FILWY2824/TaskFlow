@@ -1,12 +1,12 @@
 [package]
-name = "todoalarm-tauri"
+name = "taskflow-tauri"
 version = "0.4.0"
-description = "TodoAlarm Windows desktop client"
+description = "TaskFlow Windows desktop client"
 edition = "2021"
 rust-version = "1.75"
 
 [lib]
-name = "todoalarm_tauri_lib"
+name = "taskflow_tauri_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TodoAlarm"
+rootProject.name = "TaskFlow"
 include(":app")

@@ -8,7 +8,7 @@ use tauri::{
 };
 
 pub fn setup(app: &mut tauri::App) -> tauri::Result<()> {
-    let item_open = MenuItemBuilder::with_id("open", "打开 TodoAlarm").build(app)?;
+    let item_open = MenuItemBuilder::with_id("open", "打开 TaskFlow").build(app)?;
     let item_sync = MenuItemBuilder::with_id("sync", "立即同步").build(app)?;
     let item_quit = MenuItemBuilder::with_id("quit", "退出").build(app)?;
     let menu = MenuBuilder::new(app)
@@ -19,7 +19,7 @@ pub fn setup(app: &mut tauri::App) -> tauri::Result<()> {
         .build()?;
 
     let _tray = TrayIconBuilder::with_id("main-tray")
-        .tooltip("TodoAlarm")
+        .tooltip("TaskFlow")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app_handle, event| match event.id().as_ref() {

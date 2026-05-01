@@ -27,7 +27,7 @@ import com.example.todoalarm.ui.screens.StatsScreen
 import com.example.todoalarm.ui.screens.TasksScreen
 import com.example.todoalarm.ui.screens.TelegramBindScreen
 import com.example.todoalarm.ui.screens.TodoEditScreen
-import com.example.todoalarm.ui.theme.TodoAlarmTheme
+import com.example.todoalarm.ui.theme.TaskFlowTheme
 
 /**
  * 主入口。launchMode = singleTask(在 manifest 里),保证从通知 / 深链拉起时复用栈。
@@ -46,10 +46,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         maybeRequestNotifPerm()
-        val container = (application as TodoAlarmApp).container
+        val container = (application as TaskFlowApp).container
 
         setContent {
-            TodoAlarmTheme {
+            TaskFlowTheme {
                 Surface(Modifier.fillMaxSize()) {
                     AppNav(container)
                 }

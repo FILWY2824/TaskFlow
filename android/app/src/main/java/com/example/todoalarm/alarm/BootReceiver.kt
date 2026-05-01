@@ -4,7 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.example.todoalarm.TodoAlarmApp
+import com.example.todoalarm.TaskFlowApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,7 +37,7 @@ class BootReceiver : BroadcastReceiver() {
 
     private fun rescheduleAll(context: Context) {
         val pendingResult = goAsync()
-        val app = context.applicationContext as TodoAlarmApp
+        val app = context.applicationContext as TaskFlowApp
         val container = app.container
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope.launch {

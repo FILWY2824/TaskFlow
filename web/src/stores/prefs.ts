@@ -4,7 +4,7 @@
 
 import { defineStore } from 'pinia'
 
-const KEY = 'todoalarm.prefs.v1'
+const KEY = 'taskflow.prefs.v1'
 
 export interface Prefs {
   // 应用内 toast 弹窗（SSE 收到提醒、番茄到点等）

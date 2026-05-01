@@ -1,4 +1,4 @@
-# TodoAlarm 服务端配置
+# TaskFlow 服务端配置
 # 复制为 config.toml 后修改使用
 
 [server]
@@ -32,7 +32,7 @@ level = "info"
 [telegram]
 # 从 @BotFather 拿到的 bot token。留空则禁用所有 telegram 功能(deep-link / webhook / 推送)。
 bot_token = ""
-# 你的 Bot username,不带 @,例如 "TodoAlarmBot"。客户端用它拼 deep-link。
+# 你的 Bot username,不带 @,例如 "TaskFlowBot"。客户端用它拼 deep-link。
 bot_username = ""
 # Telegram setWebhook 时设置的 secret_token。Telegram 会通过
 # X-Telegram-Bot-Api-Secret-Token 头回传,服务端做 constant-time 比较。

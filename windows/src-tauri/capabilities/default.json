@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for TodoAlarm desktop client",
+  "description": "Default capabilities for TaskFlow desktop client",
   "windows": ["main", "alarm-*"],
   "permissions": [
     "core:default",

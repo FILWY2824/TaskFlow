@@ -19,7 +19,7 @@ func TestParseStartCommand(t *testing.T) {
 		{"/start bind_abc", "bind_abc", true},
 		{"/start  bind_abc  ", "bind_abc", true},
 		{"/start", "", true},
-		{"/start@TodoAlarmBot bind_xyz", "bind_xyz", true},
+		{"/start@TaskFlowBot bind_xyz", "bind_xyz", true},
 		{"/help", "", false},
 		{"hello world", "", false},
 		{"", "", false},

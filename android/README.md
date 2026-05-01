@@ -1,4 +1,4 @@
-# TodoAlarm Android 客户端 (规格 v2.2 阶段 7 + 8)
+# TaskFlow Android 客户端 (规格 v2.2 阶段 7 + 8)
 
 > Kotlin 2.0 + Compose Material3 + Room + Retrofit + WorkManager。
 > minSdk = 26 (Android 8),targetSdk = 35。
@@ -25,7 +25,7 @@ android/
 │       ├── AndroidManifest.xml        # 全部权限 + 4 个 component 注册
 │       ├── res/                       # strings / themes / network_security / xml / mipmap
 │       └── java/com/example/todoalarm/
-│           ├── TodoAlarmApp.kt        # Application + 手写 DI 容器
+│           ├── TaskFlowApp.kt        # Application + 手写 DI 容器
 │           ├── MainActivity.kt        # NavHost
 │           ├── ui/
 │           │   ├── theme/Theme.kt

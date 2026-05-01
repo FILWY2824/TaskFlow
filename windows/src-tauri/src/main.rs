@@ -1,4 +1,4 @@
-// TodoAlarm Windows desktop entry point.
+// TaskFlow Windows desktop entry point.
 //
 // Boot order:
 //   1. Initialize logging.

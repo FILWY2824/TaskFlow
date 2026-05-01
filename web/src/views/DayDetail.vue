@@ -24,6 +24,53 @@ const editing = ref<Todo | null>(null)
 // ======== 顶部分类筛选 ========
 // 'all' 表示不筛选；'none' 表示只看未分类；数字（list.id 转字符串）表示某个分类
 const filterKey = ref<'all' | 'none' | string>('all')
+// 下拉气泡的开关（之前是一行 chip，分类一多就会撑爆视觉，改成"按需点开"）
+const filterOpen = ref(false)
+
+// 当前筛选项的展示信息（label / 颜色 / 数量 / 圆点样式），驱动触发器按钮的呈现。
+const activeFilterLabel = computed<string>(() => {
+  if (filterKey.value === 'all') return '全部'
+  if (filterKey.value === 'none') return '未分类'
+  const id = Number(filterKey.value)
+  const l = data.lists.find((x) => x.id === id)
+  return l?.name || '未知分类'
+})
+const activeFilterColor = computed<string>(() => {
+  if (filterKey.value === 'all') return 'var(--cat-sky)'
+  if (filterKey.value === 'none') return 'var(--tg-text-tertiary)'
+  const id = Number(filterKey.value)
+  const l = data.lists.find((x) => x.id === id)
+  return l?.color || 'var(--tg-primary)'
+})
+const activeFilterDotClass = computed<string>(() => {
+  if (filterKey.value === 'all') return 'is-all-light'
+  if (filterKey.value === 'none') return 'is-none'
+  return ''
+})
+const activeFilterCount = computed<number>(() => {
+  if (filterKey.value === 'all') return items.value.length
+  if (filterKey.value === 'none') return items.value.filter((t) => !t.list_id).length
+  const id = Number(filterKey.value)
+  return items.value.filter((t) => t.list_id === id).length
+})
+
+// 简易"点击外部关闭"指令：本组件局部用一个 directive，避免引第三方依赖。
+const vClickOutside = {
+  mounted(el: HTMLElement, binding: { value: () => void }) {
+    const handler = (e: MouseEvent) => {
+      if (!el.contains(e.target as Node)) binding.value()
+    }
+    ;(el as HTMLElement & { __clickOutside__?: (e: MouseEvent) => void }).__clickOutside__ = handler
+    document.addEventListener('mousedown', handler)
+  },
+  unmounted(el: HTMLElement) {
+    const target = el as HTMLElement & { __clickOutside__?: (e: MouseEvent) => void }
+    if (target.__clickOutside__) {
+      document.removeEventListener('mousedown', target.__clickOutside__)
+      delete target.__clickOutside__
+    }
+  },
+}
 
 const filteredItems = computed<Todo[]>(() => {
   if (filterKey.value === 'all') return items.value
@@ -343,39 +390,80 @@ function shiftDay(delta: number) {
 
     <div v-if="errMsg" class="auth-error">{{ errMsg }}</div>
 
-    <!-- ============ 顶部分类筛选（横向滚动；分类多时不再撑开） ============ -->
+    <!-- ============ 顶部分类筛选(下拉气泡:避免分类过多撑爆视觉) ============ -->
+    <!--
+      之前是一行 chip,分类一多就拥挤,即便横向滚动也是噪音。改成"当前所选 + 下拉气泡"
+      模式:平时只显示当前筛选项,点开才能浏览全部分类;气泡内部本身仍然是 cat-picker
+      风格(全局复用),保持一致感。
+    -->
     <div class="day-filter-row">
-      <div class="day-filter-chips" role="tablist">
+      <div class="day-filter-trigger-wrap" v-click-outside="() => filterOpen = false">
         <button
-          class="filter-chip"
-          :class="{ 'is-active': filterKey === 'all' }"
-          @click="filterKey = 'all'"
+          type="button"
+          class="day-filter-trigger"
+          :class="{ 'is-open': filterOpen }"
+          :style="{ '--cat-color': activeFilterColor }"
+          @click="filterOpen = !filterOpen"
         >
-          <span class="chip-dot all-dot" />
-          全部
-          <span class="chip-count">{{ items.length }}</span>
+          <span class="trigger-label muted">分类筛选</span>
+          <span class="trigger-current">
+            <span class="trigger-dot" :class="activeFilterDotClass" />
+            <span class="trigger-text">{{ activeFilterLabel }}</span>
+            <span class="trigger-count">{{ activeFilterCount }}</span>
+          </span>
+          <span class="trigger-arrow" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </span>
         </button>
-        <button
-          class="filter-chip"
-          :class="{ 'is-active': filterKey === 'none' }"
-          @click="filterKey = 'none'"
-        >
-          <span class="chip-dot none-dot" />
-          未分类
-          <span class="chip-count">{{ items.filter(t => !t.list_id).length }}</span>
-        </button>
-        <button
-          v-for="l in data.lists"
-          :key="l.id"
-          class="filter-chip"
-          :class="{ 'is-active': filterKey === String(l.id) }"
-          :style="{ '--cat-color': l.color || 'var(--tg-primary)' }"
-          @click="filterKey = String(l.id)"
-        >
-          <span class="chip-dot" />
-          {{ l.name }}
-          <span class="chip-count">{{ items.filter(t => t.list_id === l.id).length }}</span>
-        </button>
+
+        <Transition name="filter-pop">
+          <div v-if="filterOpen" class="day-filter-pop" role="listbox">
+            <div class="day-filter-pop-head">
+              <span class="muted">按分类筛选</span>
+              <span class="muted day-filter-pop-tip">共 {{ data.lists.length + 2 }} 项</span>
+            </div>
+            <div class="cat-picker day-filter-pop-list">
+              <button
+                type="button"
+                class="cat-option"
+                :class="{ 'is-selected': filterKey === 'all' }"
+                :style="{ '--cat-color': 'var(--cat-sky)' }"
+                @click="filterKey = 'all'; filterOpen = false"
+              >
+                <span class="dot" />
+                全部
+                <span class="cat-option-count">{{ items.length }}</span>
+              </button>
+              <button
+                type="button"
+                class="cat-option"
+                :class="{ 'is-selected': filterKey === 'none' }"
+                :style="{ '--cat-color': 'var(--tg-text-tertiary)' }"
+                @click="filterKey = 'none'; filterOpen = false"
+              >
+                <span class="dot" />
+                未分类
+                <span class="cat-option-count">{{ items.filter(t => !t.list_id).length }}</span>
+              </button>
+              <button
+                v-for="l in data.lists"
+                :key="l.id"
+                type="button"
+                class="cat-option"
+                :class="{ 'is-selected': filterKey === String(l.id) }"
+                :style="{ '--cat-color': l.color || 'var(--tg-primary)' }"
+                @click="filterKey = String(l.id); filterOpen = false"
+              >
+                <span class="dot" />
+                {{ l.name }}
+                <span class="cat-option-count">{{ items.filter(t => t.list_id === l.id).length }}</span>
+              </button>
+            </div>
+          </div>
+        </Transition>
       </div>
       <div class="day-filter-actions">
         <button class="btn-primary day-add-btn" @click="openAdd">
@@ -862,85 +950,156 @@ function shiftDay(delta: number) {
 
 /* ============ filter row ============
  *
- * 之前 .day-filter-chips 用 flex-wrap 换行，分类一多就会撑得很高、把"新增任务"按钮
- * 顶到下一行，整个布局看起来很乱。这里改成"横向单行滚动"：
- *   - 分类区只占一行，超出时横向滚动，左/右两侧用渐变羽化暗示"还有更多"；
- *   - 移除滚动条样式但仍可滑动；
- *   - "新增任务" 按钮固定在右侧，不再被分类区挤动。
+ * 改造后的方案:
+ *   - 平时只显示一个"当前筛选"的下拉触发器,极简且永远占一行;
+ *   - 点击展开 popover, popover 内部复用 .cat-picker 样式(保持设计一致);
+ *   - "新增任务"按钮永远在右侧,不会被分类塞挤动;
+ *   - "全部"专用浅色亮调(青蓝渐变),不再用品牌深色品牌渐变。
  */
 .day-filter-row {
   display: flex; align-items: center; gap: 12px;
   margin-bottom: 16px;
-  /* 不再 flex-wrap：分类自己滚动；按钮永远在右 */
+  flex-wrap: wrap;
 }
-.day-filter-chips {
+
+.day-filter-trigger-wrap {
+  position: relative;
   flex: 1; min-width: 0;
-  display: flex; gap: 6px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 6px 16px 6px 2px;       /* 让 active chip 的阴影不被裁掉 */
-  scroll-behavior: smooth;
-  scrollbar-width: none;            /* Firefox */
-  -ms-overflow-style: none;         /* IE */
-  /* 左右两端的羽化遮罩，提示"还有更多" */
-  mask-image: linear-gradient(90deg,
-    transparent 0%, #000 12px, #000 calc(100% - 16px), transparent 100%);
-  -webkit-mask-image: linear-gradient(90deg,
-    transparent 0%, #000 12px, #000 calc(100% - 16px), transparent 100%);
+  max-width: 360px;
 }
-.day-filter-chips::-webkit-scrollbar { display: none; }
-.filter-chip {
-  flex-shrink: 0;                   /* 不被压缩；超出就横滚 */
+.day-filter-trigger {
   --cat-color: var(--tg-primary);
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 12px;
+  width: 100%;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px 9px 14px;
   background: var(--tg-bg-elev);
   border: 1.5px solid var(--tg-divider);
-  border-radius: 999px;
+  border-radius: var(--tg-radius-pill);
+  font-family: 'Sora', sans-serif;
   font-size: 13px; font-weight: 600;
   color: var(--tg-text-secondary);
   cursor: pointer;
   transition: all var(--tg-trans-fast);
+  text-align: left;
+  box-shadow: var(--tg-shadow-xs);
 }
-.filter-chip:hover {
-  border-color: color-mix(in srgb, var(--cat-color) 50%, transparent);
-  color: color-mix(in srgb, var(--cat-color) 75%, var(--tg-text));
+.day-filter-trigger:hover {
+  border-color: color-mix(in srgb, var(--cat-color) 50%, var(--tg-divider-strong));
+  box-shadow: var(--tg-shadow-sm);
   transform: translateY(-1px);
 }
-.filter-chip.is-active {
-  background: color-mix(in srgb, var(--cat-color) 14%, transparent);
+.day-filter-trigger.is-open {
   border-color: var(--cat-color);
-  color: var(--cat-color);
-  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--cat-color) 30%, transparent);
+  background: color-mix(in srgb, var(--cat-color) 6%, var(--tg-bg-elev));
+  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--cat-color) 25%, transparent);
 }
-.chip-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--cat-color);
+.day-filter-trigger .trigger-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   flex-shrink: 0;
 }
-.chip-dot.all-dot {
-  background: var(--tg-grad-brand);
+.day-filter-trigger .trigger-current {
+  flex: 1; min-width: 0;
+  display: inline-flex; align-items: center; gap: 7px;
+  color: var(--cat-color);
 }
-.chip-dot.none-dot {
+.day-filter-trigger .trigger-text {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.day-filter-trigger .trigger-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--cat-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat-color) 22%, transparent);
+  flex-shrink: 0;
+}
+/* "全部"使用浅亮色调（青/天蓝渐变），告别原本的深品牌色 */
+.day-filter-trigger .trigger-dot.is-all-light {
+  background: linear-gradient(135deg, #5eead4 0%, #38bdf8 100%);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+}
+.day-filter-trigger .trigger-dot.is-none {
   background: repeating-linear-gradient(
     45deg, var(--tg-text-tertiary),
     var(--tg-text-tertiary) 2px,
     transparent 2px, transparent 4px
   );
 }
-.chip-count {
+.day-filter-trigger .trigger-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 20px; padding: 0 8px;
+  background: color-mix(in srgb, var(--cat-color) 14%, transparent);
+  color: var(--cat-color);
+  font-size: 11px; font-weight: 700;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+.day-filter-trigger .trigger-arrow {
+  display: inline-flex;
+  color: var(--tg-text-tertiary);
+  flex-shrink: 0;
+  transition: transform var(--tg-trans-fast), color var(--tg-trans-fast);
+}
+.day-filter-trigger.is-open .trigger-arrow {
+  transform: rotate(180deg);
+  color: var(--cat-color);
+}
+
+/* 下拉气泡 */
+.day-filter-pop {
+  position: absolute;
+  top: calc(100% + 8px); left: 0;
+  z-index: 30;
+  width: max(100%, 320px);
+  max-width: 480px;
+  padding: 12px;
+  background: var(--tg-bg-elev);
+  border: 1px solid var(--tg-divider);
+  border-radius: var(--tg-radius-lg);
+  box-shadow: var(--tg-shadow-lg);
+}
+.day-filter-pop-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 4px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-bottom: 1px dashed var(--tg-divider);
+  margin-bottom: 10px;
+}
+.day-filter-pop-tip { font-size: 11px; }
+.day-filter-pop-list {
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.day-filter-pop-list .cat-option {
+  position: relative;
+}
+.day-filter-pop-list .cat-option .cat-option-count {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 18px; height: 18px; padding: 0 6px;
-  background: color-mix(in srgb, var(--cat-color) 12%, transparent);
+  margin-left: 4px;
+  background: color-mix(in srgb, var(--cat-color) 14%, transparent);
   color: var(--cat-color);
   font-size: 10.5px; font-weight: 700;
   border-radius: 999px;
   font-variant-numeric: tabular-nums;
 }
-.filter-chip.is-active .chip-count {
-  background: var(--cat-color);
-  color: var(--tg-on-primary);
+
+/* 气泡过渡 */
+.filter-pop-enter-active,
+.filter-pop-leave-active { transition: all 0.18s cubic-bezier(0.32, 0.72, 0, 1); }
+.filter-pop-enter-from,
+.filter-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
 }
 
 .day-filter-actions {
@@ -1199,6 +1358,7 @@ function shiftDay(delta: number) {
   .day-add-btn { width: auto; }
   .day-add-hint { display: none; }
   .day-filter-actions { align-items: stretch; }
+  .day-filter-trigger-wrap { max-width: none; flex-basis: 100%; }
   .day-back-link { padding: 6px 12px 6px 8px; font-size: 12.5px; }
 }
 </style>

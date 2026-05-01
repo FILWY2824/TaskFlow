@@ -95,7 +95,7 @@ class AlarmForegroundService : Service() {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
-            "TodoAlarm:AlarmService",
+            "TaskFlow:AlarmService",
         ).apply {
             setReferenceCounted(false)
             acquire(120_000L)

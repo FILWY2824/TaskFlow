@@ -1,8 +1,8 @@
 // On-disk app configuration: server URL, auth tokens, user preferences.
 //
 // File layout (JSON, single file to keep lock-free read/write simple):
-//   %APPDATA%/TodoAlarm/config.json
-//   %APPDATA%/TodoAlarm/cache.db          (SQLite, in db.rs)
+//   %APPDATA%/TaskFlow/config.json
+//   %APPDATA%/TaskFlow/cache.db          (SQLite, in db.rs)
 //
 // We deliberately do NOT store any business state here. Cached todos /
 // reminders live in cache.db; UI session state lives in the webview's
@@ -94,14 +94,14 @@ impl AppConfig {
     }
 }
 
-/// %APPDATA%/TodoAlarm on Windows, $XDG_CONFIG_HOME/todoalarm elsewhere.
+/// %APPDATA%/TaskFlow on Windows, $XDG_CONFIG_HOME/todoalarm elsewhere.
 pub fn default_app_dir() -> Result<PathBuf> {
     #[cfg(windows)]
     {
         let base = std::env::var_os("APPDATA")
             .map(PathBuf::from)
             .context("APPDATA not set")?;
-        Ok(base.join("TodoAlarm"))
+        Ok(base.join("TaskFlow"))
     }
     #[cfg(not(windows))]
     {

@@ -1,9 +1,9 @@
 {
-  "name": "todoalarm-web",
+  "name": "taskflow-web",
   "private": true,
   "version": "0.3.0",
   "type": "module",
-  "description": "TodoAlarm Web 管理端 (Vue 3 + Vite + TypeScript + Pinia)",
+  "description": "TaskFlow Web 管理端 (Vue 3 + Vite + TypeScript + Pinia)",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",

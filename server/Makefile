@@ -1,4 +1,4 @@
-BINARY      := todoalarm-server
+BINARY      := taskflow-server
 PKG         := ./...
 GOFLAGS     := -trimpath
 LDFLAGS     := -s -w

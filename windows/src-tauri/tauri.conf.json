@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "TodoAlarm",
+  "productName": "TaskFlow",
   "version": "0.4.0",
-  "identifier": "com.example.todoalarm",
+  "identifier": "com.taskflow.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://127.0.0.1:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "TodoAlarm",
+        "title": "TaskFlow",
         "width": 1100,
         "height": 760,
         "minWidth": 720,
@@ -34,7 +34,7 @@
       "iconPath": "icons/tray.png",
       "iconAsTemplate": false,
       "menuOnLeftClick": false,
-      "tooltip": "TodoAlarm"
+      "tooltip": "TaskFlow"
     }
   },
   "bundle": {
@@ -46,9 +46,9 @@
       "icons/icon.ico"
     ],
     "category": "Productivity",
-    "shortDescription": "TodoAlarm 桌面客户端",
+    "shortDescription": "TaskFlow 桌面客户端",
     "longDescription": "多用户 TODO + 强提醒,Windows 端本地强提醒 + 系统托盘 + 开机启动。",
-    "publisher": "TodoAlarm",
+    "publisher": "TaskFlow",
     "windows": {
       "wix": {
         "language": ["zh-CN", "en-US"]

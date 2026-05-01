@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">TodoAlarm</string>
+    <string name="app_name">TaskFlow</string>
 
     <!-- 通知 channel -->
     <string name="channel_alarm_name">强提醒</string>

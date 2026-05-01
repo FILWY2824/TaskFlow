@@ -1,5 +1,5 @@
 [Unit]
-Description=TodoAlarm Server
+Description=TaskFlow Server
 Documentation=https://github.com/youruser/todoalarm
 After=network-online.target
 Wants=network-online.target

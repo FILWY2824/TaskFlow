@@ -22,7 +22,7 @@ import (
 type TelegramHandler struct {
 	Store         *store.TelegramStore
 	Bot           *telegram.Client
-	BotUsername   string // 例如 "TodoAlarmBot",用于在响应中给客户端拼 deep-link
+	BotUsername   string // 例如 "TaskFlowBot",用于在响应中给客户端拼 deep-link
 	WebhookSecret string // setWebhook 时设置的 secret_token,Telegram 会通过 X-Telegram-Bot-Api-Secret-Token 回传
 	BindTokenTTL  time.Duration
 	Logger        *slog.Logger
@@ -198,7 +198,7 @@ func (h *TelegramHandler) Unbind(w http.ResponseWriter, r *http.Request) {
 
 // SendTest POST /api/telegram/test  body: {"binding_id": <id>}
 //
-// 测试发送一条 "TodoAlarm 测试消息" 给该 binding。
+// 测试发送一条 "TaskFlow 测试消息" 给该 binding。
 func (h *TelegramHandler) SendTest(w http.ResponseWriter, r *http.Request) {
 	uid := middleware.UserIDFrom(r.Context())
 	if !h.Bot.Enabled() {
@@ -232,7 +232,7 @@ func (h *TelegramHandler) SendTest(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "binding_disabled", "binding is disabled")
 		return
 	}
-	msg := "✅ TodoAlarm 已成功连接到这个聊天。今后到点的提醒会发到这里。"
+	msg := "✅ TaskFlow 已成功连接到这个聊天。今后到点的提醒会发到这里。"
 	if _, err := h.Bot.SendMessage(r.Context(), target.ChatID, msg, telegram.SendMessageOptions{}); err != nil {
 		writeError(w, http.StatusBadGateway, "telegram_send_failed", err.Error())
 		return
@@ -302,7 +302,7 @@ func (h *TelegramHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 	tok, ok := telegram.ExtractBindToken(payload)
 	if !ok {
 		// /start 但没带正确 payload。回复一句友好提示。
-		h.replyAndIgnoreErr(r.Context(), chatID, "👋 你好。请回到 TodoAlarm App,点击\"绑定 Telegram\"按钮,从那里跳进来。")
+		h.replyAndIgnoreErr(r.Context(), chatID, "👋 你好。请回到 TaskFlow App,点击\"绑定 Telegram\"按钮,从那里跳进来。")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -334,7 +334,7 @@ func (h *TelegramHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 
 	// 成功:回复用户,注意此时 binding != nil。
 	h.replyAndIgnoreErr(r.Context(), chatID,
-		fmt.Sprintf("✅ 绑定成功!从现在起,TodoAlarm 提醒会推送到这里(用户 ID #%d)。", binding.UserID))
+		fmt.Sprintf("✅ 绑定成功!从现在起,TaskFlow 提醒会推送到这里(用户 ID #%d)。", binding.UserID))
 
 	w.WriteHeader(http.StatusOK)
 }

@@ -113,7 +113,7 @@ export const useNotificationsStore = defineStore('notifications', {
     pushToast(t: { id: number; title: string; body: string }) {
       // 应用内 toast 的偏好开关由 settings 控制；关闭时直接丢弃。
       try {
-        const raw = localStorage.getItem('todoalarm.prefs.v1')
+        const raw = localStorage.getItem('taskflow.prefs.v1')
         if (raw) {
           const p = JSON.parse(raw) as { inAppToast?: boolean }
           if (p && p.inAppToast === false) return
@@ -146,7 +146,7 @@ export const useNotificationsStore = defineStore('notifications', {
           // 桌面通知开关
           let allow = true
           try {
-            const raw = localStorage.getItem('todoalarm.prefs.v1')
+            const raw = localStorage.getItem('taskflow.prefs.v1')
             if (raw) {
               const p = JSON.parse(raw) as { desktopNotification?: boolean }
               if (p && p.desktopNotification === false) allow = false

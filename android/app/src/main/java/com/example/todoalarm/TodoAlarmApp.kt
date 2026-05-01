@@ -24,7 +24,7 @@ import com.example.todoalarm.sync.SyncWorker
  * 不用 Hilt:对一个体量这么小的 app(<20 个注入点),手写 container 比注解处理器轻得多。
  * Application.container 是个简单的全局服务定位器,Activity / Receiver / Service / Worker 都可以从这里拿。
  */
-class TodoAlarmApp : Application() {
+class TaskFlowApp : Application() {
 
     lateinit var container: AppContainer
         private set
@@ -41,7 +41,7 @@ class TodoAlarmApp : Application() {
     }
 }
 
-class AppContainer(private val app: TodoAlarmApp) {
+class AppContainer(private val app: TaskFlowApp) {
 
     val tokenManager: TokenManager by lazy { TokenManager(app) }
 

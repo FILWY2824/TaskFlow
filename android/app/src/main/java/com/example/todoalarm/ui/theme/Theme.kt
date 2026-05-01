@@ -31,7 +31,7 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun TodoAlarmTheme(
+fun TaskFlowTheme(
     useDarkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {

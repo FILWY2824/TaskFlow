@@ -38,6 +38,18 @@ function statusText(s: PomodoroSession): string {
   }
 }
 
+// 番茄类型 → 中文标签。新增的 learning/review 与既有 focus/short_break/long_break 平级。
+function kindLabel(kind: string): string {
+  switch (kind) {
+    case 'focus': return '专注'
+    case 'short_break': return '短休'
+    case 'long_break': return '长休'
+    case 'learning': return '学习'
+    case 'review': return '复盘'
+    default: return kind
+  }
+}
+
 function backToTimer() {
   router.push({ name: 'pomodoro' })
 }
@@ -78,11 +90,13 @@ function backToTimer() {
         <div class="ph-icon">
           <span v-if="s.kind === 'focus'">🎯</span>
           <span v-else-if="s.kind === 'short_break'">☕</span>
+          <span v-else-if="s.kind === 'learning'">📚</span>
+          <span v-else-if="s.kind === 'review'">🔍</span>
           <span v-else>🛌</span>
         </div>
         <div class="ph-info">
           <div class="ph-item-title">
-            {{ s.kind === 'focus' ? '专注' : (s.kind === 'short_break' ? '短休' : '长休') }}
+            {{ kindLabel(s.kind) }}
             <span v-if="s.note" class="muted"> — {{ s.note }}</span>
           </div>
           <div class="ph-item-time">{{ fmtDateTime(s.started_at) }}</div>

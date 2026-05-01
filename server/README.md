@@ -1,4 +1,4 @@
-# todoalarm-server
+# taskflow-server
 
 > 多用户 TODO + 强提醒系统的后端 — 阶段 1–5 + 阶段 11 实现。
 > Go 1.22+ / SQLite (WAL) / 纯 Go 编译,适配低内存 VPS。
@@ -268,9 +268,9 @@ POST /api/telegram/webhook                (公开,但要带 secret token)
 {
   "token": "5e9c…",
   "expires_at": "2026-04-28T11:33:45Z",
-  "bot_username": "TodoAlarmBot",
-  "deep_link_web": "https://t.me/TodoAlarmBot?start=bind_5e9c…",
-  "deep_link_app": "tg://resolve?domain=TodoAlarmBot&start=bind_5e9c…"
+  "bot_username": "TaskFlowBot",
+  "deep_link_web": "https://t.me/TaskFlowBot?start=bind_5e9c…",
+  "deep_link_app": "tg://resolve?domain=TaskFlowBot&start=bind_5e9c…"
 }
 ```
 
@@ -537,14 +537,14 @@ curl -N -H "Authorization: Bearer $T" http://127.0.0.1:8080/ws/events
 ```ini
 # /etc/systemd/system/todoalarm.service
 [Unit]
-Description=todoalarm-server
+Description=taskflow-server
 After=network.target
 
 [Service]
 Type=simple
 User=todoalarm
 WorkingDirectory=/opt/todoalarm
-ExecStart=/opt/todoalarm/todoalarm-server -config /opt/todoalarm/config.toml
+ExecStart=/opt/todoalarm/taskflow-server -config /opt/todoalarm/config.toml
 Restart=on-failure
 RestartSec=5
 
@@ -562,7 +562,7 @@ WantedBy=multi-user.target
 ```bash
 sudo useradd --system --home /opt/todoalarm --shell /usr/sbin/nologin todoalarm
 sudo mkdir -p /opt/todoalarm/data
-sudo cp todoalarm-server-linux-amd64 /opt/todoalarm/todoalarm-server
+sudo cp taskflow-server-linux-amd64 /opt/todoalarm/taskflow-server
 sudo cp config.example.toml /opt/todoalarm/config.toml   # 编辑它,填 jwt_secret / telegram
 sudo chown -R todoalarm:todoalarm /opt/todoalarm
 sudo systemctl daemon-reload

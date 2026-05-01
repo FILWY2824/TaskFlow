@@ -44,7 +44,7 @@ make build-linux-amd64                          # 适用 x86 VPS
 make build-linux-arm64                          # 适用 ARM(树莓派等)
 
 # 上传
-scp server/todoalarm-server-linux-amd64 user@vps:/tmp/
+scp server/taskflow-server-linux-amd64 user@vps:/tmp/
 scp -r web/dist                          user@vps:/tmp/todoalarm-web
 scp -r deploy                            user@vps:/tmp/
 ```
@@ -55,7 +55,7 @@ scp -r deploy                            user@vps:/tmp/
 ssh user@vps
 cd /tmp/deploy
 sudo ./scripts/install.sh \
-    --binary /tmp/todoalarm-server-linux-amd64 \
+    --binary /tmp/taskflow-server-linux-amd64 \
     --web /tmp/todoalarm-web \
     --domain todo.example.com \
     --email you@example.com
@@ -64,7 +64,7 @@ sudo ./scripts/install.sh \
 `install.sh` 会:
 
 1. 创建系统用户 `todoalarm`(无 home,无 shell)
-2. 把二进制丢到 `/opt/todoalarm/todoalarm-server`,`web/dist` 丢到 `/var/www/todoalarm`
+2. 把二进制丢到 `/opt/todoalarm/taskflow-server`,`web/dist` 丢到 `/var/www/todoalarm`
 3. 写 `/opt/todoalarm/config.toml`(随机生成 JWT secret;Telegram 配置留空)
 4. 安装 systemd unit 并 enable + start
 5. 写 nginx 配置并 reload

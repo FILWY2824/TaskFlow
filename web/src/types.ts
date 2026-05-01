@@ -180,7 +180,10 @@ export interface TelegramBindStatus {
 }
 
 // === Pomodoro ===
-export type PomodoroKind = 'focus' | 'short_break' | 'long_break'
+// 番茄类型:focus / short_break / long_break 是经典三件套;learning / review 是
+// 后加的"输入(深度学习)"和"输出(复盘整理)"两段,目的是让用户做更细粒度的
+// 时段标签与统计区分。服务端 store/handlers 与 db.go 均已同步放开校验。
+export type PomodoroKind = 'focus' | 'short_break' | 'long_break' | 'learning' | 'review'
 export type PomodoroStatus = 'active' | 'completed' | 'abandoned'
 
 export interface PomodoroSession {

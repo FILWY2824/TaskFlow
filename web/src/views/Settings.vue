@@ -260,8 +260,70 @@ async function toggleDesktopNotification(v: boolean) {
     <div class="settings-card">
       <div class="card-head"><h3>关于</h3></div>
       <div class="card-body">
-        <p class="muted">ToDo List · Web v0.4.0</p>
+        <p class="muted">TaskFlow · Web v0.4.0</p>
         <p class="muted">多用户 TODO + Android / Windows 强提醒</p>
+
+        <!-- ===== 客户端下载 ===== -->
+        <!--
+          下载链接均为相对路径,直接落到本前端所在的域名(3001 端口)。
+          外部 nginx 把以下两个 URL 反代/落盘到对应的编译产物目录:
+            /android/app/build/outputs/apk/release/TaskFlow-release.apk
+            /windows/src-tauri/target/release/bundle/nsis/TaskFlow_0.4.0_x64-setup.exe
+          运维侧只要把构建产物保留在原编译路径下,nginx 配上 root 就能直链下载。
+        -->
+        <div class="about-downloads">
+          <div class="about-downloads-title">客户端下载</div>
+          <div class="about-downloads-grid">
+            <a class="dl-card" href="/android/app/build/outputs/apk/release/TaskFlow-release.apk" download>
+              <span class="dl-icon dl-icon-android" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="6" y1="2" x2="8" y2="5"/>
+                  <line x1="18" y1="2" x2="16" y2="5"/>
+                  <path d="M5 9h14v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9Z"/>
+                  <circle cx="9" cy="13" r="0.6" fill="currentColor"/>
+                  <circle cx="15" cy="13" r="0.6" fill="currentColor"/>
+                  <path d="M3 11v5"/>
+                  <path d="M21 11v5"/>
+                  <path d="M9 20v2"/>
+                  <path d="M15 20v2"/>
+                </svg>
+              </span>
+              <span class="dl-text">
+                <span class="dl-name">TaskFlow Android</span>
+                <span class="dl-sub">TaskFlow-release.apk</span>
+              </span>
+              <span class="dl-arrow" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 5v14"/>
+                  <polyline points="6 13 12 19 18 13"/>
+                </svg>
+              </span>
+            </a>
+            <a class="dl-card" href="/windows/src-tauri/target/release/bundle/nsis/TaskFlow_0.4.0_x64-setup.exe" download>
+              <span class="dl-icon dl-icon-windows" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 5.5l7.5-1v8H3v-7zM11.5 4.3L21 3v10h-9.5V4.3zM3 13.5h7.5v8L3 20.5v-7zM11.5 13.5H21v8.5l-9.5-1.3v-7.2z"/>
+                </svg>
+              </span>
+              <span class="dl-text">
+                <span class="dl-name">TaskFlow Windows</span>
+                <span class="dl-sub">TaskFlow_0.4.0_x64-setup.exe</span>
+              </span>
+              <span class="dl-arrow" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 5v14"/>
+                  <polyline points="6 13 12 19 18 13"/>
+                </svg>
+              </span>
+            </a>
+          </div>
+          <p class="about-downloads-hint muted">
+            下载链接为同域相对路径,直接落到本端口(3001),由 nginx 指向各端编译产物所在目录。
+          </p>
+        </div>
       </div>
     </div>
   </div>
@@ -365,5 +427,97 @@ async function toggleDesktopNotification(v: boolean) {
 
 @media (max-width: 600px) {
   .form-row { grid-template-columns: 1fr; gap: 6px; }
+}
+
+/* ===== 关于 box · 客户端下载 ===== */
+.about-downloads {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--tg-divider);
+}
+.about-downloads-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tg-text-secondary);
+  margin-bottom: 10px;
+}
+.about-downloads-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.dl-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--tg-bg-elev);
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-md);
+  text-decoration: none;
+  color: var(--tg-text);
+  transition: border-color var(--tg-trans-fast),
+              background var(--tg-trans-fast),
+              transform var(--tg-trans-fast),
+              box-shadow var(--tg-trans-fast);
+}
+.dl-card:hover {
+  border-color: color-mix(in srgb, var(--tg-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--tg-primary) 5%, var(--tg-bg-elev));
+  transform: translateY(-1px);
+  box-shadow: var(--tg-shadow-sm);
+}
+.dl-icon {
+  width: 36px; height: 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  flex-shrink: 0;
+  color: #fff;
+}
+.dl-icon svg { width: 20px; height: 20px; }
+.dl-icon-android {
+  background: linear-gradient(135deg, #34d399, #10b981);
+}
+.dl-icon-windows {
+  background: linear-gradient(135deg, #38bdf8, #0284c7);
+}
+.dl-text {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  overflow: hidden;
+}
+.dl-name {
+  font-family: 'Sora', sans-serif;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--tg-text);
+  letter-spacing: -0.005em;
+}
+.dl-sub {
+  font-size: 11px;
+  color: var(--tg-text-tertiary);
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dl-arrow {
+  color: var(--tg-text-tertiary);
+  flex-shrink: 0;
+  transition: color var(--tg-trans-fast), transform var(--tg-trans-fast);
+}
+.dl-card:hover .dl-arrow {
+  color: var(--tg-primary);
+  transform: translateY(2px);
+}
+.about-downloads-hint {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+@media (max-width: 600px) {
+  .about-downloads-grid { grid-template-columns: 1fr; }
 }
 </style>

@@ -20,7 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
-import com.example.todoalarm.TodoAlarmApp
+import com.example.todoalarm.TaskFlowApp
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -91,7 +91,7 @@ class AlarmActivity : ComponentActivity() {
         var status by remember { mutableStateOf("") }
 
         // 简化:用 lifecycleScope 在按钮里查网络
-        val container = (application as TodoAlarmApp).container
+        val container = (application as TaskFlowApp).container
 
         MaterialTheme {
             Box(

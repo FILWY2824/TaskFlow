@@ -68,6 +68,12 @@ android {
     }
 }
 
+// 让 release/debug 的 APK 输出名为 TaskFlow-release.apk / TaskFlow-debug.apk,
+// 与 Settings 页"客户端下载"卡片里的 href 路径一致(/android/app/build/outputs/apk/release/TaskFlow-release.apk)。
+base {
+    archivesName.set("TaskFlow")
+}
+
 dependencies {
     // AndroidX core
     implementation(libs.androidx.core.ktx)

@@ -9,7 +9,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.example.todoalarm.TodoAlarmApp
+import com.example.todoalarm.TaskFlowApp
 import com.example.todoalarm.alarm.AlarmScheduler
 import com.example.todoalarm.data.local.AppDatabase
 import com.example.todoalarm.data.local.SyncMetaEntity
@@ -37,7 +37,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters)
     : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        val app = applicationContext as TodoAlarmApp
+        val app = applicationContext as TaskFlowApp
         val container = app.container
         val client = container.apiClient
         val db = container.db
@@ -96,7 +96,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters)
             "reminder" -> when (ev.action) {
                 "deleted" -> {
                     scheduler.cancel(ev.entity_id)
-                    (applicationContext as TodoAlarmApp).container.db.reminderDao().deleteById(ev.entity_id)
+                    (applicationContext as TaskFlowApp).container.db.reminderDao().deleteById(ev.entity_id)
                 }
                 else -> {
                     val r = safeCall(client.moshi) { client.api.reminderGet(ev.entity_id) }
@@ -113,7 +113,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters)
     }
 
     private suspend fun upsertAndReschedule(dto: ReminderDto, scheduler: AlarmScheduler) {
-        val app = applicationContext as TodoAlarmApp
+        val app = applicationContext as TaskFlowApp
         val ent = com.example.todoalarm.data.local.ReminderCacheEntity(
             id = dto.id, user_id = dto.user_id, todo_id = dto.todo_id, title = dto.title,
             trigger_at = dto.trigger_at, rrule = dto.rrule, dtstart = dto.dtstart, timezone = dto.timezone,

@@ -1,4 +1,4 @@
-# TodoAlarm 生产配置模板
+# TaskFlow 生产配置模板
 # install.sh 会基于这个模板生成 /opt/todoalarm/config.toml(随机注入 jwt_secret)。
 #
 # 改完此文件需要 systemctl restart todoalarm 才生效。

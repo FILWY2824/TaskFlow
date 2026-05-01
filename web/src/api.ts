@@ -31,11 +31,13 @@ import type {
 //   - 单飞:同一时刻只发一次 refresh。其他请求等同一个 promise。
 // =============================================================
 
-const KEY_ACCESS = 'todoalarm.access'
-const KEY_ACCESS_EXP = 'todoalarm.access_exp'
-const KEY_REFRESH = 'todoalarm.refresh'
-const KEY_REFRESH_EXP = 'todoalarm.refresh_exp'
-const KEY_USER = 'todoalarm.user'
+// 注:这些 localStorage 键名带 taskflow.* 前缀(品牌即名)。如果旧版本曾用过
+// todoalarm.* 的键,升级后会被视为未登录,用户需要重新登录一次。
+const KEY_ACCESS = 'taskflow.access'
+const KEY_ACCESS_EXP = 'taskflow.access_exp'
+const KEY_REFRESH = 'taskflow.refresh'
+const KEY_REFRESH_EXP = 'taskflow.refresh_exp'
+const KEY_USER = 'taskflow.user'
 
 let onUnauthorized: (() => void) | null = null
 export function setUnauthorizedHandler(fn: () => void) {

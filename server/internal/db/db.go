@@ -287,6 +287,8 @@ CREATE INDEX IF NOT EXISTS idx_sync_events_user ON sync_events(user_id, id);
 //	focus       -> 专注番茄
 //	short_break -> 短休
 //	long_break  -> 长休
+//	learning    -> 学习专注(深度学习/读书等场景与普通 focus 区分,便于统计)
+//	review      -> 复盘整理(回顾、写日志、整理资料等较低强度的"输出"时段)
 //
 // 设计要点:
 //   - todo_id 为 NULL 表示"自由专注",不绑定具体 todo;todo 软删时置为 NULL,保留历史统计。

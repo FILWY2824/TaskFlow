@@ -1,4 +1,4 @@
-# TodoAlarm Windows 客户端 (规格 v2.2 阶段 9 + 10)
+# TaskFlow Windows 客户端 (规格 v2.2 阶段 9 + 10)
 
 > Tauri v2 + Rust + Vue 3 (复用 `../web/`)。
 > 体积 ~7-10 MB(WebView2 不计),内存 ~30-60 MB。
