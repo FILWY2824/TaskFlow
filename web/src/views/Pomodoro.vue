@@ -43,7 +43,14 @@ const presets: { label: string; seconds: number; kind: PomodoroKind }[] = [
 ]
 
 const display = computed(() => {
-  const sec = Math.max(0, remaining.value)
+  // 当没有进行中的 session 时，时间表盘应当反映"用户当前选择的时长"，
+  // 而不是上次倒计时结束/被放弃时残留的 remaining 值。
+  // 这同时修复了两个问题：
+  //   1) "放弃当前番茄"后页面仍显示放弃时刻的剩余时间（必须刷新才能恢复）。
+  //   2) 用户改动"时长（分钟）"输入框，但表盘上的时间不跟着变。
+  const sec = session.value
+    ? Math.max(0, remaining.value)
+    : Math.max(0, planned.value)
   const m = Math.floor(sec / 60)
   const s = sec % 60
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
@@ -172,6 +179,11 @@ async function complete() {
     const s = await pomoApi.complete(session.value.id)
     session.value = null
     expiredHandled.value = false
+    // 复位倒计时残值,让表盘回到"用户当前选择的时长"。display() 在
+    // session=null 时会改用 planned, 这里同步把 remaining/elapsed 也清掉,
+    // 避免下次开始时旧值在 startTick 设置前一闪而过。
+    remaining.value = 0
+    elapsed.value = 0
     if (tickHandle.value) { window.clearInterval(tickHandle.value); tickHandle.value = null }
     recent.value.unshift(s)
     // 手动结束番茄也响一声"叮咚——叮咚"
@@ -192,6 +204,9 @@ async function abandon() {
     const s = await pomoApi.abandon(session.value.id)
     session.value = null
     expiredHandled.value = false
+    // 同 complete(): 把残值清零,防止"放弃后还显示原剩余时间"的视觉残留。
+    remaining.value = 0
+    elapsed.value = 0
     if (tickHandle.value) { window.clearInterval(tickHandle.value); tickHandle.value = null }
     recent.value.unshift(s)
   } catch (e) { errMsg.value = e instanceof ApiError ? e.message : (e as Error).message }
