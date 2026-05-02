@@ -370,16 +370,18 @@ async function toggleDesktopNotification(v: boolean) {
 
         <!-- ===== 客户端下载 ===== -->
         <!--
-          下载链接均为相对路径,直接落到本前端所在的域名(3001 端口)。
-          外部 nginx 把以下两个 URL 反代/落盘到对应的编译产物目录:
-            /android/app/build/outputs/apk/release/TaskFlow-release.apk
-            /windows/src-tauri/target/release/bundle/nsis/TaskFlow_0.4.0_x64-setup.exe
-          运维侧只要把构建产物保留在原编译路径下,nginx 配上 root 就能直链下载。
+          下载链接放到一个稳定的 /downloads/ 路径下,部署侧把构建产物拷贝过来即可:
+            /downloads/TaskFlow-release.apk      (Android)
+            /downloads/TaskFlow-setup.exe        (Windows NSIS 安装器)
+            /downloads/TaskFlow.msi              (Windows MSI 包)
+          docker / nginx 把 /var/www/taskflow/downloads/ 暴露成静态目录;
+          构建脚本(scripts-deploy/deploy-*.ps1)在打包成功后会把产物拷到这里。
+          这种方式与"挂源码目录到 nginx"无关,生产部署也能用。
         -->
         <div class="about-downloads">
           <div class="about-downloads-title">客户端下载</div>
           <div class="about-downloads-grid">
-            <a class="dl-card" href="/android/app/build/outputs/apk/release/TaskFlow-release.apk" download>
+            <a class="dl-card" href="/downloads/TaskFlow-release.apk" download>
               <span class="dl-icon dl-icon-android" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round">
@@ -406,7 +408,7 @@ async function toggleDesktopNotification(v: boolean) {
                 </svg>
               </span>
             </a>
-            <a class="dl-card" href="/windows/src-tauri/target/release/bundle/nsis/TaskFlow_0.4.0_x64-setup.exe" download>
+            <a class="dl-card" href="/downloads/TaskFlow-setup.exe" download>
               <span class="dl-icon dl-icon-windows" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M3 5.5l7.5-1v8H3v-7zM11.5 4.3L21 3v10h-9.5V4.3zM3 13.5h7.5v8L3 20.5v-7zM11.5 13.5H21v8.5l-9.5-1.3v-7.2z"/>
@@ -414,7 +416,7 @@ async function toggleDesktopNotification(v: boolean) {
               </span>
               <span class="dl-text">
                 <span class="dl-name">TaskFlow Windows</span>
-                <span class="dl-sub">TaskFlow_0.4.0_x64-setup.exe</span>
+                <span class="dl-sub">TaskFlow-setup.exe</span>
               </span>
               <span class="dl-arrow" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"

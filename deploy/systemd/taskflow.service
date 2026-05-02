@@ -9,6 +9,8 @@ Type=simple
 User=taskflow
 Group=taskflow
 WorkingDirectory=/opt/taskflow
+# 唯一来源 —— 三端共用的 /opt/taskflow/.env。文件不存在不算错(server 启动会用进程环境里的值兜底)。
+EnvironmentFile=-/opt/taskflow/.env
 ExecStart=/opt/taskflow/taskflow-server -config /opt/taskflow/config.toml
 Restart=on-failure
 RestartSec=5

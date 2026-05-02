@@ -239,13 +239,11 @@ class PomodoroViewModel(private val container: AppContainer) : ViewModel() {
 // ============== Settings ==============
 
 data class SettingsUiState(
-    val serverUrl: String = "",
     val email: String = "",
     val timezone: String = "UTC",
     val displayName: String = "",
     val prefs: AndroidPrefs = PreferenceRepository.DEFAULTS,
     val prefsLoading: Boolean = false,
-    val info: String? = null,
     val error: String? = null,
 )
 
@@ -262,25 +260,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     private fun loadInitial(): SettingsUiState {
         val s = container.tokenManager.current()
         return SettingsUiState(
-            serverUrl = s.serverUrl ?: container.apiClient.currentBase().trimEnd('/'),
             email = s.userEmail ?: "",
             timezone = s.timezone,
             displayName = "",
             prefs = container.preferenceRepository.current(),
         )
-    }
-
-    fun setServerUrl(v: String) { _state.value = _state.value.copy(serverUrl = v, error = null) }
-
-    fun saveServerUrl() {
-        val v = _state.value.serverUrl.trim()
-        if (v.isBlank()) {
-            _state.value = _state.value.copy(error = "服务端 URL 不能为空")
-            return
-        }
-        container.tokenManager.setServerUrl(v)
-        container.apiClient.setBase(v)
-        _state.value = _state.value.copy(info = "已保存,下次请求生效")
     }
 
     fun setDisplayName(v: String) { _state.value = _state.value.copy(displayName = v) }

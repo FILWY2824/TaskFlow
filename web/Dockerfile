@@ -12,6 +12,11 @@
 FROM node:20-alpine AS build
 WORKDIR /src
 
+# 由 docker-compose build args 注入,Vite 在编译期可读到
+# (web 自身用同源相对路径,所以没强制依赖,但保留入口便于将来扩展)
+ARG PUBLIC_BASE_URL=
+ENV PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
+
 # 先 lockfile 让缓存复用
 COPY web/package.json web/package-lock.json ./
 RUN npm ci

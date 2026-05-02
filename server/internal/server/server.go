@@ -89,6 +89,10 @@ func BuildHandler(d Deps) http.Handler {
 		mux.HandleFunc("GET /api/auth/oauth/start", oauthH.Start)
 		mux.HandleFunc("GET /api/auth/oauth/callback", oauthH.Callback)
 		mux.HandleFunc("POST /api/auth/oauth/finalize", oauthH.Finalize)
+		// 桌面 / Android 客户端轮询拿 handoff(代替 OS 自定义 URL scheme)
+		mux.HandleFunc("GET /api/auth/oauth/poll", oauthH.Poll)
+		// 桌面 / Android 用户在浏览器里完成 OAuth 后看到的"请回客户端"静态页
+		mux.HandleFunc("GET /api/auth/oauth/done", oauthH.Done)
 		mux.HandleFunc("GET /api/auth/config", oauthH.Config)
 	} else {
 		mux.HandleFunc("POST /api/auth/register", authH.Register)

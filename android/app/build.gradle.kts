@@ -5,6 +5,7 @@
 //   - Room 用 KSP(KAPT 已不推荐)。
 //   - Moshi codegen + Kotlin reflection 0 用,所有 DTO 都标注 @JsonClass(generateAdapter = true)。
 //   - Compose 插件由 Kotlin 2.0 直接提供,不再依赖独立 compiler 版本对齐。
+//   - DEFAULT_SERVER_URL 由仓库根目录 .env 的 PUBLIC_BASE_URL 烧入,与 server / web / windows 共用一份配置。
 
 import java.util.Properties
 
@@ -13,6 +14,33 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+}
+
+/**
+ * 解析仓库根目录 ../.env(android/ 的上一级)。
+ *
+ * 文件不存在或字段不存在都不算错 —— 返回 null,由调用方 fallback。
+ * 不是完整的 dotenv 解析器:足够覆盖 KEY=VALUE / KEY="VALUE" / 注释行 / 空行。
+ */
+fun parseRootDotEnv(key: String): String? {
+    val envFile = rootProject.file("../.env").takeIf { it.exists() }
+        ?: rootProject.file("../.env.example").takeIf { it.exists() }
+        ?: return null
+    envFile.readLines().forEach { rawLine ->
+        val line = rawLine.trim()
+        if (line.isEmpty() || line.startsWith("#")) return@forEach
+        val idx = line.indexOf('=')
+        if (idx <= 0) return@forEach
+        val k = line.substring(0, idx).trim()
+        if (k != key) return@forEach
+        var v = line.substring(idx + 1).trim()
+        // 去掉首尾配对的引号
+        if ((v.startsWith("\"") && v.endsWith("\"")) || (v.startsWith("'") && v.endsWith("'"))) {
+            v = v.substring(1, v.length - 1)
+        }
+        return v
+    }
+    return null
 }
 
 android {
@@ -26,25 +54,56 @@ android {
         versionCode = 1
         versionName = "0.4.0"
 
-        // 默认服务端地址。优先级:
-        //   1) 环境变量 TASKFLOW_DEFAULT_SERVER_URL(打包时传入,例如 GitHub Actions)
-        //   2) local.properties 里的 taskflow.default.server.url(本地开发常用)
-        //   3) 兜底 http://10.0.2.2:8080(Android 模拟器把它路由到宿主机 127.0.0.1)
-        // 用户安装后仍可在 App 设置里改,改的值会持久化到 EncryptedSharedPreferences。
+        // 默认服务端地址(出厂值)。优先级:
+        //   1) 环境变量 TASKFLOW_DEFAULT_SERVER_URL —— 打包时显式传入
+        //   2) 仓库根 .env 的 PUBLIC_API_URL  —— 后端 API 域名(前后端分离)
+        //   3) 仓库根 .env 的 PUBLIC_BASE_URL  —— 前端域名(单域名部署兼容回退)
+        //   4) local.properties 的 taskflow.default.server.url  —— 单机开发
+        //   5) 兜底 https://backend.taskflow.teamcy.eu.cc
+        // 服务端地址已固化,安装后不再允许用户在 App 内修改。
         val defaultServer: String = run {
-            val fromEnv = System.getenv("TASKFLOW_DEFAULT_SERVER_URL")?.trim().orEmpty()
-            if (fromEnv.isNotEmpty()) return@run fromEnv.trimEnd('/')
+            System.getenv("TASKFLOW_DEFAULT_SERVER_URL")?.trim()?.takeIf { it.isNotEmpty() }
+                ?.let { return@run it.trimEnd('/') }
+            parseRootDotEnv("PUBLIC_API_URL")?.takeIf { it.isNotEmpty() }
+                ?.let { return@run it.trimEnd('/') }
+            parseRootDotEnv("PUBLIC_BASE_URL")?.takeIf { it.isNotEmpty() }
+                ?.let { return@run it.trimEnd('/') }
             val localProps = Properties().apply {
                 val f = rootProject.file("local.properties")
                 if (f.exists()) f.inputStream().use { load(it) }
             }
             val fromLocal = localProps.getProperty("taskflow.default.server.url")?.trim().orEmpty()
             if (fromLocal.isNotEmpty()) return@run fromLocal.trimEnd('/')
-            "http://10.0.2.2:8080"
+            "https://backend.taskflow.teamcy.eu.cc"
         }
         buildConfigField("String", "DEFAULT_SERVER_URL", "\"$defaultServer\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // APK 签名配置:环境变量优先(CI/CD),其次读根 .env
+    val signKeystorePath: String? = System.getenv("ANDROID_KEYSTORE_PATH")
+        ?: parseRootDotEnv("ANDROID_KEYSTORE_PATH")
+    val signKeystorePass: String? = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+        ?: parseRootDotEnv("ANDROID_KEYSTORE_PASSWORD")
+    val signAlias: String? = System.getenv("ANDROID_KEY_ALIAS")
+        ?: parseRootDotEnv("ANDROID_KEY_ALIAS")
+    val signKeyPass: String? = System.getenv("ANDROID_KEY_PASSWORD")
+        ?: parseRootDotEnv("ANDROID_KEY_PASSWORD")
+
+    val releaseSigningReady = signKeystorePath != null &&
+        signKeystorePass != null && signAlias != null &&
+        rootProject.file(signKeystorePath).exists()
+
+    if (releaseSigningReady) {
+        signingConfigs {
+            create("release") {
+                storeFile = rootProject.file(signKeystorePath!!)
+                storePassword = signKeystorePass!!
+                keyAlias = signAlias!!
+                keyPassword = signKeyPass ?: signKeystorePass!!
+            }
+        }
     }
 
     buildTypes {
@@ -52,6 +111,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (releaseSigningReady) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         debug {
             // 默认就是 debug,允许明文 HTTP(只在 debug 生效,见 res/xml/network_security_config.xml)
@@ -85,8 +147,8 @@ android {
     }
 }
 
-// 让 release/debug 的 APK 输出名为 TaskFlow-release.apk / TaskFlow-debug.apk,
-// 与 Settings 页"客户端下载"卡片里的 href 路径一致(/android/app/build/outputs/apk/release/TaskFlow-release.apk)。
+// 让 release/debug 的 APK 输出名为 TaskFlow-release.apk / TaskFlow-debug.apk。
+// 部署侧 (scripts-deploy/deploy-android.ps1) 会把 release apk 拷到 /var/www/taskflow/downloads/。
 base {
     archivesName.set("TaskFlow")
 }
@@ -117,6 +179,9 @@ dependencies {
     implementation(libs.work.runtime.ktx)
     implementation(libs.datastore.preferences)
     implementation(libs.security.crypto)
+
+    // Custom Tabs(OAuth 登录用,LoginScreen 调用)
+    implementation("androidx.browser:browser:1.8.0")
 
     // Room
     implementation(libs.room.runtime)

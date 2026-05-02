@@ -26,11 +26,25 @@ interface ApiService {
     suspend fun healthz(): Response<Unit>
 
     // ---------- Auth ----------
-    @POST("/api/auth/register")
-    suspend fun register(@Body body: RegisterRequest): Response<AuthResponse>
+    //
+    // 三端均强制 OAuth 登录,服务端 /api/auth/register 与 /api/auth/login 在
+    // OAUTH_ENABLED=true 下会返回 403。Android 端走 OAuth + poll 方案:
+    //
+    //   1) Custom Tabs 打开 ${baseUrl}/api/auth/oauth/start?client=android&device_id=<random>
+    //   2) 用户在系统浏览器里完成 OAuth(可以走 Profile / 任意 IdP)
+    //   3) 应用持续 poll /api/auth/oauth/poll?device_id=<random> 拿 handoff
+    //   4) 拿到 handoff -> POST /api/auth/oauth/finalize 换本服务的 access/refresh token
+    //
+    // 详见 server/internal/handlers/oauth.go。
 
-    @POST("/api/auth/login")
-    suspend fun login(@Body body: LoginRequest): Response<AuthResponse>
+    @GET("/api/auth/config")
+    suspend fun authConfig(): Response<AuthConfigDto>
+
+    @GET("/api/auth/oauth/poll")
+    suspend fun oauthPoll(@Query("device_id") deviceId: String): Response<OAuthPollResponse>
+
+    @POST("/api/auth/oauth/finalize")
+    suspend fun oauthFinalize(@Body body: OAuthFinalizeRequest): Response<AuthResponse>
 
     @POST("/api/auth/refresh")
     suspend fun refresh(@Body body: RefreshRequest): Response<AuthResponse>

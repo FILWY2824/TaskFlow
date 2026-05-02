@@ -9,7 +9,7 @@
 
 VERSION ?= 0.4.0
 
-.PHONY: all build server-build web-build server-run web-dev server-test web-typecheck \
+.PHONY: all build dev server-build web-build server-run web-dev server-test web-typecheck \
         windows-build windows-dev android-build android-debug android-clean \
         dist dist-src clean
 
@@ -34,6 +34,11 @@ build-linux-arm64:
 	cd web && npm run build
 
 # 开发模式
+# dev: 在两个新的 Windows 终端里分别启动后端和前端
+dev:
+	cmd /c start "TaskFlow Server" cmd /k "cd /d server && go run ./cmd/server -config config.toml -env ../.env"
+	cmd /c start "TaskFlow Web" cmd /k "cd /d web && npm run dev"
+
 server-run:
 	$(MAKE) -C server run
 

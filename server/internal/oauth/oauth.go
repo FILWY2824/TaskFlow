@@ -83,11 +83,39 @@ func (p *Provider) AuthorizeURLFor(state, codeChallenge string) string {
 	q.Set("state", state)
 	q.Set("code_challenge", codeChallenge)
 	q.Set("code_challenge_method", "S256")
-	sep := "?"
-	if strings.Contains(p.AuthorizeURL, "?") {
-		sep = "&"
+	q.Set("prompt", "consent")
+
+	u, err := url.Parse(p.AuthorizeURL)
+	if err != nil {
+		sep := "?"
+		if strings.Contains(p.AuthorizeURL, "?") {
+			sep = "&"
+		}
+		return p.AuthorizeURL + sep + q.Encode()
 	}
-	return p.AuthorizeURL + sep + q.Encode()
+	if u.Fragment != "" {
+		frag := u.Fragment
+		sep := "?"
+		if strings.Contains(frag, "?") {
+			sep = "&"
+		}
+		// url.URL.String() 会对 Fragment 做二次编码(encodeFragment),
+		// 导致 q.Encode() 里已经编码好的 redirect_uri 等参数的 % 变成 %25。
+		// 这里手动拼接,避免双重编码。
+		base := u.Scheme + "://" + u.Host + u.EscapedPath()
+		if u.RawQuery != "" {
+			base += "?" + u.RawQuery
+		}
+		return base + "#" + frag + sep + q.Encode()
+	}
+	existing := u.Query()
+	for k, vs := range q {
+		for _, v := range vs {
+			existing.Set(k, v)
+		}
+	}
+	u.RawQuery = existing.Encode()
+	return u.String()
 }
 
 // FrontendCallbackURL 服务端处理完 OAuth 后,重定向给前端的目标 URL(不含 fragment)。
@@ -245,10 +273,17 @@ func truncate(s string, n int) string {
 // =============================================================
 
 // PendingState 浏览器从 /oauth/start 跳到认证中心、又跳回 /oauth/callback 期间的临时状态。
+//
+// 字段:
+//   - State / CodeVerifier:OAuth 标准 PKCE 字段
+//   - DeviceID:回调阶段下发的 refresh_token 会绑定它,便于"退出此设备"
+//   - ClientKind:发起登录的客户端类型 —— "web"(默认)/ "desktop" / "android"
+//     web 走"重定向 + 前端 finalize";desktop / android 走"系统浏览器 + 服务端 poll"
 type PendingState struct {
 	State        string
 	CodeVerifier string
 	DeviceID     string
+	ClientKind   string
 	CreatedAt    time.Time
 }
 
@@ -260,27 +295,41 @@ type HandoffSession struct {
 }
 
 // PendingStore 把 PendingState / HandoffSession 都放在内存里,定期清过期。
+//
+// 此外维护一份 deviceHandoffs:device_id -> handoff_code 的映射。这是给桌面 / Android
+// 客户端用的"轮询"接口的支撑结构 —— 客户端打开系统浏览器登录后,服务端把 handoff
+// code 同时写入两处:常规 handoffs 表,以及 deviceHandoffs[device_id]。客户端
+// 不知道 handoff code,只知道自己生成的 device_id;通过 GET /api/auth/oauth/poll
+// 取走 handoff,然后才走 finalize 换 token。
+//
+// 这样桌面 / 移动端不需要在 OS 注册自定义 URL scheme(taskflow://),
+// 也不需要起本地 HTTP 监听。device_id 必须不可猜(>=32 字节随机),因此
+// 知道它就等同于授权。一次取走后立刻删除,防止重放。
 type PendingStore struct {
-	mu         sync.Mutex
-	states     map[string]PendingState
-	handoffs   map[string]HandoffSession
-	stateTTL   time.Duration
-	handoffTTL time.Duration
+	mu             sync.Mutex
+	states         map[string]PendingState
+	handoffs       map[string]HandoffSession
+	deviceHandoffs map[string]string // device_id -> handoff_code(等待 poll)
+	stateTTL       time.Duration
+	handoffTTL     time.Duration
 }
 
 // NewPendingStore stateTTL 建议 10 分钟(用户登录加授权页停留),handoffTTL 建议 60 秒
-// (前端重定向回 /oauth/callback 后立刻发 finalize)。
+// (前端重定向回 /oauth/callback 后立刻发 finalize)。桌面 / 移动 client 的 poll
+// 走另一条路径,但 handoff TTL 同样适用 —— 客户端要在窗口期内 poll 到。
 func NewPendingStore(stateTTL, handoffTTL time.Duration) *PendingStore {
 	return &PendingStore{
-		states:     make(map[string]PendingState),
-		handoffs:   make(map[string]HandoffSession),
-		stateTTL:   stateTTL,
-		handoffTTL: handoffTTL,
+		states:         make(map[string]PendingState),
+		handoffs:       make(map[string]HandoffSession),
+		deviceHandoffs: make(map[string]string),
+		stateTTL:       stateTTL,
+		handoffTTL:     handoffTTL,
 	}
 }
 
 // SaveState 生成新的 state + code_verifier + S256 challenge,写入 store,返回三元组。
-func (s *PendingStore) SaveState(deviceID string) (state, verifier, challenge string, err error) {
+// clientKind 取值 "web"(默认)/ "desktop" / "android",决定回调阶段的重定向方式。
+func (s *PendingStore) SaveState(deviceID, clientKind string) (state, verifier, challenge string, err error) {
 	state, err = randomURLSafe(24)
 	if err != nil {
 		return "", "", "", err
@@ -292,11 +341,16 @@ func (s *PendingStore) SaveState(deviceID string) (state, verifier, challenge st
 	sum := sha256.Sum256([]byte(verifier))
 	challenge = base64.RawURLEncoding.EncodeToString(sum[:])
 
+	if clientKind != "desktop" && clientKind != "android" {
+		clientKind = "web"
+	}
+
 	s.mu.Lock()
 	s.states[state] = PendingState{
 		State:        state,
 		CodeVerifier: verifier,
 		DeviceID:     deviceID,
+		ClientKind:   clientKind,
 		CreatedAt:    time.Now(),
 	}
 	s.mu.Unlock()
@@ -349,6 +403,50 @@ func (s *PendingStore) LookupHandoff(code string) (HandoffSession, bool) {
 	return v, true
 }
 
+// LinkDeviceHandoff 把刚生成的 handoff code 绑定到 device_id 上,以便桌面 / Android 客户端
+// 通过 /api/auth/oauth/poll?device_id=... 取走。同一个 device_id 后到的 handoff 会覆盖前一个
+// (用户在同一台设备重复发起 OAuth 时只保留最新一次)。
+func (s *PendingStore) LinkDeviceHandoff(deviceID, code string) {
+	if deviceID == "" || code == "" {
+		return
+	}
+	s.mu.Lock()
+	s.deviceHandoffs[deviceID] = code
+	s.mu.Unlock()
+}
+
+// LookupDeviceHandoff 用 device_id 取出 handoff code(一次性,取走即删除)。
+// 没有匹配或绑定的 handoff 已过期 -> ok = false,客户端需要继续 poll 或显示超时。
+//
+// 注意:即便客户端连续 poll 到的也是同一个 code,本接口只返回一次 —— 之后客户端
+// 应当立刻拿这个 code 调用 /api/auth/oauth/finalize 换 access/refresh token。
+func (s *PendingStore) LookupDeviceHandoff(deviceID string) (string, bool) {
+	if deviceID == "" {
+		return "", false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	code, ok := s.deviceHandoffs[deviceID]
+	if !ok {
+		return "", false
+	}
+	// 校验 handoff 本身没过期 —— 否则即便客户端 poll 到,后面 finalize 也会失败,
+	// 不如这里先识别出来。注意 LookupDeviceHandoff 不消耗 handoffs 表,保留给 finalize 用。
+	if h, ok2 := s.handoffs[code]; ok2 {
+		if time.Since(h.CreatedAt) > s.handoffTTL {
+			delete(s.deviceHandoffs, deviceID)
+			delete(s.handoffs, code)
+			return "", false
+		}
+	} else {
+		// handoff 已被别人 finalize 走了或被 GC 清掉:device_id 也清掉。
+		delete(s.deviceHandoffs, deviceID)
+		return "", false
+	}
+	delete(s.deviceHandoffs, deviceID)
+	return code, true
+}
+
 // GC 清理过期 state / handoff。建议每 5 分钟跑一次(由调用方启动 goroutine)。
 func (s *PendingStore) GC() {
 	now := time.Now()
@@ -362,6 +460,12 @@ func (s *PendingStore) GC() {
 	for k, v := range s.handoffs {
 		if now.Sub(v.CreatedAt) > s.handoffTTL {
 			delete(s.handoffs, k)
+		}
+	}
+	// 清理孤儿 deviceHandoffs:绑定的 handoff 已不存在
+	for d, code := range s.deviceHandoffs {
+		if _, ok := s.handoffs[code]; !ok {
+			delete(s.deviceHandoffs, d)
 		}
 	}
 }

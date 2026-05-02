@@ -48,6 +48,23 @@ $ErrorActionPreference = 'Stop'
 
 Show-Diagnostic
 
+# ====== 0. 校验根目录 .env(三端共用) ======
+$rootEnvFile = Join-Path $script:RepoRoot '.env'
+$rootEnvExample = Join-Path $script:RepoRoot '.env.example'
+
+if (-not (Test-Path $rootEnvFile)) {
+    if (Test-Path $rootEnvExample) {
+        Copy-Item $rootEnvExample $rootEnvFile
+        Write-Warn2 "从 .env.example 复制了一份 .env;请确认 PUBLIC_BASE_URL / OAUTH_* / TASKFLOW_JWT_SECRET 已填好。"
+    } else {
+        Write-Fail "找不到根目录 .env" "请先 cp .env.example .env 并按需修改"
+    }
+}
+Import-DotEnv $rootEnvFile | Out-Null
+if (-not $env:PUBLIC_BASE_URL) {
+    Write-Warn2 "根 .env 没设 PUBLIC_BASE_URL,Vite 会用兜底 http://127.0.0.1:8080"
+}
+
 # ====== 1. 环境检查 ======
 Write-Step "检查环境依赖"
 
@@ -139,18 +156,35 @@ if (-not $ServerOnly) {
 
 # ====== 4. Dev 模式: 同时起后端和前端 ======
 if ($Dev) {
+    # 端口优先级:命令行参数 -> 根 .env -> 默认值
+    if ($PSBoundParameters.ContainsKey('ServerPort') -eq $false) {
+        if ($env:TASKFLOW_LISTEN) {
+            $listenParts = $env:TASKFLOW_LISTEN -split ':'
+            if ($listenParts.Length -eq 2) {
+                $portFromEnv = [int]$listenParts[1]
+                if ($portFromEnv -gt 0) { $ServerPort = $portFromEnv }
+            }
+        }
+    }
+    if ($PSBoundParameters.ContainsKey('WebPort') -eq $false) {
+        if ($env:WEB_DEV_PORT) {
+            $portFromEnv = [int]$env:WEB_DEV_PORT
+            if ($portFromEnv -gt 0) { $WebPort = $portFromEnv }
+        }
+    }
     Write-Step "Dev 模式: 同时启动后端 ($ServerPort) 和前端 ($WebPort)"
 
     $serverDir = Join-Path $script:RepoRoot 'server'
     $webDir    = Join-Path $script:RepoRoot 'web'
 
-    # 检查 server config
+    # server 既支持 -config config.toml,也支持纯 .env;此处优先 .env(三端统一)。
+    # 若用户保留了一份 server/config.toml,server 启动时会自己合并 .env 覆盖。
     $cfgPath = Join-Path $serverDir 'config.toml'
     if (-not (Test-Path $cfgPath)) {
         $examplePath = Join-Path $serverDir 'config.example.toml'
         if (Test-Path $examplePath) {
             Copy-Item $examplePath $cfgPath
-            Write-Warn2 "已从 config.example.toml 复制出 config.toml, 请按需修改 (尤其 jwt_secret)"
+            Write-Warn2 "已从 config.example.toml 复制出 server\config.toml(.env 会覆盖其中的 OAuth/JWT/管理员等敏感字段)"
         }
     }
 

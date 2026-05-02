@@ -258,19 +258,11 @@ function buildURL(path: string, q?: Record<string, string | number | boolean | u
 
 // =============================================================
 // API: auth
+//
+// 三端均强制 OAuth 登录,本对象不再暴露 login / register 端点 ——
+// /api/auth/register 与 /api/auth/login 在服务端 OAUTH_ENABLED=true 下会返回 403。
 // =============================================================
 export const auth = {
-  async register(input: {
-    email: string
-    password: string
-    display_name?: string
-    timezone?: string
-  }): Promise<AuthResponse> {
-    return request('/api/auth/register', { method: 'POST', body: input, noAuth: true })
-  },
-  async login(input: { email: string; password: string }): Promise<AuthResponse> {
-    return request('/api/auth/login', { method: 'POST', body: input, noAuth: true })
-  },
   async logout(refresh_token?: string): Promise<void> {
     return request('/api/auth/logout', { method: 'POST', body: { refresh_token } })
   },
@@ -288,6 +280,23 @@ export const auth = {
   // 用它换本服务的 access/refresh token。
   async oauthFinalize(code: string): Promise<AuthResponse> {
     return request('/api/auth/oauth/finalize', { method: 'POST', body: { code }, noAuth: true })
+  },
+  // 桌面 / Android 客户端在打开系统浏览器后,持续 poll 这个接口拿 handoff。
+  // 200 -> {code: "..."};204 -> 还没准备好。404 / 5xx 会作为 ApiError 抛出。
+  async oauthPoll(deviceId: string): Promise<{ code: string } | null> {
+    const path = `/api/auth/oauth/poll?device_id=${encodeURIComponent(deviceId)}`
+    const url = absUrl(path)
+    let res: Response
+    try {
+      res = await fetch(url, { method: 'GET' })
+    } catch (e) {
+      throw new ApiError(0, 'network', (e as Error).message || '网络错误')
+    }
+    if (res.status === 204) return null
+    if (!res.ok) {
+      throw new ApiError(res.status, 'http_' + res.status, res.statusText || '轮询失败')
+    }
+    return (await res.json()) as { code: string }
   },
 }
 

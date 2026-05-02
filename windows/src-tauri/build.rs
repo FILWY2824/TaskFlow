@@ -12,10 +12,16 @@ fn main() {
 
     if let Ok(contents) = std::fs::read_to_string(&env_path) {
         let env = parse_env(&contents);
+        // 默认服务端 URL 优先级:
+        //   1) TASKFLOW_DEFAULT_SERVER_URL 显式覆盖
+        //   2) VITE_TASKFLOW_DEFAULT_SERVER 显式覆盖
+        //   3) PUBLIC_API_URL        后端 API 域名(前后端分离)
+        //   4) PUBLIC_BASE_URL       前端域名(单域名部署兼容)
         let default_server = env
             .iter()
             .find(|(key, _)| key == "TASKFLOW_DEFAULT_SERVER_URL")
             .or_else(|| env.iter().find(|(key, _)| key == "VITE_TASKFLOW_DEFAULT_SERVER"))
+            .or_else(|| env.iter().find(|(key, _)| key == "PUBLIC_API_URL"))
             .or_else(|| env.iter().find(|(key, _)| key == "PUBLIC_BASE_URL"))
             .map(|(_, value)| value.trim().trim_end_matches('/').to_string())
             .unwrap_or_default();

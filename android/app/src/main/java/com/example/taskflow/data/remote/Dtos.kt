@@ -3,23 +3,24 @@ package com.example.taskflow.data.remote
 import com.squareup.moshi.JsonClass
 
 // =============================================================
-// Auth
+// Auth (OAuth-only — 三端不再支持邮箱注册 / 密码登录)
 // =============================================================
 
 @JsonClass(generateAdapter = true)
-data class RegisterRequest(
-    val email: String,
-    val password: String,
-    val display_name: String? = null,
-    val timezone: String? = null,
-    val device_id: String? = null,
+data class AuthConfigDto(
+    val oauth_enabled: Boolean = false,
+    val oauth_provider: String? = null,
+    val oauth_start_url: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
-data class LoginRequest(
-    val email: String,
-    val password: String,
-    val device_id: String? = null,
+data class OAuthPollResponse(
+    val code: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class OAuthFinalizeRequest(
+    val code: String,
 )
 
 @JsonClass(generateAdapter = true)

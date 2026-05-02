@@ -1,8 +1,8 @@
 // On-disk app configuration: server URL, auth tokens, user preferences.
 //
-// File layout (JSON, single file to keep lock-free read/write simple):
-//   %APPDATA%/TaskFlow/config.json
-//   %APPDATA%/TaskFlow/cache.db          (SQLite, in db.rs)
+// File layout (all data co-located with the executable, NOT in AppData):
+//   <exe_dir>/data/config.json
+//   <exe_dir>/data/cache.db          (SQLite, in db.rs)
 //
 // We deliberately do NOT store any business state here. Cached todos /
 // reminders live in cache.db; UI session state lives in the webview's
@@ -107,21 +107,11 @@ impl AppConfig {
     }
 }
 
-/// %APPDATA%/TaskFlow on Windows, $XDG_CONFIG_HOME/taskflow elsewhere.
+/// 返回 <exe所在目录>/data 作为数据目录(便携化,所有数据跟着程序走)。
+/// Windows 上 exe 放在 Program Files 时需要写权限;安装时给 data/ 目录设好 ACL
+/// 或者安装时不选 Program Files,让用户选有写权限的目录(如 %LOCALAPPDATA%\Programs)。
 pub fn default_app_dir() -> Result<PathBuf> {
-    #[cfg(windows)]
-    {
-        let base = std::env::var_os("APPDATA")
-            .map(PathBuf::from)
-            .context("APPDATA not set")?;
-        Ok(base.join("TaskFlow"))
-    }
-    #[cfg(not(windows))]
-    {
-        let base = std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
-            .context("HOME not set")?;
-        Ok(base.join("taskflow"))
-    }
+    let exe = std::env::current_exe().context("current_exe")?;
+    let exe_dir = exe.parent().context("exe parent dir")?;
+    Ok(exe_dir.join("data"))
 }

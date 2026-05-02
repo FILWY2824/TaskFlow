@@ -4,9 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- 白勾,比例对齐 web/public/favicon.svg: M16 33l9 9 22-22 in 64x64 -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M37,57 L48,68 L72,42" 
+        android:fillColor="@android:color/transparent"
+        android:pathData="M27,56 L46,75 L79,36"
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="6" />
+        android:strokeWidth="9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
 </vector>

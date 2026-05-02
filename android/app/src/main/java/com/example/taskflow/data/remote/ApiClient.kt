@@ -10,15 +10,20 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 
 /**
- * 让 Retrofit 的 baseUrl 在用户改了服务端 URL 后也能切换 — 我们包了一层
- * AtomicReference,每次请求都从里头读 base 重写 host。
+ * Retrofit 客户端封装 —— 服务端地址固化到 BuildConfig.DEFAULT_SERVER_URL,运行时不可切换。
+ *
+ * 历史说明:之前允许用户在设置页 / 登录页自行输入服务端 URL,
+ * 并通过 AtomicReference + hostRewrite interceptor 做运行时切换。
+ * 现已移除该能力,API 请求始终指向构建时烧入的地址。
  */
 class ApiClient(private val tokenManager: TokenManager) {
 
-    private val baseRef = AtomicReference(resolveBase(tokenManager.current().serverUrl))
+    /** 服务端 base URL,始终以 "/" 结尾 */
+    private val base: String = BuildConfig.DEFAULT_SERVER_URL.let {
+        if (it.endsWith("/")) it else "$it/"
+    }
 
     val moshi: Moshi = Moshi.Builder()
         .add(KotlinJsonAdapterFactory())
@@ -27,15 +32,15 @@ class ApiClient(private val tokenManager: TokenManager) {
     private val authInterceptor = AuthInterceptor(
         tokenManager = tokenManager,
         moshi = moshi,
-        refreshUrlProvider = { baseRef.get() + "api/auth/refresh" },
+        refreshUrlProvider = { base + "api/auth/refresh" },
     )
 
     /**
-     * Host-rewriting interceptor —— Retrofit 的 baseUrl 是创建时固定的;
-     * 我们这里把每个请求的 host 改成当前 base,就支持运行时切换服务端。
+     * Host-rewriting interceptor —— Retrofit 的 baseUrl 是构建时烧入的,
+     * 每次请求将 host 重写为 BuildConfig.DEFAULT_SERVER_URL。
      */
     private val hostRewrite = okhttp3.Interceptor { chain ->
-        val current = baseRef.get().toHttpUrl()
+        val current = base.toHttpUrl()
         val originalUrl = chain.request().url
         // 仅改 host / port / scheme,保留路径和 query
         val rewritten = originalUrl.newBuilder()
@@ -69,16 +74,11 @@ class ApiClient(private val tokenManager: TokenManager) {
 
     val api: ApiService = retrofit.create(ApiService::class.java)
 
-    fun setBase(url: String) {
-        baseRef.set(resolveBase(url))
-    }
+    /** 服务端地址已固化;此方法保留仅为兼容旧代码(AuthViewModels 仍会调用),无实际效果 */
+    fun setBase(url: String) {}
 
-    fun currentBase(): String = baseRef.get()
-
-    private fun resolveBase(userUrl: String?): String {
-        val raw = userUrl?.takeIf { it.isNotBlank() } ?: BuildConfig.DEFAULT_SERVER_URL
-        return if (raw.endsWith("/")) raw else "$raw/"
-    }
+    /** 返回当前服务端 base URL(始终为 BuildConfig.DEFAULT_SERVER_URL) */
+    fun currentBase(): String = base
 
     private fun String.toHttpUrl(): okhttp3.HttpUrl {
         val v = if (this.endsWith("/")) this else "$this/"

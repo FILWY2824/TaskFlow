@@ -3,6 +3,7 @@ PKG         := ./...
 GOFLAGS     := -trimpath
 LDFLAGS     := -s -w
 VERSION     ?= 0.3.0
+ENV_FILE    ?= ../.env
 
 .PHONY: all tidy build run test fmt vet clean lint
 
@@ -23,7 +24,7 @@ build-linux-arm64:
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(GOFLAGS) -ldflags="$(LDFLAGS) -X main.version=$(VERSION)" -o $(BINARY)-linux-arm64 ./cmd/server
 
 run:
-	go run ./cmd/server -config config.toml
+	go run ./cmd/server -config config.toml -env $(ENV_FILE)
 
 test:
 	go test $(PKG) -count=1

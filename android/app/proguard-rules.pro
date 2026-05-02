@@ -15,4 +15,7 @@
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
 
+# Tink / Security-Crypto annotations (compile-time only, not needed at runtime)
+-dontwarn com.google.errorprone.annotations.**
+
 # Compose - usually handled by AGP / kotlin-compose plugin

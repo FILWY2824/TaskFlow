@@ -21,7 +21,6 @@ import com.example.taskflow.ui.screens.LoginScreen
 import com.example.taskflow.ui.screens.NotificationsScreen
 import com.example.taskflow.ui.screens.PermissionCheckScreen
 import com.example.taskflow.ui.screens.PomodoroScreen
-import com.example.taskflow.ui.screens.RegisterScreen
 import com.example.taskflow.ui.screens.SettingsScreen
 import com.example.taskflow.ui.screens.StatsScreen
 import com.example.taskflow.ui.screens.TasksScreen
@@ -74,11 +73,11 @@ private fun AppNav(container: AppContainer) {
     val start = if (session.isLoggedIn) Route.TASKS else Route.LOGIN
 
     // 当后台 401 把 token 清空(AuthInterceptor 处理),自动跳回登录页。
-    // 唯一例外:用户已经在 login / register 页面,就不要循环跳了。
+    // 唯一例外:用户已经在 login 页面,就不要循环跳了。
     androidx.compose.runtime.LaunchedEffect(session.isLoggedIn) {
         if (!session.isLoggedIn) {
             val current = nav.currentBackStackEntry?.destination?.route
-            if (current != null && current != Route.LOGIN && current != Route.REGISTER) {
+            if (current != null && current != Route.LOGIN) {
                 nav.navigate(Route.LOGIN) { popUpTo(0) { inclusive = true } }
             }
         }
@@ -94,19 +93,6 @@ private fun AppNav(container: AppContainer) {
                         popUpTo(Route.LOGIN) { inclusive = true }
                     }
                 },
-                onGotoRegister = { nav.navigate(Route.REGISTER) },
-            )
-        }
-
-        composable(Route.REGISTER) {
-            RegisterScreen(
-                container = container,
-                onSuccess = {
-                    nav.navigate(Route.TASKS) {
-                        popUpTo(Route.LOGIN) { inclusive = true }
-                    }
-                },
-                onGotoLogin = { nav.popBackStack() },
             )
         }
 
@@ -163,7 +149,6 @@ private fun AppNav(container: AppContainer) {
 
 private object Route {
     const val LOGIN = "login"
-    const val REGISTER = "register"
     const val TASKS = "tasks"
     const val TODO_EDIT_PREFIX = "todo_edit"
     const val NOTIFS = "notifs"

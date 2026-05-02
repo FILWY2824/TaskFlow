@@ -2,9 +2,8 @@
 #
 # 干什么:
 #   1) 检查 JDK 17 / ANDROID_HOME / SDK 平台
-#   2) 引导 gradle-wrapper.jar (项目里没带, 必须先 bootstrap)
-#   3) 写 local.properties (sdk.dir + 默认服务器地址)
-#   4) ./gradlew :app:assembleRelease 或 :app:assembleDebug
+#   2) 校验仓库根 .env(三端共用 PUBLIC_BASE_URL,作为出厂默认服务端 URL)
+#   3) ./gradlew :app:assembleRelease 或 :app:assembleDebug
 #
 # 用法:
 #   # Debug APK (无需签名, 装机即用, 适合测试)
@@ -13,7 +12,7 @@
 #   # Release APK (需签名 keystore, 见下面参数)
 #   powershell -ExecutionPolicy Bypass -File scripts-deploy\deploy-android.ps1 -Release
 #
-#   # 指定后端服务器地址 (烧进 BuildConfig.DEFAULT_SERVER_URL, 用户首次启动默认连这个)
+#   # 命令行临时覆盖默认服务器地址(优先级高于 .env 的 PUBLIC_BASE_URL)
 #   powershell -ExecutionPolicy Bypass -File scripts-deploy\deploy-android.ps1 `
 #       -ServerUrl 'https://taskflow.example.com'
 #
@@ -29,17 +28,17 @@
 #   android\app\build\outputs\apk\debug\TaskFlow-debug.apk
 #   android\app\build\outputs\apk\release\TaskFlow-release.apk
 #
-# 报错排查 (按出现频率排序):
-#   - "Could not find or load main class org.gradle.wrapper.GradleWrapperMain"
-#       → gradle-wrapper.jar 缺失, 本脚本会自动下载
-#   - "SDK location not found"
-#       → 没装 Android SDK 或 ANDROID_HOME 没设, 脚本会引导
-#   - "Failed to apply plugin 'com.android.application'"
-#       → AGP 版本要 JDK 17 (不是 11 也不是 21)
+# 注意:
+#   * gradle-wrapper.jar 已经在仓库里(android/gradle/wrapper/),不需要任何 bootstrap。
+#     如果它不见了,说明 git checkout 不完整,本脚本会直接报错。
+#   * 默认服务器地址来自仓库根 .env 的 PUBLIC_BASE_URL,与 server / web / windows 共用一份。
+#     不再有 android\local.properties 里 taskflow.default.server.url 这种局部覆盖入口。
+#
+# 报错排查:
+#   - "SDK location not found"       → 没装 Android SDK 或 ANDROID_HOME 没设
 #   - "compileSdk = 35 ... not installed"
-#       → 用 sdkmanager 装: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-#   - 国内下载 Gradle 慢/卡
-#       → 脚本支持 -GradleMirror 切清华镜像
+#       → sdkmanager "platforms;android-35" "build-tools;35.0.0"
+#   - 国内 Gradle 下载慢 → -GradleMirror 切清华镜像
 
 [CmdletBinding()]
 param(
@@ -140,91 +139,44 @@ if (-not $SkipChecks) {
     }
 }
 
-# ====== 2. 写 local.properties 的 server url ======
+# ====== 2. 读根目录 .env 拿 PUBLIC_BASE_URL,作为客户端出厂默认服务端 URL ======
+# 三端共用根 .env;android/app/build.gradle.kts 也会读 .env 里的 PUBLIC_BASE_URL,
+# 这里再 export 一份到环境变量是为了让 -ServerUrl 命令行覆盖也能生效。
+Write-Step "解析根目录 .env"
+
+$rootEnvFile = Join-Path $script:RepoRoot '.env'
+$rootEnvExample = Join-Path $script:RepoRoot '.env.example'
+
+if (-not (Test-Path $rootEnvFile)) {
+    if (Test-Path $rootEnvExample) {
+        Copy-Item $rootEnvExample $rootEnvFile
+        Write-Warn2 "从 .env.example 复制了一份 .env;请确认 PUBLIC_BASE_URL 已填好。"
+    } else {
+        Write-Fail "找不到根目录 .env" "请先 cp .env.example .env 并修改 PUBLIC_BASE_URL"
+    }
+}
+Import-DotEnv $rootEnvFile | Out-Null
+
+# 命令行 -ServerUrl 优先级最高(本次构建生效,不写 .env)
 if ($ServerUrl) {
-    Write-Step "写默认服务器地址 (烧进 BuildConfig.DEFAULT_SERVER_URL)"
-    $localPropsPath = Join-Path $androidDir 'local.properties'
-    $existing = if (Test-Path $localPropsPath) { Get-Content $localPropsPath } else { @() }
-    $filtered = $existing | Where-Object { $_ -notmatch '^\s*taskflow\.default\.server\.url\s*=' }
-    $filtered = @($filtered) + "taskflow.default.server.url=$ServerUrl"
-    Set-Content -Path $localPropsPath -Value $filtered -Encoding UTF8
-    Write-Ok "默认服务器地址: $ServerUrl"
+    Write-Step "命令行覆盖默认服务器地址 = $ServerUrl"
+    $env:TASKFLOW_DEFAULT_SERVER_URL = $ServerUrl
+} elseif ($env:PUBLIC_BASE_URL) {
+    $env:TASKFLOW_DEFAULT_SERVER_URL = $env:PUBLIC_BASE_URL
+    Write-Ok "TASKFLOW_DEFAULT_SERVER_URL = $($env:TASKFLOW_DEFAULT_SERVER_URL)(取自 .env 的 PUBLIC_BASE_URL)"
+} else {
+    Write-Warn2 "根目录 .env 没设 PUBLIC_BASE_URL;客户端会用 build.gradle.kts 的兜底值。"
 }
 
-# ====== 3. Bootstrap gradle-wrapper.jar ======
+# ====== 3. gradle-wrapper.jar 检查(项目里已带,正常情况下不会缺) ======
 Write-Step "检查 gradle-wrapper.jar"
 $wrapperJar = Join-Path $androidDir 'gradle\wrapper\gradle-wrapper.jar'
 if (-not (Test-Path $wrapperJar)) {
-    Write-Warn2 "gradle-wrapper.jar 缺失, 自动引导 (~145MB 一次性)"
-
-    Push-Location $androidDir
-    try {
-        # 优先用本机 gradle (如果有)
-        $gradleCmd = Get-Command gradle -ErrorAction SilentlyContinue
-        if ($gradleCmd) {
-            Write-Host "    > 检测到本机 gradle: $($gradleCmd.Source)"
-            & gradle wrapper --gradle-version 8.10.2 --distribution-type bin
-            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $wrapperJar)) {
-                Write-Warn2 "gradle wrapper 命令没成功, 走下载方案"
-            }
-        }
-
-        # 没成功就下载
-        if (-not (Test-Path $wrapperJar)) {
-            $gradleVersion = '8.10.2'
-            $tmpDir = Join-Path $env:TEMP "taskflow-gradle-bootstrap-$gradleVersion"
-            $zipFile = Join-Path $tmpDir "gradle-$gradleVersion-bin.zip"
-
-            New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
-
-            if (-not (Test-Path $zipFile)) {
-                $zipUrl = if ($GradleMirror) {
-                    "https://mirrors.tuna.tsinghua.edu.cn/gradle/distributions/v$gradleVersion/gradle-$gradleVersion-bin.zip"
-                } else {
-                    "https://services.gradle.org/distributions/gradle-$gradleVersion-bin.zip"
-                }
-                Write-Host "    > 下载 $zipUrl"
-                $oldProgress = $ProgressPreference
-                $ProgressPreference = 'SilentlyContinue'
-                try {
-                    Invoke-WebRequest -Uri $zipUrl -OutFile $zipFile -UseBasicParsing
-                } catch {
-                    $hint = if ($GradleMirror) {
-                        '清华镜像也下载失败. 检查网络或手动下载放到: ' + $zipFile
-                    } else {
-                        '下载失败. 加 -GradleMirror 走清华源, 或手动下载放到: ' + $zipFile
-                    }
-                    Write-Fail "下载 Gradle 失败: $_" $hint
-                } finally {
-                    $ProgressPreference = $oldProgress
-                }
-            }
-
-            Write-Host "    > 解压 gradle-wrapper.jar"
-            Add-Type -AssemblyName System.IO.Compression.FileSystem
-            $zip = [System.IO.Compression.ZipFile]::OpenRead($zipFile)
-            try {
-                $entry = $zip.Entries | Where-Object {
-                    $_.Name -like 'gradle-wrapper-*.jar'
-                } | Select-Object -First 1
-                if (-not $entry) {
-                    Write-Fail "在 zip 中找不到 gradle-wrapper jar" '建议改用 Android Studio 打开 android 目录'
-                }
-                New-Item -ItemType Directory -Force -Path (Split-Path $wrapperJar) | Out-Null
-                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $wrapperJar, $true)
-            } finally {
-                $zip.Dispose()
-            }
-        }
-    } finally {
-        Pop-Location
-    }
-
-    if (Test-Path $wrapperJar) {
-        Write-Ok "gradle-wrapper.jar 就绪"
-    } else {
-        Write-Fail 'gradle-wrapper.jar 引导失败' '建议用 Android Studio 打开 android\ 目录, IDE 会自动 sync'
-    }
+    Write-Fail "缺少 $wrapperJar" @'
+项目仓库自带 gradle-wrapper.jar(48 KB)。如果它不见了,通常意味着 git checkout
+不完整,或者是被某些"清理空目录"脚本误删了。请重新 clone 或从最近一次 commit 恢复:
+  git checkout HEAD -- android/gradle/wrapper/gradle-wrapper.jar
+'@
 } else {
     Write-Ok "gradle-wrapper.jar 已存在"
 }

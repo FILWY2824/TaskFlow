@@ -2,17 +2,14 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 // 路由懒加载，首屏只加载 Layout + 默认视图。
+//
+// 三端强制 OAuth 登录(.env 里 OAUTH_ENABLED=true),邮箱密码注册路径已移除。
+// 旧的 /register 路径会被下面的 catchAll 兜底跳到 /login。
 const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'login',
     component: () => import('@/views/Login.vue'),
-    meta: { public: true },
-  },
-  {
-    path: '/register',
-    name: 'register',
-    component: () => import('@/views/Register.vue'),
     meta: { public: true },
   },
   {
@@ -74,7 +71,6 @@ router.beforeEach((to) => {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
   // 公开路由 + 已登录：除了 alarm 这种"独立窗口"，其他公开页跳到默认视图。
-  // BUGFIX: 此前这里也是不存在的 'today'，已登录用户访问 /login 会卡住。
   if (to.meta.public && authStore.isAuthenticated && !to.meta.standalone) {
     return { name: 'schedule' }
   }

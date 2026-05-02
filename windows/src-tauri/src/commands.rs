@@ -133,10 +133,22 @@ pub fn open_external(url: String) -> Result<(), String> {
     // a manual `Command::new` covers our two use cases (Telegram + admin URL).
     #[cfg(windows)]
     {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", &url])
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        use windows::core::PCWSTR;
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOW;
+        // 用 ShellExecuteW 而非 cmd /c start,避免 cmd.exe 把 URL 中 & 解释为命令分隔符。
+        let url_w: Vec<u16> = url.encode_utf16().chain(std::iter::once(0)).collect();
+        let op_w: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            ShellExecuteW(
+                None,
+                PCWSTR(op_w.as_ptr()),
+                PCWSTR(url_w.as_ptr()),
+                None,
+                None,
+                SW_SHOW,
+            );
+        }
     }
     #[cfg(target_os = "macos")]
     {

@@ -420,23 +420,6 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () 
                 )
             }
 
-            // ---------- 服务端 ----------
-            SettingsCard(title = "服务端") {
-                OutlinedTextField(
-                    value = state.serverUrl,
-                    onValueChange = vm::setServerUrl,
-                    label = { Text("服务端 URL") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = vm::saveServerUrl) { Text("保存") }
-                if (state.info != null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(state.info!!, color = MaterialTheme.colorScheme.primary)
-                }
-            }
-
             // ---------- 权限自检(Android 专属,内联) ----------
             SettingsCard(
                 title = "Android 通知与强提醒权限",

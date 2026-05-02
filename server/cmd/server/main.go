@@ -29,7 +29,7 @@ var version = "0.5.0"
 
 func main() {
 	cfgPath := flag.String("config", "config.toml", "path to config file")
-	envPath := flag.String("env", ".env", "path to .env file (optional, ignored if missing)")
+	envPath := flag.String("env", "../.env", "path to root .env file (project uses single .env at repo root)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 

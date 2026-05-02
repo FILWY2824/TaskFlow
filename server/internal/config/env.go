@@ -111,13 +111,19 @@ func unquoteEnvValue(v string) (string, error) {
 	return v, nil
 }
 
-// PublicBaseURL 返回去掉末尾斜杠的 PUBLIC_BASE_URL,没设置则空串。
-//
-// 主要用于:
-//   - LoadOAuthFromEnv 推导 redirect_url / frontend_redirect_url
-//   - 其他模块需要给浏览器拼绝对链接(下载页、邮件等)
+// PublicBaseURL 返回去掉末尾斜杠的 PUBLIC_BASE_URL(前端域名),没设置则空串。
 func PublicBaseURL() string {
 	v := strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL"))
+	return strings.TrimRight(v, "/")
+}
+
+// PublicApiURL 返回去掉末尾斜杠的 PUBLIC_API_URL(后端 API 域名),没设置则
+// 回退到 PUBLIC_BASE_URL(单域名部署兼容)。
+func PublicApiURL() string {
+	v := strings.TrimSpace(os.Getenv("PUBLIC_API_URL"))
+	if v == "" {
+		v = os.Getenv("PUBLIC_BASE_URL")
+	}
 	return strings.TrimRight(v, "/")
 }
 
@@ -153,15 +159,17 @@ func LoadOAuthFromEnv() (OAuthConfig, error) {
 		return cfg, nil
 	}
 
-	// 用 PUBLIC_BASE_URL 给两个 redirect 字段提供默认值 —— 用户没填就按公网根
-	// URL 推导,这样换部署域名时改一处即可。
-	if base := PublicBaseURL(); base != "" {
-		if strings.TrimSpace(cfg.RedirectURL) == "" {
-			cfg.RedirectURL = base + "/api/auth/oauth/callback"
-		}
-		if strings.TrimSpace(cfg.FrontendRedirectURL) == "" {
-			cfg.FrontendRedirectURL = base + "/oauth/callback"
-		}
+	// 重定向 URL 推导(前后端分离):
+	//   - RedirectURL(OAuth 回调)       → ${PUBLIC_API_URL}/api/auth/oauth/callback
+	//   - FrontendRedirectURL(登录成功页) → ${PUBLIC_BASE_URL}/oauth/callback
+	// PUBLIC_API_URL 没填时回退到 PUBLIC_BASE_URL(单域名部署兼容)。
+	apiBase := PublicApiURL()
+	frontBase := PublicBaseURL()
+	if apiBase != "" && strings.TrimSpace(cfg.RedirectURL) == "" {
+		cfg.RedirectURL = apiBase + "/api/auth/oauth/callback"
+	}
+	if frontBase != "" && strings.TrimSpace(cfg.FrontendRedirectURL) == "" {
+		cfg.FrontendRedirectURL = frontBase + "/oauth/callback"
 	}
 
 	// typo 兜底:这是用户最容易踩的坑(双 https://、忘写协议头)。

@@ -1,5 +1,5 @@
 # ==============================
-# OS & Editor/IDE Files
+# OS & Editor / IDE
 # ==============================
 .DS_Store
 Thumbs.db
@@ -13,18 +13,30 @@ Thumbs.db
 *.sln
 
 # ==============================
-# Go Backend (/server)
+# Env & secrets (only .env.example is committed)
 # ==============================
-/server/taskflow-server
-/server/taskflow-server-*
+.env
+.env.local
+.env.*.local
+
+# ==============================
+# Go backend (/server)
+# ==============================
+/server/taskflow-server*
 /server/dist/
-/server/config.toml
 /server/data/
 /server/*.db
 /server/*.db-wal
 /server/*.db-shm
 /server/*.log
 /server/vendor/
+/server/config.toml
+
+# 数据文件(保留目录结构,只忽略内容)
+/data/*
+!/data/.gitkeep
+/server/data/
+/backup/
 
 # ==============================
 # Node / Frontend (/web & /windows)
@@ -38,14 +50,13 @@ yarn-error.log
 pnpm-debug.log
 .npm/
 *.tsbuildinfo
-.env
-.env.*.local
-.env.local
 
 # ==============================
 # Rust / Tauri (/windows)
 # ==============================
 /windows/src-tauri/target/
+# Tauri build 产物的 schemas 由 tauri-build 在每次编译时重建,不需要进 git。
+/windows/src-tauri/gen/
 **/*.rs.bk
 
 # ==============================
@@ -56,16 +67,30 @@ pnpm-debug.log
 /android/app/build/
 /android/local.properties
 /android/.cxx/
-*.apk
-*.aab
+/android/.kotlin/
 *.keystore
+# APK / AAB:只忽略 android/ 下的构建散碎;releases/ 下的正式包要提交。
+/android/**/*.apk
+/android/**/*.aab
 
 # ==============================
-# Logs & General Caches
+# 下载 / 发布目录 —— 用户下载的产物,必须提交
+# ==============================
+!releases/
+!releases/**/
+
+# ==============================
+# Logs & misc
 # ==============================
 *.log
 .tmp/
 .temp/
-
 *.patch
 .alma-snapshots
+.claude/
+.external-profile-reference/
+
+# ==============================
+# 部署临时文件
+# ==============================
+/deploy/downloads/

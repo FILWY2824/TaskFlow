@@ -5,53 +5,123 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.taskflow.AppContainer
 import com.example.taskflow.data.repository.Result
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.time.ZoneId
 
-data class AuthUiState(
-    val email: String = "",
-    val password: String = "",
-    val displayName: String = "",
-    val timezone: String = ZoneId.systemDefault().id,
+/**
+ * Android 端登录 UI 状态(OAuth-only)。
+ *
+ * 三端均强制走 OAuth,Android 走 "Custom Tabs + 服务端 poll"。状态机:
+ *
+ *   IDLE -> LAUNCHING -> WAITING -> FINALIZING -> SUCCESS
+ *                                ^             v
+ *                                +---ERROR-----+
+ *
+ * 用户在登录页:
+ *   - 输入服务器 URL(默认烧入的 BuildConfig.DEFAULT_SERVER_URL,可改)
+ *   - 点 "通过认证中心登录" 按钮
+ *      * ViewModel 生成 device_id 并把 OAuth start URL 通过 [pendingOpenUrl] 暴露
+ *      * Activity 监听 pendingOpenUrl,用 Custom Tabs / Intent 打开
+ *      * ViewModel 在后台 poll 服务端,拿到 handoff -> 调 finalize -> 保存 token -> success
+ */
+data class OAuthLoginState(
     val serverUrl: String = "",
-    val isLoading: Boolean = false,
+    val phase: Phase = Phase.IDLE,
     val error: String? = null,
+    /** 一次性"请打开这个 URL"信号,Activity 拿到后立刻 setNull,避免重复打开 */
+    val pendingOpenUrl: String? = null,
     val success: Boolean = false,
-)
+) {
+    enum class Phase { IDLE, LAUNCHING, WAITING, FINALIZING }
+}
 
 class LoginViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _state = MutableStateFlow(
-        AuthUiState(serverUrl = container.tokenManager.current().serverUrl ?: container.apiClient.currentBase().trimEnd('/'))
+        OAuthLoginState(
+            serverUrl = container.tokenManager.current().serverUrl
+                ?: container.apiClient.currentBase().trimEnd('/'),
+        )
     )
-    val state: StateFlow<AuthUiState> = _state.asStateFlow()
+    val state: StateFlow<OAuthLoginState> = _state.asStateFlow()
 
-    fun setEmail(v: String) { _state.value = _state.value.copy(email = v, error = null) }
-    fun setPassword(v: String) { _state.value = _state.value.copy(password = v, error = null) }
-    fun setServerUrl(v: String) { _state.value = _state.value.copy(serverUrl = v, error = null) }
+    private var pollJob: Job? = null
+    private var deviceId: String? = null
 
-    fun login() {
-        val s = _state.value
-        if (s.email.isBlank() || s.password.isBlank()) {
-            _state.value = s.copy(error = "请输入邮箱和密码")
-            return
-        }
-        // 应用服务端 URL
-        applyServerUrl(s.serverUrl)
-        _state.value = s.copy(isLoading = true, error = null)
-        viewModelScope.launch {
-            val r = container.authRepository.login(s.email, s.password)
-            _state.value = when (r) {
+    fun setServerUrl(v: String) {
+        _state.value = _state.value.copy(serverUrl = v, error = null)
+    }
+
+    /**
+     * 用户点 "通过认证中心登录":
+     *   1) 应用 server URL 到 ApiClient + TokenManager
+     *   2) 生成 device_id,拼出 start URL
+     *   3) 通过 pendingOpenUrl 通知 Activity 打开浏览器
+     *   4) 后台 poll handoff,拿到后 finalize,成功则 success=true,UI 跳转
+     */
+    fun startOAuth() {
+        applyServerUrl(_state.value.serverUrl)
+        val id = container.authRepository.generateDeviceId()
+        deviceId = id
+        val url = container.authRepository.oauthStartUrl(id)
+        _state.value = _state.value.copy(
+            phase = OAuthLoginState.Phase.LAUNCHING,
+            error = null,
+            pendingOpenUrl = url,
+        )
+
+        // 启动后台 poll
+        pollJob?.cancel()
+        pollJob = viewModelScope.launch {
+            // 进入 WAITING
+            _state.value = _state.value.copy(phase = OAuthLoginState.Phase.WAITING)
+            val pollRes = container.authRepository.pollForHandoff(id)
+            when (pollRes) {
                 is Result.Success -> {
-                    // 拉一遍提醒列表到本地缓存,保证离线可触发
-                    container.reminderRepository.refreshAll()
-                    _state.value.copy(isLoading = false, success = true, error = null)
+                    _state.value = _state.value.copy(phase = OAuthLoginState.Phase.FINALIZING)
+                    val finalizeRes = container.authRepository.finalize(pollRes.data)
+                    when (finalizeRes) {
+                        is Result.Success -> {
+                            // 拉一遍提醒列表到本地缓存,保证离线可触发
+                            container.reminderRepository.refreshAll()
+                            _state.value = _state.value.copy(
+                                phase = OAuthLoginState.Phase.IDLE,
+                                success = true,
+                            )
+                        }
+                        is Result.Error -> _state.value = _state.value.copy(
+                            phase = OAuthLoginState.Phase.IDLE,
+                            error = finalizeRes.message,
+                        )
+                    }
                 }
-                is Result.Error -> _state.value.copy(isLoading = false, error = r.message)
+                is Result.Error -> _state.value = _state.value.copy(
+                    phase = OAuthLoginState.Phase.IDLE,
+                    error = pollRes.message,
+                )
             }
+        }
+    }
+
+    /** 用户在系统浏览器里取消、或点 UI 上的"取消" -> 立刻停轮询、重置状态。 */
+    fun cancelOAuth() {
+        pollJob?.cancel()
+        pollJob = null
+        deviceId = null
+        _state.value = _state.value.copy(
+            phase = OAuthLoginState.Phase.IDLE,
+            pendingOpenUrl = null,
+            error = null,
+        )
+    }
+
+    /** Activity 把 pendingOpenUrl 消费完,通知 VM 重置,避免重复打开 */
+    fun consumePendingOpenUrl() {
+        if (_state.value.pendingOpenUrl != null) {
+            _state.value = _state.value.copy(pendingOpenUrl = null)
         }
     }
 
@@ -63,50 +133,13 @@ class LoginViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    override fun onCleared() {
+        pollJob?.cancel()
+        super.onCleared()
+    }
+
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = LoginViewModel(container) as T
-    }
-}
-
-class RegisterViewModel(private val container: AppContainer) : ViewModel() {
-    private val _state = MutableStateFlow(
-        AuthUiState(serverUrl = container.tokenManager.current().serverUrl ?: container.apiClient.currentBase().trimEnd('/'))
-    )
-    val state: StateFlow<AuthUiState> = _state.asStateFlow()
-
-    fun setEmail(v: String) { _state.value = _state.value.copy(email = v, error = null) }
-    fun setPassword(v: String) { _state.value = _state.value.copy(password = v, error = null) }
-    fun setDisplayName(v: String) { _state.value = _state.value.copy(displayName = v) }
-    fun setTimezone(v: String) { _state.value = _state.value.copy(timezone = v) }
-    fun setServerUrl(v: String) { _state.value = _state.value.copy(serverUrl = v, error = null) }
-
-    fun register() {
-        val s = _state.value
-        if (s.email.isBlank() || s.password.length < 8) {
-            _state.value = s.copy(error = "邮箱必填,密码至少 8 位")
-            return
-        }
-        val v = s.serverUrl.trim()
-        if (v.isNotBlank()) {
-            container.tokenManager.setServerUrl(v)
-            container.apiClient.setBase(v)
-        }
-        _state.value = s.copy(isLoading = true, error = null)
-        viewModelScope.launch {
-            val r = container.authRepository.register(s.email, s.password, s.displayName, s.timezone)
-            _state.value = when (r) {
-                is Result.Success -> {
-                    container.reminderRepository.refreshAll()
-                    _state.value.copy(isLoading = false, success = true)
-                }
-                is Result.Error -> _state.value.copy(isLoading = false, error = r.message)
-            }
-        }
-    }
-
-    class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T = RegisterViewModel(container) as T
     }
 }

@@ -2,12 +2,17 @@
 # TaskFlow —— docker-compose 一键部署(开发 / 单机生产)
 #
 # 启动:
-#   cp .env.example .env      # 修改 ADMIN_*、JWT_SECRET 等
+#   cp .env.example .env      # 修改 ADMIN_*、JWT_SECRET、PUBLIC_BASE_URL、OAUTH_*
 #   docker compose up -d --build
 #
 # 服务:
 #   server  —— Go 后端,内部端口 8080,数据卷 ./data
 #   web     —— nginx 静态托管 + /api 反代到 server,对外暴露 ${WEB_PORT:-8080}
+#
+# 关键:
+#   * PUBLIC_BASE_URL 必须设置,否则 OAuth 回调 URL 推导不出来,登录会卡住。
+#   * 单一来源:本仓库根目录的 .env 既是 docker-compose 的 env file,也是
+#     Vite/Tauri/Gradle 共用的 .env。子目录里没有第二份 .env。
 #
 # 备份:容器卷 ./data 与 ./backup 挂在仓库根目录下,用 deploy/scripts/backup.sh
 # (在宿主机上运行即可,不需要进容器)。
@@ -25,21 +30,19 @@ services:
     expose:
       - "8080"
     environment:
-      # ---- 必须 ----
+      # ---- 公网根 URL(必填,OAuth 回调据此推导) ----
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?PUBLIC_BASE_URL is required (e.g. https://taskflow.teamcy.eu.cc)}
+
+      # ---- 后端核心 ----
       TASKFLOW_JWT_SECRET: ${TASKFLOW_JWT_SECRET:?TASKFLOW_JWT_SECRET is required (>=32 random hex chars)}
+      TASKFLOW_LOG_LEVEL: ${TASKFLOW_LOG_LEVEL:-info}
 
       # ---- 启动管理员 ----
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
 
-      # ---- 可选 ----
-      TASKFLOW_LOG_LEVEL: ${TASKFLOW_LOG_LEVEL:-info}
-      TASKFLOW_TG_BOT_TOKEN: ${TASKFLOW_TG_BOT_TOKEN:-}
-      TASKFLOW_TG_BOT_USER: ${TASKFLOW_TG_BOT_USER:-}
-      TASKFLOW_TG_WEBHOOK_SEC: ${TASKFLOW_TG_WEBHOOK_SEC:-}
-
-      # ---- OAuth(默认关闭。打开请把 OAUTH_ENABLED=true 并填齐 6 个字段) ----
-      OAUTH_ENABLED: ${OAUTH_ENABLED:-false}
+      # ---- OAuth(必填,本项目强制 OAuth 登录) ----
+      OAUTH_ENABLED: ${OAUTH_ENABLED:-true}
       OAUTH_PROVIDER: ${OAUTH_PROVIDER:-}
       OAUTH_AUTHORIZE_URL: ${OAUTH_AUTHORIZE_URL:-}
       OAUTH_TOKEN_URL: ${OAUTH_TOKEN_URL:-}
@@ -49,8 +52,16 @@ services:
       OAUTH_REDIRECT_URL: ${OAUTH_REDIRECT_URL:-}
       OAUTH_FRONTEND_REDIRECT_URL: ${OAUTH_FRONTEND_REDIRECT_URL:-}
       OAUTH_SCOPES: ${OAUTH_SCOPES:-openid profile email}
+      OAUTH_EMAIL_FIELD: ${OAUTH_EMAIL_FIELD:-email}
+      OAUTH_NAME_FIELD: ${OAUTH_NAME_FIELD:-name}
+      OAUTH_SUBJECT_FIELD: ${OAUTH_SUBJECT_FIELD:-sub}
 
-      # 让进程内部 SQLite 走容器宿主时区(数据按 UTC 存,这里只影响日志)
+      # ---- Telegram(可选) ----
+      TASKFLOW_TG_BOT_TOKEN: ${TASKFLOW_TG_BOT_TOKEN:-}
+      TASKFLOW_TG_BOT_USER: ${TASKFLOW_TG_BOT_USER:-}
+      TASKFLOW_TG_WEBHOOK_SEC: ${TASKFLOW_TG_WEBHOOK_SEC:-}
+
+      # 容器内时区(数据按 UTC 存,这里只影响日志)
       TZ: ${TZ:-UTC}
 
     volumes:
@@ -59,7 +70,7 @@ services:
 
     healthcheck:
       # distroless 没 shell;用 nc 也不行 —— Go 后端的 /healthz 由 web 容器代为探测就够,
-      # 这里给一个最朴素的 TCP 探测:start_period 给 5s 让进程拉起。
+      # 这里给一个最朴素的探测:start_period 给 5s 让进程拉起。
       test: ["CMD", "/taskflow-server", "-version"]
       interval: 30s
       timeout: 5s
@@ -73,13 +84,17 @@ services:
     build:
       context: .
       dockerfile: web/Dockerfile
+      # PUBLIC_BASE_URL 不影响 web 容器自身行为(同源部署),但保留作为 build arg
+      # 以便未来需要在构建期注入(例如 manifest.json / sitemap.xml)。
+      args:
+        PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
     image: taskflow-web:local
     container_name: taskflow-web
     restart: unless-stopped
     depends_on:
       - server
     ports:
-      # 默认对外 8080。如果要直接挂在 80 端口(单机生产、无外层反代),改成 "80:80"。
+      # 默认对外 8080。若要直接挂 80,把 WEB_PORT 改成 80。
       - "${WEB_PORT:-8080}:80"
     networks:
       - taskflow-net
