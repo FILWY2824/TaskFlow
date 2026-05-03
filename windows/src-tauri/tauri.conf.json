@@ -30,12 +30,6 @@
     ],
     "security": {
       "csp": "default-src 'self' tauri: ipc: asset:; script-src 'self' 'unsafe-inline' 'unsafe-eval' tauri:; style-src 'self' 'unsafe-inline' tauri:; img-src 'self' tauri: asset: data: blob: https: http:; connect-src 'self' tauri: ipc: asset: https: http: ws: wss:; font-src 'self' tauri: data:; worker-src 'self' tauri: blob:"
-    },
-    "trayIcon": {
-      "iconPath": "icons/tray.png",
-      "iconAsTemplate": false,
-      "menuOnLeftClick": false,
-      "tooltip": "TaskFlow"
     }
   },
   "bundle": {

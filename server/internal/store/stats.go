@@ -44,11 +44,12 @@ func (s *StatsStore) Summary(ctx context.Context, userID int64, loc *time.Locati
 	out := &Summary{}
 
 	// todos_total / todos_open / todos_completed (排除软删)
+	// COALESCE 防止新用户 0 行时 SUM 返回 NULL,导致 Scan int 失败。
 	if err := s.DB.QueryRowContext(ctx, `
 		SELECT
 			COUNT(*),
-			SUM(CASE WHEN is_completed = 0 THEN 1 ELSE 0 END),
-			SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END)
+			COALESCE(SUM(CASE WHEN is_completed = 0 THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END), 0)
 		FROM todos
 		WHERE user_id = ? AND deleted_at IS NULL
 	`, userID).Scan(&out.TodosTotal, &out.TodosOpen, &out.TodosCompleted); err != nil {

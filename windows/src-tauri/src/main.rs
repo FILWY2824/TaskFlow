@@ -57,6 +57,14 @@ pub struct AppState {
 }
 
 fn main() {
+    // 0) 单实例检查:通过 TCP 端口绑定防止多开。
+    //    必须把 listener 存到变量里,让它活到进程结束。如果放在 match 里
+    //    会在 match 结束后立即 drop,端口就释放了,单实例锁失效。
+    let _single_instance_lock = std::net::TcpListener::bind("127.0.0.1:19830");
+    if _single_instance_lock.is_err() {
+        return; // 已有实例,静默退出
+    }
+
     // 1) 解析 app dir。失败的话连日志都没地方写,直接 MessageBox 退出。
     let app_dir = match config::default_app_dir() {
         Ok(d) => d,

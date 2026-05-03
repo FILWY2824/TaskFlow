@@ -4,8 +4,8 @@ import { useAuthStore } from '@/stores/auth'
 import { usePrefsStore } from '@/stores/prefs'
 import { fmtDateTime } from '@/utils'
 import { TIMEZONE_GROUPS, DEFAULT_TIMEZONE } from '@/timezones'
-import { ApiError } from '@/api'
-import { isTauri } from '@/tauri'
+import { ApiError, getApiBase } from '@/api'
+import { isTauri, tauri } from '@/tauri'
 
 const auth = useAuthStore()
 const prefs = usePrefsStore()
@@ -79,6 +79,19 @@ function applyTheme(m: ThemeMode) {
 function chooseTheme(m: ThemeMode) {
   themeMode.value = m
   applyTheme(m)
+}
+
+// 下载链接:浏览器直接用 href,Tauri 用系统浏览器打开
+function downloadUrl(path: string): string {
+  const base = getApiBase()
+  if (base) return base + '/downloads/' + path
+  return '/downloads/' + path
+}
+function doDownload(e: MouseEvent, path: string) {
+  if (!isTauri()) return // 浏览器走默认 <a href>
+  e.preventDefault()
+  const url = downloadUrl(path)
+  tauri.openExternal(url).catch(() => { window.open(url, '_blank') })
 }
 
 onMounted(() => {
@@ -381,54 +394,35 @@ async function toggleDesktopNotification(v: boolean) {
         <div class="about-downloads">
           <div class="about-downloads-title">客户端下载</div>
           <div class="about-downloads-grid">
-            <a class="dl-card" href="/downloads/TaskFlow-release.apk" download>
+            <!-- Android APK -->
+            <a class="dl-card" :href="downloadUrl('android/TaskFlow-release-unsigned.apk')" @click.prevent="doDownload($event, 'android/TaskFlow-release-unsigned.apk')">
               <span class="dl-icon dl-icon-android" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="6" y1="2" x2="8" y2="5"/>
-                  <line x1="18" y1="2" x2="16" y2="5"/>
-                  <path d="M5 9h14v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9Z"/>
-                  <circle cx="9" cy="13" r="0.6" fill="currentColor"/>
-                  <circle cx="15" cy="13" r="0.6" fill="currentColor"/>
-                  <path d="M3 11v5"/>
-                  <path d="M21 11v5"/>
-                  <path d="M9 20v2"/>
-                  <path d="M15 20v2"/>
-                </svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="2" x2="8" y2="5"/><line x1="18" y1="2" x2="16" y2="5"/><path d="M5 9h14v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9Z"/><circle cx="9" cy="13" r="0.6" fill="currentColor"/><circle cx="15" cy="13" r="0.6" fill="currentColor"/><path d="M3 11v5"/><path d="M21 11v5"/><path d="M9 20v2"/><path d="M15 20v2"/></svg>
               </span>
               <span class="dl-text">
                 <span class="dl-name">TaskFlow Android</span>
-                <span class="dl-sub">TaskFlow-release.apk</span>
+                <span class="dl-sub">APK 安装包</span>
               </span>
               <span class="dl-arrow" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 5v14"/>
-                  <polyline points="6 13 12 19 18 13"/>
-                </svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><polyline points="6 13 12 19 18 13"/></svg>
               </span>
             </a>
-            <a class="dl-card" href="/downloads/TaskFlow-setup.exe" download>
+            <!-- Windows MSI -->
+            <a class="dl-card" :href="downloadUrl('windows/TaskFlow_0.4.0_x64_zh-CN.msi')" @click.prevent="doDownload($event, 'windows/TaskFlow_0.4.0_x64_zh-CN.msi')">
               <span class="dl-icon dl-icon-windows" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M3 5.5l7.5-1v8H3v-7zM11.5 4.3L21 3v10h-9.5V4.3zM3 13.5h7.5v8L3 20.5v-7zM11.5 13.5H21v8.5l-9.5-1.3v-7.2z"/>
-                </svg>
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5l7.5-1v8H3v-7zM11.5 4.3L21 3v10h-9.5V4.3zM3 13.5h7.5v8L3 20.5v-7zM11.5 13.5H21v8.5l-9.5-1.3v-7.2z"/></svg>
               </span>
               <span class="dl-text">
                 <span class="dl-name">TaskFlow Windows</span>
-                <span class="dl-sub">TaskFlow-setup.exe</span>
+                <span class="dl-sub">MSI 安装包</span>
               </span>
               <span class="dl-arrow" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 5v14"/>
-                  <polyline points="6 13 12 19 18 13"/>
-                </svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><polyline points="6 13 12 19 18 13"/></svg>
               </span>
             </a>
           </div>
           <p class="about-downloads-hint muted">
-            下载链接为同域相对路径,直接落到本端口(3001),由 nginx 指向各端编译产物所在目录。
+            下载文件来自仓库 releases/ 目录。Windows 用户请下载 .msi 安装包。
           </p>
         </div>
       </div>

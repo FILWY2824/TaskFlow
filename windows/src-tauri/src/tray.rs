@@ -1,5 +1,10 @@
-// System tray icon. Click to show/hide main window. Right-click for
-// menu: Open / Sync now / Quit.
+// System tray icon + menu.
+//
+// 注意:tauri.conf.json 中已移除 trayIcon 配置,完全由本文件以代码方式
+// 创建托盘图标,避免 config 与代码各建一个托盘导致"双图标 + 菜单无效"。
+//
+// 左键单击 = 显示/隐藏主窗口
+// 右键菜单 = 打开 / 立即同步 / 退出
 
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
@@ -10,7 +15,7 @@ use tauri::{
 pub fn setup(app: &mut tauri::App) -> tauri::Result<()> {
     let item_open = MenuItemBuilder::with_id("open", "打开 TaskFlow").build(app)?;
     let item_sync = MenuItemBuilder::with_id("sync", "立即同步").build(app)?;
-    let item_quit = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+    let item_quit = MenuItemBuilder::with_id("quit", "退出 TaskFlow").build(app)?;
     let menu = MenuBuilder::new(app)
         .item(&item_open)
         .item(&item_sync)
@@ -18,11 +23,14 @@ pub fn setup(app: &mut tauri::App) -> tauri::Result<()> {
         .item(&item_quit)
         .build()?;
 
-    let _tray = TrayIconBuilder::with_id("main-tray")
-        .tooltip("TaskFlow")
+    let mut builder = TrayIconBuilder::with_id("main-tray").tooltip("TaskFlow");
+    if let Some(icon) = app.default_window_icon().cloned() {
+        builder = builder.icon(icon);
+    }
+    let _tray = builder
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(move |app_handle, event| match event.id().as_ref() {
+        .on_menu_event(|app_handle, event| match event.id().as_ref() {
             "open" => {
                 if let Some(win) = app_handle.get_webview_window("main") {
                     let _ = win.show();
@@ -40,7 +48,7 @@ pub fn setup(app: &mut tauri::App) -> tauri::Result<()> {
                 });
             }
             "quit" => {
-                app_handle.exit(0);
+                std::process::exit(0);
             }
             _ => {}
         })

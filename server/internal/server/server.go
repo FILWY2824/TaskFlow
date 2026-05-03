@@ -78,6 +78,10 @@ func BuildHandler(d Deps) http.Handler {
 	// === 公开路由(不需要认证) ===
 	mux.HandleFunc("GET /healthz", healthH.Health)
 
+	// 客户端下载:把 ../releases/ 暴露为 /downloads/
+	downloadDir := http.Dir("../releases")
+	mux.Handle("GET /downloads/", http.StripPrefix("/downloads/", http.FileServer(downloadDir)))
+
 	// 本地邮箱注册/登录:OAuth 启用时关闭(返回 403),否则保持原行为。
 	oauthEnabled := d.OAuthProvider != nil && d.OAuthPending != nil
 	if oauthEnabled {

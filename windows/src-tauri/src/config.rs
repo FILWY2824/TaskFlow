@@ -107,11 +107,42 @@ impl AppConfig {
     }
 }
 
-/// 返回 <exe所在目录>/data 作为数据目录(便携化,所有数据跟着程序走)。
-/// Windows 上 exe 放在 Program Files 时需要写权限;安装时给 data/ 目录设好 ACL
-/// 或者安装时不选 Program Files,让用户选有写权限的目录(如 %LOCALAPPDATA%\Programs)。
+/// 数据目录:优先 exe 目录(便携),不可写时回退到 %LOCALAPPDATA%/TaskFlow。
 pub fn default_app_dir() -> Result<PathBuf> {
     let exe = std::env::current_exe().context("current_exe")?;
     let exe_dir = exe.parent().context("exe parent dir")?;
-    Ok(exe_dir.join("data"))
+    let portable = exe_dir.join("data");
+
+    // 如果 data 目录已存在且可写,或者可以创建,就用便携路径
+    if let Ok(()) = ensure_writable(&portable) {
+        return Ok(portable);
+    }
+
+    // 否则回退 AppData(MSI 装到 Program Files 的情况)
+    #[cfg(windows)]
+    {
+        let appdata = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .context("LOCALAPPDATA not set")?;
+        let d = appdata.join("TaskFlow").join("data");
+        std::fs::create_dir_all(&d).ok();
+        return Ok(d);
+    }
+    #[cfg(not(windows))]
+    {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .context("HOME not set")?;
+        let d = home.join(".local").join("share").join("taskflow");
+        std::fs::create_dir_all(&d).ok();
+        return Ok(d);
+    }
+}
+
+fn ensure_writable(dir: &PathBuf) -> Result<(), ()> {
+    std::fs::create_dir_all(dir).map_err(|_| ())?;
+    let test = dir.join(".rw_test");
+    std::fs::write(&test, b"x").map_err(|_| ())?;
+    std::fs::remove_file(&test).map_err(|_| ())?;
+    Ok(())
 }
