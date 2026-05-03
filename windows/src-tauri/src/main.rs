@@ -47,7 +47,7 @@ mod tray;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::{Manager, RunEvent};
+use tauri::{Manager, RunEvent, WindowEvent};
 use tokio::sync::Mutex;
 
 /// 全局退出标志。托盘"退出"或前端 quit_app 命令先把它设为 true,
@@ -60,6 +60,36 @@ pub static QUIT_FLAG: AtomicBool = AtomicBool::new(false);
 /// 后台线程检测到 TCP 连接后设为 true;setup 里的 async task 轮询此标志
 /// 并调 bring_window_to_front 把主窗口拉回前台。
 static INSTANCE_SIGNAL: AtomicBool = AtomicBool::new(false);
+
+fn should_hide_main_window_on_close(label: &str, quit_requested: bool) -> bool {
+    label == "main" && !quit_requested
+}
+
+fn main_webview_data_dir(app_dir: &std::path::Path) -> PathBuf {
+    app_dir.join("webview")
+}
+
+fn create_main_window(
+    app: &mut tauri::App,
+    app_dir: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == "main")
+        .cloned()
+        .ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "main window config not found")
+        })?;
+    let webview_dir = main_webview_data_dir(app_dir);
+    std::fs::create_dir_all(&webview_dir)?;
+    tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?
+        .data_directory(webview_dir)
+        .build()?;
+    Ok(())
+}
 
 pub struct AppState {
     pub cfg: Mutex<config::AppConfig>,
@@ -172,6 +202,7 @@ fn main() {
     // 6) 构造 tauri::Builder。如果 build() 失败(图标错、capabilities 错、context 错),
     //    依旧弹窗给用户看 —— 千万别用 expect() 静默退出。
     let app_dir_for_dialog = app_dir.clone();
+    let app_dir_for_window = app_dir.clone();
     let app_result = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_os::init())
@@ -196,6 +227,8 @@ fn main() {
             commands::quit_app,
         ])
         .setup(move |app| {
+            create_main_window(app, &app_dir_for_window)?;
+
             // Tray icon + menu —— 失败时只 log,不 panic(没有托盘也能用)。
             if let Err(e) = tray::setup(app) {
                 log::warn!("tray setup failed: {e:#}");
@@ -254,10 +287,29 @@ fn main() {
         }
     };
 
-    // Hide window when user clicks the X — keep app running in tray.
-    // User can fully quit via tray "退出" or commands::quit_app.
+    // 窗口 X 必须在 CloseRequested 阶段拦截;到 ExitRequested 时窗口可能已经销毁,
+    // 会留下"托盘还在,但主窗口无法再打开"的后台孤儿进程。
+    // 用户仍可通过托盘"退出"或前端 quit_app 真正结束进程。
     app.run(|app_handle, event| match event {
-        RunEvent::ExitRequested { api, .. } => {
+        RunEvent::WindowEvent {
+            label,
+            event: WindowEvent::CloseRequested { api, .. },
+            ..
+        } => {
+            if should_hide_main_window_on_close(&label, QUIT_FLAG.load(Ordering::SeqCst)) {
+                if let Some(win) = app_handle.get_webview_window(&label) {
+                    if let Err(e) = win.hide() {
+                        log::warn!("hide main window on close failed: {e}");
+                    } else {
+                        log::info!("main window close intercepted; hidden to tray");
+                    }
+                } else {
+                    log::warn!("main window close requested but window was not found");
+                }
+                api.prevent_close();
+            }
+        }
+        RunEvent::ExitRequested { .. } => {
             if QUIT_FLAG.load(Ordering::SeqCst) {
                 // 用户明确要求退出(托盘菜单 / 前端 quit 命令),放行。
                 log::info!("exit requested with QUIT_FLAG — shutting down");
@@ -267,7 +319,9 @@ fn main() {
                 if let Some(win) = app_handle.get_webview_window("main") {
                     let _ = win.hide();
                 }
-                api.prevent_exit();
+                log::warn!(
+                    "exit requested without QUIT_FLAG; allowing shutdown to avoid tray-only orphan state"
+                );
             }
         }
         _ => {}
@@ -383,5 +437,33 @@ fn fatal_dialog(app_dir: Option<&std::path::Path>, body: &str) {
     #[cfg(not(windows))]
     {
         eprintln!("[FATAL] {}", full);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn main_window_close_hides_to_tray_when_quit_was_not_requested() {
+        assert!(should_hide_main_window_on_close("main", false));
+    }
+
+    #[test]
+    fn main_window_close_is_allowed_when_quit_was_requested() {
+        assert!(!should_hide_main_window_on_close("main", true));
+    }
+
+    #[test]
+    fn non_main_window_close_is_not_intercepted() {
+        assert!(!should_hide_main_window_on_close("alarm-1", false));
+    }
+
+    #[test]
+    fn main_webview_data_dir_lives_under_app_data_dir() {
+        assert_eq!(
+            main_webview_data_dir(std::path::Path::new("data-root")),
+            std::path::PathBuf::from("data-root").join("webview")
+        );
     }
 }

@@ -4,6 +4,9 @@
 
 ## v0.5.0 (unreleased) — 管理面板 + Docker 部署
 
+- **Windows:修复托盘恢复与 WebView2 启动目录**
+  - 主窗口改为 `setup()` 阶段手动创建,并把 WebView2 数据目录固定到应用 `data/webview`,避免默认 `LOCALAPPDATA` 目录残留占用或权限异常导致启动失败。
+  - 窗口 X 在 `CloseRequested` 阶段拦截并隐藏到托盘,避免主窗口被销毁后托盘"打开 TaskFlow"和双击快捷方式都无法恢复页面。
 - **后端:管理员能力**
   - migration v5:`users` 加 `is_admin` / `is_disabled`,新表 `audit_logs`(管理员动作时间线)。
   - 启动时根据 `ADMIN_EMAIL` / `ADMIN_PASSWORD` 引导首位管理员 —— 已存在则提升,不存在则创建。已存在管理员的密码不会被 `.env` 默认值覆盖。
