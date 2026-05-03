@@ -87,11 +87,58 @@ function downloadUrl(path: string): string {
   if (base) return base + '/downloads/' + path
   return '/downloads/' + path
 }
-function doDownload(e: MouseEvent, path: string) {
-  if (!isTauri()) return // 浏览器走默认 <a href>
-  e.preventDefault()
-  const url = downloadUrl(path)
-  tauri.openExternal(url).catch(() => { window.open(url, '_blank') })
+
+// ---- 检测更新(Tauri / Windows 端) ----
+const LOCAL_VERSION = '0.4.0'
+const updateChecking = ref(false)
+const updateResult = ref<null | { hasNew: boolean; version?: string; url?: string; notes?: string }>(null)
+const updateErr = ref('')
+
+async function checkUpdate() {
+  updateChecking.value = true
+  updateErr.value = ''
+  updateResult.value = null
+  try {
+    const manifestUrl = downloadUrl('latest.json')
+    const resp = await fetch(manifestUrl)
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const data = await resp.json()
+    const platform = 'windows'
+    const remote = data[platform]
+    if (!remote) throw new Error('清单中未找到当前平台的版本信息')
+    const hasNew = compareVersions(remote.version, LOCAL_VERSION) > 0
+    updateResult.value = {
+      hasNew,
+      version: remote.version,
+      url: remote.filename ? downloadUrl(`${platform}/${remote.filename}`) : undefined,
+      notes: remote.notes,
+    }
+  } catch (e) {
+    updateErr.value = e instanceof Error ? e.message : '检测失败'
+  } finally {
+    updateChecking.value = false
+  }
+}
+
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const va = pa[i] || 0
+    const vb = pb[i] || 0
+    if (va !== vb) return va - vb
+  }
+  return 0
+}
+
+function openUpdateDownload() {
+  const url = updateResult.value?.url
+  if (!url) return
+  if (isTauri()) {
+    tauri.openExternal(url).catch(() => { window.open(url, '_blank') })
+  } else {
+    window.open(url, '_blank')
+  }
 }
 
 onMounted(() => {
@@ -381,49 +428,64 @@ async function toggleDesktopNotification(v: boolean) {
         <p class="muted">TaskFlow · Web v0.4.0</p>
         <p class="muted">多用户 TODO + Android / Windows 强提醒</p>
 
-        <!-- ===== 客户端下载 ===== -->
-        <!--
-          下载链接放到一个稳定的 /downloads/ 路径下,部署侧把构建产物拷贝过来即可:
-            /downloads/TaskFlow-release.apk      (Android)
-            /downloads/TaskFlow-setup.exe        (Windows NSIS 安装器)
-            /downloads/TaskFlow.msi              (Windows MSI 包)
-          docker / nginx 把 /var/www/taskflow/downloads/ 暴露成静态目录;
-          构建脚本(scripts-deploy/deploy-*.ps1)在打包成功后会把产物拷到这里。
-          这种方式与"挂源码目录到 nginx"无关,生产部署也能用。
-        -->
+        <!-- ===== 客户端下载 / 检测更新 ===== -->
         <div class="about-downloads">
-          <div class="about-downloads-title">客户端下载</div>
-          <div class="about-downloads-grid">
-            <!-- Android APK -->
-            <a class="dl-card" :href="downloadUrl('android/TaskFlow-release-unsigned.apk')" @click.prevent="doDownload($event, 'android/TaskFlow-release-unsigned.apk')">
-              <span class="dl-icon dl-icon-android" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="2" x2="8" y2="5"/><line x1="18" y1="2" x2="16" y2="5"/><path d="M5 9h14v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9Z"/><circle cx="9" cy="13" r="0.6" fill="currentColor"/><circle cx="15" cy="13" r="0.6" fill="currentColor"/><path d="M3 11v5"/><path d="M21 11v5"/><path d="M9 20v2"/><path d="M15 20v2"/></svg>
-              </span>
-              <span class="dl-text">
-                <span class="dl-name">TaskFlow Android</span>
-                <span class="dl-sub">APK 安装包</span>
-              </span>
-              <span class="dl-arrow" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><polyline points="6 13 12 19 18 13"/></svg>
-              </span>
-            </a>
-            <!-- Windows MSI -->
-            <a class="dl-card" :href="downloadUrl('windows/TaskFlow_0.4.0_x64_zh-CN.msi')" @click.prevent="doDownload($event, 'windows/TaskFlow_0.4.0_x64_zh-CN.msi')">
-              <span class="dl-icon dl-icon-windows" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5l7.5-1v8H3v-7zM11.5 4.3L21 3v10h-9.5V4.3zM3 13.5h7.5v8L3 20.5v-7zM11.5 13.5H21v8.5l-9.5-1.3v-7.2z"/></svg>
-              </span>
-              <span class="dl-text">
-                <span class="dl-name">TaskFlow Windows</span>
-                <span class="dl-sub">MSI 安装包</span>
-              </span>
-              <span class="dl-arrow" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><polyline points="6 13 12 19 18 13"/></svg>
-              </span>
-            </a>
-          </div>
-          <p class="about-downloads-hint muted">
-            下载文件来自仓库 releases/ 目录。Windows 用户请下载 .msi 安装包。
-          </p>
+          <!-- Windows (Tauri) 端:检测更新 -->
+          <template v-if="isWindows">
+            <div class="about-downloads-title">检测更新</div>
+            <p class="muted" style="font-size:13px;margin-bottom:10px">当前版本 v0.4.0</p>
+            <button class="btn-primary btn-sm" :disabled="updateChecking" @click="checkUpdate">
+              {{ updateChecking ? '检测中…' : '检查新版本' }}
+            </button>
+            <div v-if="updateErr" class="banner banner-err" style="margin-top:10px">{{ updateErr }}</div>
+            <div v-if="updateResult" style="margin-top:10px">
+              <template v-if="updateResult.hasNew">
+                <p style="font-size:14px;font-weight:600;color:var(--tg-primary)">
+                  发现新版本 v{{ updateResult.version }}
+                </p>
+                <p v-if="updateResult.notes" class="muted" style="font-size:12.5px;margin:4px 0 8px">{{ updateResult.notes }}</p>
+                <button class="btn-primary btn-sm" @click="openUpdateDownload">下载新版本</button>
+              </template>
+              <template v-else>
+                <p class="muted" style="font-size:13px">✓ 当前已是最新版本</p>
+              </template>
+            </div>
+          </template>
+          <!-- Web 端:下载客户端 -->
+          <template v-else>
+            <div class="about-downloads-title">客户端下载</div>
+            <div class="about-downloads-grid">
+              <!-- Android APK -->
+              <a class="dl-card" :href="downloadUrl('android/TaskFlow-release-unsigned.apk')">
+                <span class="dl-icon dl-icon-android" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="2" x2="8" y2="5"/><line x1="18" y1="2" x2="16" y2="5"/><path d="M5 9h14v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9Z"/><circle cx="9" cy="13" r="0.6" fill="currentColor"/><circle cx="15" cy="13" r="0.6" fill="currentColor"/><path d="M3 11v5"/><path d="M21 11v5"/><path d="M9 20v2"/><path d="M15 20v2"/></svg>
+                </span>
+                <span class="dl-text">
+                  <span class="dl-name">TaskFlow Android</span>
+                  <span class="dl-sub">APK 安装包</span>
+                </span>
+                <span class="dl-arrow" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><polyline points="6 13 12 19 18 13"/></svg>
+                </span>
+              </a>
+              <!-- Windows 安装包 -->
+              <a class="dl-card" :href="downloadUrl('windows/TaskFlow_0.4.0_x64-setup.exe')">
+                <span class="dl-icon dl-icon-windows" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5l7.5-1v8H3v-7zM11.5 4.3L21 3v10h-9.5V4.3zM3 13.5h7.5v8L3 20.5v-7zM11.5 13.5H21v8.5l-9.5-1.3v-7.2z"/></svg>
+                </span>
+                <span class="dl-text">
+                  <span class="dl-name">TaskFlow Windows</span>
+                  <span class="dl-sub">NSIS 安装包</span>
+                </span>
+                <span class="dl-arrow" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><polyline points="6 13 12 19 18 13"/></svg>
+                </span>
+              </a>
+            </div>
+            <p class="about-downloads-hint muted">
+              下载文件来自服务端 releases/ 目录。Windows 用户请下载 .exe 安装包。
+            </p>
+          </template>
         </div>
       </div>
     </div>

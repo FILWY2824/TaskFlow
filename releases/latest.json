@@ -1,0 +1,12 @@
+{
+  "windows": {
+    "version": "0.4.0",
+    "filename": "TaskFlow_0.4.0_x64-setup.exe",
+    "notes": "初始版本"
+  },
+  "android": {
+    "version": "0.4.0",
+    "filename": "TaskFlow-release-unsigned.apk",
+    "notes": "初始版本"
+  }
+}

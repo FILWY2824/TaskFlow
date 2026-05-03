@@ -91,7 +91,7 @@ class TokenManager(context: Context) {
         refreshToken = prefs.getString(KEY_REFRESH, null),
         userId = prefs.getLong(KEY_USER_ID, 0L).takeIf { it > 0 },
         userEmail = prefs.getString(KEY_USER_EMAIL, null),
-        timezone = prefs.getString(KEY_TZ, "UTC") ?: "UTC",
+        timezone = prefs.getString(KEY_TZ, "Asia/Shanghai") ?: "Asia/Shanghai",
         serverUrl = prefs.getString(KEY_SERVER_URL, null),
     )
 

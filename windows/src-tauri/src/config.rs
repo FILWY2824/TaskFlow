@@ -61,7 +61,7 @@ fn default_server_url() -> String {
 }
 
 fn default_tz() -> String {
-    "UTC".to_string()
+    "Asia/Shanghai".to_string()
 }
 
 fn default_ringtone() -> String {

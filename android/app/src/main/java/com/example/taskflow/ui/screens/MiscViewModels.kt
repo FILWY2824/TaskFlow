@@ -240,11 +240,17 @@ class PomodoroViewModel(private val container: AppContainer) : ViewModel() {
 
 data class SettingsUiState(
     val email: String = "",
-    val timezone: String = "UTC",
+    val timezone: String = "Asia/Shanghai",
     val displayName: String = "",
     val prefs: AndroidPrefs = PreferenceRepository.DEFAULTS,
     val prefsLoading: Boolean = false,
     val error: String? = null,
+    val updateChecking: Boolean = false,
+    val updateHasNew: Boolean? = null,
+    val updateVersion: String? = null,
+    val updateUrl: String? = null,
+    val updateNotes: String? = null,
+    val updateError: String? = null,
 )
 
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
@@ -294,6 +300,47 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setAutoSnooze(minutes: Int) {
         val clamped = minutes.coerceIn(1, 60)
         togglePref { it.copy(autoSnoozeMinutes = clamped) }
+    }
+
+    fun checkUpdate() {
+        _state.value = _state.value.copy(updateChecking = true, updateError = null, updateHasNew = null)
+        viewModelScope.launch {
+            try {
+                val baseUrl = container.tokenManager.current().serverUrl
+                    ?: container.apiClient.currentBase()
+                val url = "${baseUrl.trimEnd('/')}/downloads/latest.json"
+                val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 8000
+                    conn.readTimeout = 8000
+                    try {
+                        val body = conn.inputStream.bufferedReader().readText()
+                        val json = org.json.JSONObject(body)
+                        val android = json.getJSONObject("android")
+                        Triple(android.getString("version"), android.optString("filename", ""), android.optString("notes", ""))
+                    } finally { conn.disconnect() }
+                }
+                val (remoteVersion, filename, notes) = result
+                val hasNew = compareVersions(remoteVersion, "0.4.0") > 0
+                _state.value = _state.value.copy(
+                    updateChecking = false, updateHasNew = hasNew, updateVersion = remoteVersion,
+                    updateUrl = if (filename.isNotBlank()) "${baseUrl.trimEnd('/')}/downloads/android/$filename" else null,
+                    updateNotes = notes.ifBlank { null },
+                )
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(updateChecking = false, updateError = e.message ?: "检测失败")
+            }
+        }
+    }
+
+    private fun compareVersions(a: String, b: String): Int {
+        val pa = a.split(".").map { it.toIntOrNull() ?: 0 }
+        val pb = b.split(".").map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(pa.size, pb.size)) {
+            val va = pa.getOrElse(i) { 0 }; val vb = pb.getOrElse(i) { 0 }
+            if (va != vb) return va - vb
+        }
+        return 0
     }
 
     fun logout(onDone: () -> Unit) {

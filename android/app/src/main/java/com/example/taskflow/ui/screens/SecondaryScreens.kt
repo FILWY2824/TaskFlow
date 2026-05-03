@@ -548,6 +548,42 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () 
                 )
             }
 
+            // ---------- 检测更新 ----------
+            SettingsCard(title = "检测更新") {
+                Text(
+                    "当前版本 v0.4.0",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { vm.checkUpdate() },
+                    enabled = !state.updateChecking,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (state.updateChecking) "检测中…" else "检查新版本")
+                }
+                if (state.updateError != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(state.updateError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                if (state.updateHasNew == true) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("发现新版本 v${state.updateVersion}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    if (state.updateNotes != null) {
+                        Text(state.updateNotes!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (state.updateUrl != null) {
+                        Spacer(Modifier.height(6.dp))
+                        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                        Button(onClick = { uriHandler.openUri(state.updateUrl!!) }, modifier = Modifier.fillMaxWidth()) { Text("下载新版本") }
+                    }
+                } else if (state.updateHasNew == false) {
+                    Spacer(Modifier.height(6.dp))
+                    Text("✓ 当前已是最新版本", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
             // ---------- 退出登录 ----------
             OutlinedButton(
                 onClick = { vm.logout(onLoggedOut) },
