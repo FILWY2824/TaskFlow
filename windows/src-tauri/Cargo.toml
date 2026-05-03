@@ -37,7 +37,7 @@ rodio   = { version = "0.19", default-features = false, features = ["wav", "mp3"
 
 # Windows API for misc(MessageBoxW 致命错误弹窗 + 窗口前置)
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.58", features = [
+windows = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Shell",

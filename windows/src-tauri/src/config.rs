@@ -53,7 +53,9 @@ fn default_server_url() -> String {
             return v.to_string();
         }
     }
-    let baked = option_env!("TASKFLOW_DEFAULT_SERVER_URL").unwrap_or("").trim();
+    let baked = option_env!("TASKFLOW_DEFAULT_SERVER_URL")
+        .unwrap_or("")
+        .trim();
     if !baked.is_empty() {
         return baked.trim_end_matches('/').to_string();
     }

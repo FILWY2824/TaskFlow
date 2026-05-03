@@ -71,7 +71,12 @@ impl AlarmController {
         }
     }
 
-    fn spawn_alarm_window(&self, handle: &AppHandle, rule: &CachedRule, fire_at: DateTime<Utc>) -> Result<()> {
+    fn spawn_alarm_window(
+        &self,
+        handle: &AppHandle,
+        rule: &CachedRule,
+        fire_at: DateTime<Utc>,
+    ) -> Result<()> {
         let label = format!("alarm-{}", rule.id);
         // 已经存在则只 focus
         if let Some(win) = handle.get_webview_window(&label) {

@@ -184,7 +184,11 @@ impl LocalDb {
                 user_id: row.get(1)?,
                 todo_id: row.get(2)?,
                 title: row.get(3)?,
-                next_fire_at: next.and_then(|s| DateTime::parse_from_rfc3339(&s).ok().map(|t| t.with_timezone(&Utc))),
+                next_fire_at: next.and_then(|s| {
+                    DateTime::parse_from_rfc3339(&s)
+                        .ok()
+                        .map(|t| t.with_timezone(&Utc))
+                }),
                 channel_local: row.get::<_, i64>(5)? != 0,
                 ringtone: row.get(6)?,
                 fullscreen: row.get::<_, i64>(7)? != 0,

@@ -20,7 +20,10 @@ fn main() {
         let default_server = env
             .iter()
             .find(|(key, _)| key == "TASKFLOW_DEFAULT_SERVER_URL")
-            .or_else(|| env.iter().find(|(key, _)| key == "VITE_TASKFLOW_DEFAULT_SERVER"))
+            .or_else(|| {
+                env.iter()
+                    .find(|(key, _)| key == "VITE_TASKFLOW_DEFAULT_SERVER")
+            })
             .or_else(|| env.iter().find(|(key, _)| key == "PUBLIC_API_URL"))
             .or_else(|| env.iter().find(|(key, _)| key == "PUBLIC_BASE_URL"))
             .map(|(_, value)| value.trim().trim_end_matches('/').to_string())
@@ -46,7 +49,11 @@ fn parse_env(contents: &str) -> Vec<(String, String)> {
             continue;
         };
         let key = key.trim().to_string();
-        let mut value = value.trim().trim_matches('"').trim_matches('\'').to_string();
+        let mut value = value
+            .trim()
+            .trim_matches('"')
+            .trim_matches('\'')
+            .to_string();
 
         for (existing_key, existing_value) in &parsed {
             value = value.replace(&format!("${{{existing_key}}}"), existing_value);

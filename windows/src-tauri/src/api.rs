@@ -133,10 +133,7 @@ impl ApiClient {
         let mut req = self
             .inner
             .http
-            .get(self.url(&format!(
-                "/api/sync/pull?since={}&limit={}",
-                since, limit
-            )));
+            .get(self.url(&format!("/api/sync/pull?since={}&limit={}", since, limit)));
         if let Some(h) = self.auth_header() {
             req = req.header("Authorization", h);
         }

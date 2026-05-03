@@ -90,7 +90,11 @@ pub async fn clear_tokens(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn set_autostart(enabled: bool, app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn set_autostart(
+    enabled: bool,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let manager = app.autolaunch();
     if enabled {
         manager.enable().map_err(|e| e.to_string())?;
@@ -120,7 +124,11 @@ pub async fn sync_now(state: State<'_, AppState>) -> Result<(), String> {
 /// Stop a currently-ringing alarm. Called from the alarm window's
 /// "停止" / "完成" / "稍后" buttons.
 #[tauri::command]
-pub async fn stop_alarm(rule_id: i64, app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn stop_alarm(
+    rule_id: i64,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     state.alarm.stop(&app, rule_id);
     Ok(())
 }
@@ -199,16 +207,7 @@ pub fn bring_window_to_front(label: Option<String>, app: AppHandle) -> Result<()
     let win = app
         .get_webview_window(&lbl)
         .ok_or_else(|| format!("window '{}' not found", lbl))?;
-    let _ = win.show();
-    let _ = win.unminimize();
-    // 短暂置顶 -> 取消,避免一直挡其他窗口
-    let _ = win.set_always_on_top(true);
-    let _ = win.set_focus();
-    let win_clone = win.clone();
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
-        let _ = win_clone.set_always_on_top(false);
-    });
+    crate::tray::bring_window_to_front(&win);
     Ok(())
 }
 

@@ -56,6 +56,11 @@ use tokio::sync::Mutex;
 ///   - false → 用户只是点了窗口 X,藏到托盘继续后台运行。
 pub static QUIT_FLAG: AtomicBool = AtomicBool::new(false);
 
+/// 另一个实例启动了(用户双击桌面图标 / 任务栏图标)。
+/// 后台线程检测到 TCP 连接后设为 true;setup 里的 async task 轮询此标志
+/// 并调 bring_window_to_front 把主窗口拉回前台。
+static INSTANCE_SIGNAL: AtomicBool = AtomicBool::new(false);
+
 pub struct AppState {
     pub cfg: Mutex<config::AppConfig>,
     pub db: Arc<db::LocalDb>,
@@ -64,12 +69,45 @@ pub struct AppState {
 }
 
 fn main() {
-    // 0) 单实例检查:通过 TCP 端口绑定防止多开。
-    //    必须把 listener 存到变量里,让它活到进程结束。如果放在 match 里
-    //    会在 match 结束后立即 drop,端口就释放了,单实例锁失效。
-    let _single_instance_lock = std::net::TcpListener::bind("127.0.0.1:19830");
-    if _single_instance_lock.is_err() {
-        return; // 已有实例,静默退出
+    // 0) 单实例 + 激活信号:通过 TCP 端口绑定防止多开。
+    //    第一个实例:绑定 127.0.0.1:19830 并启动后台线程监听来自
+    //      第二个实例的连接;收到连接 → 设 INSTANCE_SIGNAL=true,
+    //      setup 里的 async task 轮询后调 bring_window_to_front。
+    //    第二个实例:连接端口并写一个字节通知第一个实例"把窗口拉回前台",
+    //      然后静默退出。
+    match std::net::TcpListener::bind("127.0.0.1:19830") {
+        Ok(listener) => {
+            // 第一个实例 — 占用端口并监听激活信号。
+            // 把 listener 交给后台线程,让它一直活到进程结束(线程不结束,
+            // listener 就不 drop,端口一直被占用)。
+            listener.set_nonblocking(true).ok();
+            std::thread::Builder::new()
+                .name("instance-watch".into())
+                .spawn(move || loop {
+                    match listener.accept() {
+                        Ok((_stream, _addr)) => {
+                            INSTANCE_SIGNAL.store(true, Ordering::SeqCst);
+                        }
+                        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                            std::thread::sleep(std::time::Duration::from_millis(500));
+                        }
+                        Err(e) => {
+                            log::warn!("instance listener error: {e}, restarting accept loop");
+                            std::thread::sleep(std::time::Duration::from_millis(500));
+                        }
+                    }
+                })
+                .ok();
+        }
+        Err(_) => {
+            // 第二个实例 — 通知第一个实例把窗口拉到前台,然后退出。
+            if let Ok(mut stream) = std::net::TcpStream::connect("127.0.0.1:19830") {
+                use std::io::Write;
+                let _ = stream.write(&[1]);
+                let _ = stream.flush();
+            }
+            return;
+        }
     }
 
     // 1) 解析 app dir。失败的话连日志都没地方写,直接 MessageBox 退出。
@@ -90,7 +128,10 @@ fn main() {
     if let Err(e) = std::fs::create_dir_all(&app_dir) {
         fatal_dialog(
             None,
-            &format!("无法创建应用数据目录 {}: {e}\n\n可能被杀毒软件或权限拦截。", app_dir.display()),
+            &format!(
+                "无法创建应用数据目录 {}: {e}\n\n可能被杀毒软件或权限拦截。",
+                app_dir.display()
+            ),
         );
         return;
     }
@@ -135,12 +176,10 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(
-            tauri_plugin_autostart::init(
-                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-                Some(vec!["--minimized"]),
-            ),
-        )
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             commands::set_server_config,
@@ -177,6 +216,24 @@ fn main() {
             let alarm2 = alarm.clone();
             tauri::async_runtime::spawn(async move {
                 scheduler::run_scheduler_loop(handle2, db_for_sched, alarm2).await;
+            });
+
+            // Instance activation poller — 当用户双击桌面/任务栏图标时,
+            // 第二个实例通过 TCP 通知我们;这里每 300ms 检查一次信号并把
+            // 主窗口拉回前台。
+            let handle3 = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                    if INSTANCE_SIGNAL.swap(false, Ordering::SeqCst) {
+                        log::info!("instance activation signal received, bringing window to front");
+                        if let Some(win) = handle3.get_webview_window("main") {
+                            tray::bring_window_to_front(&win);
+                        } else {
+                            log::warn!("main window not found for instance activation");
+                        }
+                    }
+                }
             });
 
             Ok(())

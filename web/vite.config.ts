@@ -52,6 +52,10 @@ export default defineConfig(({ mode }) => {
           target: apiTarget,
           changeOrigin: false,
         },
+        '/downloads': {
+          target: apiTarget,
+          changeOrigin: false,
+        },
       },
     },
     build: {

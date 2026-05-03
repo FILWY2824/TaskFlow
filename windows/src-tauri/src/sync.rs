@@ -102,7 +102,11 @@ pub async fn full_resync(api: &ApiClient, db: &LocalDb) -> anyhow::Result<()> {
             user_id: rule.user_id,
             todo_id: rule.todo_id,
             title: rule.title,
-            next_fire_at: if rule.is_enabled { rule.next_fire_at } else { None },
+            next_fire_at: if rule.is_enabled {
+                rule.next_fire_at
+            } else {
+                None
+            },
             channel_local: rule.channel_local,
             ringtone: rule.ringtone,
             fullscreen: rule.fullscreen,
