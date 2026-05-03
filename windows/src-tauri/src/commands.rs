@@ -170,6 +170,7 @@ pub fn open_external(url: String) -> Result<(), String> {
 /// Force-quit (bypass tray-hide). Tray menu's "退出" calls this.
 #[tauri::command]
 pub fn quit_app(app: AppHandle) {
+    crate::QUIT_FLAG.store(true, std::sync::atomic::Ordering::SeqCst);
     app.exit(0);
 }
 

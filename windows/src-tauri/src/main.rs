@@ -45,9 +45,16 @@ mod sync;
 mod tray;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{Manager, RunEvent};
 use tokio::sync::Mutex;
+
+/// 全局退出标志。托盘"退出"或前端 quit_app 命令先把它设为 true,
+/// 再调 app.exit(0)。ExitRequested 回调检查此标志:
+///   - true  → 用户明确要退出,放行;
+///   - false → 用户只是点了窗口 X,藏到托盘继续后台运行。
+pub static QUIT_FLAG: AtomicBool = AtomicBool::new(false);
 
 pub struct AppState {
     pub cfg: Mutex<config::AppConfig>,
@@ -194,11 +201,17 @@ fn main() {
     // User can fully quit via tray "退出" or commands::quit_app.
     app.run(|app_handle, event| match event {
         RunEvent::ExitRequested { api, .. } => {
-            // 默认行为:不退出,藏起来
-            if let Some(win) = app_handle.get_webview_window("main") {
-                let _ = win.hide();
+            if QUIT_FLAG.load(Ordering::SeqCst) {
+                // 用户明确要求退出(托盘菜单 / 前端 quit 命令),放行。
+                log::info!("exit requested with QUIT_FLAG — shutting down");
+                // 不调 prevent_exit(),Tauri 将正常走完清理流程后退出。
+            } else {
+                // 窗口关闭按钮 → 只藏到托盘,不退出。
+                if let Some(win) = app_handle.get_webview_window("main") {
+                    let _ = win.hide();
+                }
+                api.prevent_exit();
             }
-            api.prevent_exit();
         }
         _ => {}
     });

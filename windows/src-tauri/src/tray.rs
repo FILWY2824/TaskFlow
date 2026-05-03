@@ -13,6 +13,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
+use std::sync::atomic::Ordering;
 
 /// 把窗口可靠地拉到屏幕最前面。
 /// Windows 对前台窗口有严格限制(ForegroundLockTimeout),单纯 set_focus()
@@ -52,7 +53,8 @@ pub fn setup(app: &mut tauri::App) -> tauri::Result<()> {
                 }
             }
             "quit" => {
-                std::process::exit(0);
+                crate::QUIT_FLAG.store(true, Ordering::SeqCst);
+                app_handle.exit(0);
             }
             _ => {}
         })
