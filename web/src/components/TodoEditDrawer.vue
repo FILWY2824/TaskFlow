@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ReminderRule, Subtask, Todo } from '@/types'
 import { useDataStore } from '@/stores/data'
 import { useAuthStore } from '@/stores/auth'
@@ -14,7 +14,20 @@ import {
   toRFC3339,
 } from '@/utils'
 import PrettyDateTimePicker from '@/components/PrettyDateTimePicker.vue'
-import { confirmDialog } from '@/dialogs'
+import { alertDialog, confirmDialog } from '@/dialogs'
+
+const online = ref(navigator.onLine)
+function _onOnline() { online.value = true }
+function _onOffline() { online.value = false }
+
+onMounted(() => {
+  window.addEventListener('online', _onOnline)
+  window.addEventListener('offline', _onOffline)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('online', _onOnline)
+  window.removeEventListener('offline', _onOffline)
+})
 
 const props = defineProps<{
   todo: Todo
@@ -101,6 +114,10 @@ watch(
 
 async function save() {
   errMsg.value = ''
+  if (!online.value) {
+    errMsg.value = '当前无网络，离线状态下无法修改任务。'
+    return
+  }
   if (!title.value.trim()) {
     errMsg.value = '标题不能为空'
     return
@@ -141,6 +158,10 @@ async function save() {
 }
 
 async function remove() {
+  if (!online.value) {
+    alertDialog({ title: '当前无网络', message: '离线状态下无法删除任务，请在网络恢复后重试。' })
+    return
+  }
   const ok = await confirmDialog({
     title: '确认删除任务？',
     message: `任务 "${props.todo.title}" 将被永久删除，包括它下面的子任务和提醒规则。此操作无法撤销。`,

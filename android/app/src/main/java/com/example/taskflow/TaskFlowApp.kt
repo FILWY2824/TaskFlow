@@ -19,6 +19,8 @@ import com.example.taskflow.data.repository.TelegramRepository
 import com.example.taskflow.data.repository.TodoRepository
 import com.example.taskflow.sync.SyncWorker
 
+import com.example.taskflow.util.NetworkUtil
+
 /**
  * Application class —— 启动时建立全部单例。
  *
@@ -43,6 +45,9 @@ class TaskFlowApp : Application() {
 }
 
 class AppContainer(private val app: TaskFlowApp) {
+
+    /** 当前是否有网络连接——离线时禁止新增 / 删除任务。 */
+    fun isOnline(): Boolean = NetworkUtil.isOnline(app)
 
     val tokenManager: TokenManager by lazy { TokenManager(app) }
 

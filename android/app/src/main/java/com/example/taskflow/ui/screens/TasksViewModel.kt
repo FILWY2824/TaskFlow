@@ -117,6 +117,10 @@ class TasksViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun delete(id: Long) {
+        if (!container.isOnline()) {
+            errorFlow.value = "当前无网络，离线状态下无法删除任务"
+            return
+        }
         viewModelScope.launch {
             val r = container.todoRepository.delete(id)
             if (r is Result.Error && r.code != "network") {

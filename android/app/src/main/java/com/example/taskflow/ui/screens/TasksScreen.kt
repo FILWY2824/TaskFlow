@@ -84,8 +84,10 @@ fun TasksScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { onOpenTodo(null) }) {
-                Icon(Icons.Default.Add, "添加")
+            if (!state.isOffline) {
+                FloatingActionButton(onClick = { onOpenTodo(null) }) {
+                    Icon(Icons.Default.Add, "添加")
+                }
             }
         },
     ) { padding ->
@@ -112,6 +114,7 @@ fun TasksScreen(
                         TodoRow(
                             todo = todo,
                             tz = state.tz,
+                            isOffline = state.isOffline,
                             onToggle = { vm.complete(todo.id, !todo.is_completed) },
                             onClick = { onOpenTodo(todo.id) },
                             onDelete = { vm.delete(todo.id) },
@@ -144,7 +147,7 @@ private fun FilterRow(current: TaskFilter, onSelect: (TaskFilter) -> Unit) {
 private fun OfflineBanner() {
     Surface(color = MaterialTheme.colorScheme.errorContainer) {
         Text(
-            "⚠ 当前离线 — 显示的是本地缓存,新建 / 修改将无法生效(规格 §4)",
+            "⚠ 当前离线 — 显示的是本地缓存，新增 / 删除任务已停用",
             color = MaterialTheme.colorScheme.onErrorContainer,
             modifier = Modifier.fillMaxWidth().padding(12.dp),
         )
@@ -162,6 +165,7 @@ private fun ErrorBanner(msg: String) {
 private fun TodoRow(
     todo: TodoCacheEntity,
     tz: String,
+    isOffline: Boolean,
     onToggle: () -> Unit,
     onClick: () -> Unit,
     onDelete: () -> Unit,
@@ -205,8 +209,10 @@ private fun TodoRow(
                 }
             }
         }
-        IconButton(onClick = onDelete) {
-            Icon(Icons.Default.Delete, "删除", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!isOffline) {
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, "删除", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

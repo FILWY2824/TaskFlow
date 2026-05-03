@@ -90,6 +90,10 @@ class TodoEditViewModel(
             _state.value = s.copy(error = "标题不能为空")
             return
         }
+        if (!container.isOnline()) {
+            _state.value = s.copy(error = "当前无网络，离线状态下无法保存任务")
+            return
+        }
         _state.value = s.copy(saving = true, error = null)
         val input = TodoInput(
             title = s.title.trim(), description = s.description, priority = s.priority,
@@ -108,6 +112,10 @@ class TodoEditViewModel(
 
     fun delete() {
         val id = _state.value.todoId ?: return
+        if (!container.isOnline()) {
+            _state.value = _state.value.copy(error = "当前无网络，离线状态下无法删除任务")
+            return
+        }
         _state.value = _state.value.copy(deleting = true, error = null)
         viewModelScope.launch {
             val r = container.todoRepository.delete(id)

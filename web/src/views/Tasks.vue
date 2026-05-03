@@ -10,7 +10,11 @@ import PrettyDateTimePicker from '@/components/PrettyDateTimePicker.vue'
 import { ApiError, reminders as remindersApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { DEFAULT_TIMEZONE } from '@/timezones'
-import { confirmDialog } from '@/dialogs'
+import { alertDialog, confirmDialog } from '@/dialogs'
+
+const online = ref(navigator.onLine)
+function _onOnline() { online.value = true }
+function _onOffline() { online.value = false }
 
 const props = defineProps<{
   filter?: TodoFilterName
@@ -142,6 +146,10 @@ const adding = ref(false)
 const addErr = ref('')
 
 function openAdd() {
+  if (!online.value) {
+    alertDialog({ title: '当前无网络', message: '离线状态下无法新增任务，请在网络恢复后重试。' })
+    return
+  }
   addTitle.value = ''
   addDueLocal.value = ''
   addPriority.value = 0
@@ -268,6 +276,10 @@ async function submitAdd() {
 function open(t: Todo) { editing.value = t }
 
 async function remove(t: Todo) {
+  if (!online.value) {
+    alertDialog({ title: '当前无网络', message: '离线状态下无法删除任务，请在网络恢复后重试。' })
+    return
+  }
   const ok = await confirmDialog({
     title: '确认删除任务？',
     message: `任务 "${t.title}" 将被永久删除，包括它下面的子任务和提醒规则。此操作无法撤销。`,
@@ -293,8 +305,16 @@ function onKey(e: KeyboardEvent) {
     openAdd()
   }
 }
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  window.addEventListener('online', _onOnline)
+  window.addEventListener('offline', _onOffline)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  window.removeEventListener('online', _onOnline)
+  window.removeEventListener('offline', _onOffline)
+})
 
 // 状态筛选标签（用于空态文案）
 const statusLabel = computed(() => {

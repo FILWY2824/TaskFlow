@@ -7,7 +7,11 @@ import { fmtTime, isOverdue, PRIORITY_LABELS, toRFC3339 } from '@/utils'
 import { useDataStore } from '@/stores/data'
 import TodoEditDrawer from '@/components/TodoEditDrawer.vue'
 import PrettyTimePicker from '@/components/PrettyTimePicker.vue'
-import { confirmDialog } from '@/dialogs'
+import { confirmDialog, alertDialog } from '@/dialogs'
+
+const online = ref(navigator.onLine)
+function _onOnline() { online.value = true }
+function _onOffline() { online.value = false }
 
 const props = defineProps<{
   date: string  // 形如 YYYY-MM-DD（来自路由 params）
@@ -190,6 +194,10 @@ async function toggleDone(t: Todo, e: Event) {
 
 // ========== 删除 ==========
 async function remove(t: Todo) {
+  if (!online.value) {
+    alertDialog({ title: '当前无网络', message: '离线状态下无法删除任务，请在网络恢复后重试。' })
+    return
+  }
   const ok = await confirmDialog({
     title: '确认删除任务？',
     message: `任务 "${t.title}" 将被永久删除，包括它下面的子任务和提醒规则。此操作无法撤销。`,
@@ -225,6 +233,10 @@ const PRIORITY_OPTIONS = [
 ]
 
 function openAdd() {
+  if (!online.value) {
+    alertDialog({ title: '当前无网络', message: '离线状态下无法新增任务，请在网络恢复后重试。' })
+    return
+  }
   addTitle.value = ''
   addTimeLocal.value = isToday.value ? defaultTimeForToday() : '09:00'
   addPriority.value = 0
@@ -294,8 +306,16 @@ function onKey(e: KeyboardEvent) {
     openAdd()
   }
 }
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  window.addEventListener('online', _onOnline)
+  window.addEventListener('offline', _onOffline)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  window.removeEventListener('online', _onOnline)
+  window.removeEventListener('offline', _onOffline)
+})
 
 // 编辑抽屉的回调
 function onTodoUpdated(t: Todo) {
