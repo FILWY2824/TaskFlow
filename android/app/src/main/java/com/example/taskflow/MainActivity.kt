@@ -14,13 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Button
@@ -230,9 +230,9 @@ private fun MoreScreen(
             )
         }
         MoreAction("通知中心", "查看强提醒和已读状态", Icons.Default.Notifications, onOpenNotifications)
-        MoreAction("Telegram 推送", "绑定账号，把重要提醒同步到 Telegram", Icons.Default.Send, onOpenTelegram)
+        MoreAction("Telegram 推送", "绑定账号，把重要提醒同步到 Telegram", Icons.AutoMirrored.Filled.Send, onOpenTelegram)
         MoreAction("提醒权限", "检查锁屏全屏、精确闹钟和通知权限", Icons.Default.Security, onOpenPermissions)
-        MoreAction("设置", "账号、时区、Android 提醒行为和版本更新", Icons.Default.Settings, onOpenSettings)
+        MoreAction("设置", "账号、时区和版本更新", Icons.Default.Settings, onOpenSettings)
     }
 }
 

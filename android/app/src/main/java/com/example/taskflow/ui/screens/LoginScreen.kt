@@ -19,9 +19,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sync
@@ -226,7 +226,7 @@ private fun LoginPanel(
                     modifier = Modifier.fillMaxWidth().height(54.dp),
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Icon(Icons.Default.Login, contentDescription = null)
+                    Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null)
                     Spacer(Modifier.size(8.dp))
                     Text("继续登录")
                 }

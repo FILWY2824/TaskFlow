@@ -7,7 +7,7 @@
 #   android/build.gradle   —— Kotlin / Compose
 #   deploy/                —— systemd / nginx / 备份脚本
 
-VERSION ?= 1.4.0
+VERSION ?= 1.4.1
 
 .PHONY: all build dev server-build web-build server-run web-dev server-test web-typecheck \
         windows-build windows-dev android-build android-debug android-clean publish-release \

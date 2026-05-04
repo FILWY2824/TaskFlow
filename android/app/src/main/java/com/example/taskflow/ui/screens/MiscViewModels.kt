@@ -258,8 +258,8 @@ class PomodoroViewModel(private val container: AppContainer) : ViewModel() {
 
 data class SettingsUiState(
     val email: String = "",
-    val timezone: String = "Asia/Shanghai",
-    val systemTimezone: String = "Asia/Shanghai",
+    val timezone: String = DEFAULT_TIMEZONE,
+    val systemTimezone: String = DEFAULT_TIMEZONE,
     val timezoneSaving: Boolean = false,
     val displayName: String = "",
     val prefs: AndroidPrefs = PreferenceRepository.DEFAULTS,
@@ -361,7 +361,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun syncSystemTimezone() {
-        val tz = _state.value.systemTimezone.ifBlank { "Asia/Shanghai" }
+        setTimezone(_state.value.systemTimezone.ifBlank { DEFAULT_TIMEZONE })
+    }
+
+    fun setTimezone(timezone: String) {
+        val tz = timezone.ifBlank { DEFAULT_TIMEZONE }
         _state.value = _state.value.copy(timezoneSaving = true, error = null)
         viewModelScope.launch {
             val r = container.authRepository.updateMe(timezone = tz)

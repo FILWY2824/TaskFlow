@@ -3,8 +3,10 @@ package com.example.taskflow.ui.screens
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -188,11 +190,18 @@ private fun openTelegramDeepLink(ctx: android.content.Context, appUrl: String, w
 // StatsScreen
 // ================================================================
 
+private enum class StatsPanel(val label: String) {
+    Overview("概览"),
+    Tasks("任务"),
+    Focus("专注"),
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatsScreen(container: AppContainer, onBack: () -> Unit) {
     val vm: StatsViewModel = viewModel(factory = StatsViewModel.Factory(container))
     val state by vm.state.collectAsState()
+    var panel by remember { mutableStateOf(StatsPanel.Overview) }
 
     TaskFlowErrorDialog(message = state.error, onDismiss = vm::clearError)
 
@@ -204,28 +213,91 @@ fun StatsScreen(container: AppContainer, onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        Column(Modifier.padding(padding).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState())) {
+        LazyColumn(
+            Modifier.padding(padding).fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             val s = state.summary
-            if (s != null) {
-                StatCard("今日完成", s.completed_today.toString())
-                StatCard("本周完成", s.completed_this_week.toString())
-                StatCard("待办总数", s.todos_open.toString())
-                StatCard("已逾期", s.todos_overdue.toString(), MaterialTheme.colorScheme.errorContainer)
-                StatCard("今日到期", s.todos_due_today.toString())
-                StatCard("今日番茄(分)", (s.pomodoro_today_seconds / 60).toString())
-                StatCard("本周番茄(分)", (s.pomodoro_this_week_seconds / 60).toString())
-            } else if (state.loading) {
-                CircularProgressIndicator()
+            item {
+                StatsPanelFilter(current = panel, onSelect = { panel = it })
+            }
+            if (s == null && state.loading) {
+                item {
+                    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+            } else if (s != null) {
+                when (panel) {
+                    StatsPanel.Overview -> {
+                        item {
+                            ProductCard(tonal = true) {
+                                Text("今天的推进感", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    MetricTile("今日完成", s.completed_today.toString(), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
+                                    MetricTile("今日到期", s.todos_due_today.toString(), Modifier.weight(1f), MaterialTheme.colorScheme.tertiary)
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    MetricTile("本周完成", s.completed_this_week.toString(), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
+                                    MetricTile("逾期", s.todos_overdue.toString(), Modifier.weight(1f), MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+                    }
+                    StatsPanel.Tasks -> {
+                        item { StatCard("待办总数", s.todos_open.toString(), "还需要推进的任务") }
+                        item { StatCard("今日到期", s.todos_due_today.toString(), "今天需要收口的事项", MaterialTheme.colorScheme.tertiaryContainer) }
+                        item { StatCard("已逾期", s.todos_overdue.toString(), "建议优先处理", MaterialTheme.colorScheme.errorContainer) }
+                    }
+                    StatsPanel.Focus -> {
+                        item {
+                            ProductCard {
+                                Text("专注时间", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    MetricTile("今日", "${s.pomodoro_today_seconds / 60} 分钟", Modifier.weight(1f), MaterialTheme.colorScheme.primary)
+                                    MetricTile("本周", "${s.pomodoro_this_week_seconds / 60} 分钟", Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
+                                }
+                                Text(
+                                    "筛选到专注后，只看番茄相关指标，减少任务数字的干扰。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun StatCard(title: String, value: String, bg: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surfaceVariant) {
+private fun StatsPanelFilter(current: StatsPanel, onSelect: (StatsPanel) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(StatsPanel.entries) { item ->
+            FilterChip(
+                selected = current == item,
+                onClick = { onSelect(item) },
+                label = { Text(item.label) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatCard(
+    title: String,
+    value: String,
+    desc: String,
+    bg: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surfaceVariant,
+) {
     Card(Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = bg)) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(title, modifier = Modifier.weight(1f))
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Text(value, style = MaterialTheme.typography.headlineSmall)
         }
     }
@@ -240,6 +312,7 @@ private fun StatCard(title: String, value: String, bg: androidx.compose.ui.graph
 fun PomodoroScreen(container: AppContainer, onBack: () -> Unit) {
     val vm: PomodoroViewModel = viewModel(factory = PomodoroViewModel.Factory(container))
     val state by vm.state.collectAsState()
+    var historyFilter by remember { mutableStateOf("all") }
 
     TaskFlowErrorDialog(message = state.error, onDismiss = vm::clearError)
 
@@ -260,89 +333,127 @@ fun PomodoroScreen(container: AppContainer, onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        Column(Modifier.padding(padding).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState())) {
+        LazyColumn(
+            Modifier.padding(padding).fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
             if (state.active == null) {
-                Text("开始一个新的番茄", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(15, 25, 45, 60).forEach { m ->
-                        FilterChip(selected = state.plannedMinutes == m, onClick = { vm.setPlanned(m) },
-                            label = { Text("${m}m") })
+                item {
+                    ProductCard(tonal = true) {
+                        Text("开始一个新的专注", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text("选择时长和类型，开始后页面会变成实时计时盘。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(listOf(15, 25, 45, 60)) { m ->
+                                FilterChip(
+                                    selected = state.plannedMinutes == m,
+                                    onClick = { vm.setPlanned(m) },
+                                    label = { Text("${m}m") },
+                                )
+                            }
+                        }
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(listOf("focus" to "专注", "short_break" to "短休", "long_break" to "长休")) { (k, label) ->
+                                FilterChip(
+                                    selected = state.kind == k,
+                                    onClick = { vm.setKind(k) },
+                                    label = { Text(label) },
+                                )
+                            }
+                        }
+                        Button(onClick = vm::start, modifier = Modifier.fillMaxWidth()) { Text("开始") }
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("focus" to "专注", "short_break" to "短休", "long_break" to "长休").forEach { (k, label) ->
-                        FilterChip(selected = state.kind == k, onClick = { vm.setKind(k) },
-                            label = { Text(label) })
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-                Button(onClick = vm::start, modifier = Modifier.fillMaxWidth()) { Text("开始") }
             } else {
-                val a = state.active!!
-                // 计算剩余秒数
-                val startedMs = runCatching {
-                    java.time.Instant.parse(a.started_at).toEpochMilli()
-                }.getOrNull() ?: nowMs
-                val elapsedSec = ((nowMs - startedMs) / 1000).toInt().coerceAtLeast(0)
-                val remainingSec = (a.planned_duration_seconds - elapsedSec).coerceAtLeast(0)
-                val mm = remainingSec / 60
-                val ss = remainingSec % 60
-                val progress = if (a.planned_duration_seconds > 0)
-                    (1f - remainingSec.toFloat() / a.planned_duration_seconds.toFloat()).coerceIn(0f, 1f)
-                else 1f
+                item {
+                    val a = state.active!!
+                    val startedMs = runCatching {
+                        java.time.Instant.parse(a.started_at).toEpochMilli()
+                    }.getOrNull() ?: nowMs
+                    val elapsedSec = ((nowMs - startedMs) / 1000).toInt().coerceAtLeast(0)
+                    val remainingSec = (a.planned_duration_seconds - elapsedSec).coerceAtLeast(0)
+                    val mm = remainingSec / 60
+                    val ss = remainingSec % 60
+                    val progress = if (a.planned_duration_seconds > 0)
+                        (1f - remainingSec.toFloat() / a.planned_duration_seconds.toFloat()).coerceIn(0f, 1f)
+                    else 1f
 
-                Card(Modifier.fillMaxWidth()) {
-                    Column(
-                        Modifier.padding(20.dp).fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            when (a.kind) { "focus" -> "专注中"; "short_break" -> "短休中"; "long_break" -> "长休中"; else -> a.kind },
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            "%02d:%02d".format(mm, ss),
-                            fontSize = 64.sp,
-                            fontWeight = FontWeight.Light,
-                            color = if (remainingSec == 0) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier.fillMaxWidth().height(6.dp),
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "计划 ${a.planned_duration_seconds / 60} 分钟 · 已过 ${elapsedSec / 60} 分 ${elapsedSec % 60} 秒",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        if (remainingSec == 0) {
-                            Spacer(Modifier.height(8.dp))
-                            Text("⏰ 时间到 — 点完成结算", color = MaterialTheme.colorScheme.primary,
-                                style = MaterialTheme.typography.titleSmall)
+                    ProductCard(tonal = true) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                            StatusPill(
+                                when (a.kind) { "focus" -> "专注中"; "short_break" -> "短休中"; "long_break" -> "长休中"; else -> a.kind },
+                                MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                "%02d:%02d".format(mm, ss),
+                                fontSize = 64.sp,
+                                fontWeight = FontWeight.Light,
+                                color = if (remainingSec == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            )
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth().height(8.dp),
+                            )
+                            Text(
+                                "计划 ${a.planned_duration_seconds / 60} 分钟 · 已过 ${elapsedSec / 60} 分 ${elapsedSec % 60} 秒",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (remainingSec == 0) {
+                                Text("时间到，点完成结算", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = vm::complete, modifier = Modifier.weight(1f)) { Text("完成") }
+                            OutlinedButton(onClick = vm::abandon, modifier = Modifier.weight(1f)) { Text("放弃") }
                         }
                     }
                 }
-                Spacer(Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = vm::complete, modifier = Modifier.weight(1f)) { Text("完成") }
-                    OutlinedButton(onClick = vm::abandon, modifier = Modifier.weight(1f)) { Text("放弃") }
-                }
             }
 
-            Spacer(Modifier.height(24.dp))
-            Text("最近", style = MaterialTheme.typography.titleMedium)
-            state.recent.take(8).forEach { p ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                    Text("${p.kind} · ${p.actual_duration_seconds / 60} min", modifier = Modifier.weight(1f))
-                    Text(p.status, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+            item {
+                Text("最近记录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            }
+            item {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(listOf("all" to "全部", "completed" to "完成", "abandoned" to "放弃", "active" to "进行中")) { (k, label) ->
+                        FilterChip(selected = historyFilter == k, onClick = { historyFilter = k }, label = { Text(label) })
+                    }
+                }
+            }
+            val recent = state.recent
+                .filter { historyFilter == "all" || it.status == historyFilter }
+                .take(12)
+            if (recent.isEmpty()) {
+                item {
+                    EmptyProductState(
+                        title = "还没有记录",
+                        body = "完成一次专注后，这里会显示最近的时长和状态。",
+                    )
+                }
+            } else {
+                items(recent, key = { it.id }) { p ->
+                    ProductCard {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    when (p.kind) { "focus" -> "专注"; "short_break" -> "短休"; "long_break" -> "长休"; else -> p.kind },
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    "${p.actual_duration_seconds / 60} 分钟 · 计划 ${p.planned_duration_seconds / 60} 分钟",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            StatusPill(
+                                when (p.status) { "completed" -> "完成"; "abandoned" -> "放弃"; "active" -> "进行中"; else -> p.status },
+                                if (p.status == "completed") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -357,46 +468,25 @@ fun PomodoroScreen(container: AppContainer, onBack: () -> Unit) {
 // (scope='android'),以及从浏览器搬过来的"账号 / 时区 / 服务端"等通用项。
 // Web / Windows 的对应项在各自客户端展示,这里看不到 —— 但在数据库里它们各占一行,
 // 用户切换到任一端都能看到完整的本端设置。
-//
-// 这里同时把"权限自检"内联到 SettingsScreen,而不是再让用户跳到独立子页:
-// Android 上要让强提醒真正生效,五项权限缺一不可,所以放在第一屏直观提示。
-//
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () -> Unit) {
     val vm: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory(container))
     val state by vm.state.collectAsState()
-    val ctx = LocalContext.current
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    var showTimezonePicker by remember { mutableStateOf(false) }
 
     TaskFlowErrorDialog(message = state.error, onDismiss = vm::clearError)
 
-    // 五项权限的实时状态。每次 onResume 重读(用户从系统设置回来后立刻反映)。
-    var permPostNotif by remember { mutableStateOf(true) }
-    var permNotifEnabled by remember { mutableStateOf(true) }
-    var permExactAlarm by remember { mutableStateOf(true) }
-    var permFullScreen by remember { mutableStateOf(true) }
-    var permBattery by remember { mutableStateOf(true) }
-
-    fun reloadPerms() {
-        permPostNotif    = com.example.taskflow.util.Permissions.hasPostNotifications(ctx)
-        permNotifEnabled = com.example.taskflow.util.Permissions.areNotificationsEnabled(ctx)
-        permExactAlarm   = com.example.taskflow.util.Permissions.canScheduleExactAlarms(ctx)
-        permFullScreen   = com.example.taskflow.util.Permissions.canUseFullScreenIntent(ctx)
-        permBattery      = com.example.taskflow.util.Permissions.isIgnoringBatteryOptimizations(ctx)
-    }
-    DisposableEffect(lifecycle) {
-        reloadPerms()
-        val obs = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                reloadPerms()
-                vm.refreshPrefs()
-            }
-        }
-        lifecycle.addObserver(obs)
-        onDispose { lifecycle.removeObserver(obs) }
+    if (showTimezonePicker) {
+        TimezonePickerDialog(
+            current = state.timezone,
+            onDismiss = { showTimezonePicker = false },
+            onSelect = {
+                showTimezonePicker = false
+                vm.setTimezone(it)
+            },
+        )
     }
 
     val updateDialog = state.updateDialog
@@ -466,162 +556,41 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () 
             // ---------- 账号 ----------
             SettingsCard(title = "账号") {
                 Text(state.email, style = MaterialTheme.typography.bodyLarge)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "时区: ${state.timezone}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(12.dp))
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = if (state.shouldSuggestSystemTimezone)
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !state.timezoneSaving) { showTimezonePicker = true },
                 ) {
                     Column(Modifier.padding(12.dp)) {
                         Text(
-                            "本机时区: ${state.systemTimezone}",
-                            style = MaterialTheme.typography.bodyMedium,
+                            "当前时区",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                         Text(
-                            if (state.shouldSuggestSystemTimezone)
-                                "检测到本机时区与账户时区不同，可以一键同步并保存到服务端。"
-                            else
-                                "账户时区已与本机保持一致。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            timezoneLabel(state.timezone),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
                         )
-                        if (state.shouldSuggestSystemTimezone) {
-                            Spacer(Modifier.height(8.dp))
-                            Button(
-                                onClick = vm::syncSystemTimezone,
-                                enabled = !state.timezoneSaving,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(if (state.timezoneSaving) "同步中..." else "同步为本机时区")
+                        Text(
+                            "点此选择其他时区。所有任务、提醒和统计都会按这个时区展示，并保存到你的账户。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            if (state.timezoneSaving) "保存中..." else "本机时区: ${timezoneLabel(state.systemTimezone)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f),
+                        )
+                        if (state.shouldSuggestSystemTimezone && !state.timezoneSaving) {
+                            TextButton(onClick = vm::syncSystemTimezone) {
+                                Text("同步为本机时区")
                             }
                         }
-                    }
-                }
-            }
-
-            // ---------- 权限自检(Android 专属,内联) ----------
-            SettingsCard(
-                title = "Android 通知与强提醒权限",
-                hint = "Android 端要让到点真的能叫醒你,这五项权限都需要打开。下面任何一项缺失都会延迟或丢失提醒。",
-            ) {
-                PermissionRow(
-                    title = "通知权限 (Android 13+)",
-                    ok = permPostNotif,
-                    hint = "POST_NOTIFICATIONS 运行时权限,没有的话连状态栏图标都不出现。",
-                    onAction = { com.example.taskflow.util.Permissions.openAppNotificationSettings(ctx) },
-                )
-                PermissionRow(
-                    title = "通知未被关闭",
-                    ok = permNotifEnabled,
-                    hint = "整个应用的通知开关没被用户关掉。",
-                    onAction = { com.example.taskflow.util.Permissions.openAppNotificationSettings(ctx) },
-                )
-                PermissionRow(
-                    title = "精确闹钟",
-                    ok = permExactAlarm,
-                    hint = "Android 12+ 必须开,否则 AlarmManager 会被 Doze 延迟到几分钟甚至几小时之后。",
-                    onAction = { com.example.taskflow.util.Permissions.openExactAlarmSettings(ctx) },
-                )
-                PermissionRow(
-                    title = "全屏意图",
-                    ok = permFullScreen,
-                    hint = "Android 14+ 锁屏全屏弹窗,默认不给,需手动放开。",
-                    onAction = { com.example.taskflow.util.Permissions.openFullScreenIntentSettings(ctx) },
-                )
-                PermissionRow(
-                    title = "电池优化白名单",
-                    ok = permBattery,
-                    hint = "建议加入,否则系统在 Doze / 强制睡眠下会延迟提醒。",
-                    onAction = { com.example.taskflow.util.Permissions.openBatteryOptimizationSettings(ctx) },
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "提示:不同厂商系统(MIUI / EMUI / OriginOS / 鸿蒙)还要在\"自启动\"/\"后台保活\"/\"锁屏显示\"里再放一遍 TaskFlow 才能保证 100% 准点。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            // ---------- Android 通知开关(scope='android') ----------
-            SettingsCard(
-                title = "Android 通知行为",
-                hint = "这一组开关只对当前 Android 端生效。Web / Windows 客户端的同类设置在各自客户端里管理,但都会同步保存到你的账户。",
-            ) {
-                ToggleRow(
-                    title = "锁屏全屏强提醒",
-                    desc = "到点拉起全屏 Activity,直到你点击\"完成\"或\"稍后\"。需要\"全屏意图\"权限放开。",
-                    checked = state.prefs.fullScreenAlarm,
-                    onChange = { v -> vm.togglePref { it.copy(fullScreenAlarm = v) } },
-                )
-                ToggleRow(
-                    title = "震动",
-                    desc = "强提醒响铃同时震动。",
-                    checked = state.prefs.vibrate,
-                    onChange = { v -> vm.togglePref { it.copy(vibrate = v) } },
-                )
-                ToggleRow(
-                    title = "应用内提示",
-                    desc = "应用前台时,在底部弹出小卡片(独立于系统通知)。",
-                    checked = state.prefs.inAppToast,
-                    onChange = { v -> vm.togglePref { it.copy(inAppToast = v) } },
-                )
-                ToggleRow(
-                    title = "任务截止本地弹窗",
-                    desc = "任务到了截止时间时,本地弹窗(独立于服务端 reminder)。",
-                    checked = state.prefs.todoDueLocalAlarm,
-                    onChange = { v -> vm.togglePref { it.copy(todoDueLocalAlarm = v) } },
-                )
-                ToggleRow(
-                    title = "番茄到点响铃",
-                    desc = "通过 Foreground Service 播放铃声,直到用户点完成或自动停止。",
-                    checked = state.prefs.pomodoroSound,
-                    onChange = { v -> vm.togglePref { it.copy(pomodoroSound = v) } },
-                )
-                ToggleRow(
-                    title = "番茄到点自动结束",
-                    desc = "关闭后停留在 0:00 等手动确认;开启后倒计时结束直接入库。",
-                    checked = state.prefs.pomodoroAutoComplete,
-                    onChange = { v -> vm.togglePref { it.copy(pomodoroAutoComplete = v) } },
-                )
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
-                // ---- 系统时钟双保险 ----
-                ToggleRow(
-                    title = "同步到系统\"时钟\"应用(双保险)",
-                    desc = "每条 reminder 创建/更新时,同时往系统时钟里写一条单次闹钟。系统时钟享受全部白名单,绝不漏响 —— 但条目会需要你手动到时钟应用里清理。建议只在重要场景开启。",
-                    checked = state.prefs.useSystemAlarmClock,
-                    onChange = { v -> vm.togglePref { it.copy(useSystemAlarmClock = v) } },
-                )
-                if (state.prefs.useSystemAlarmClock) {
-                    Spacer(Modifier.height(4.dp))
-                    OutlinedButton(
-                        onClick = { com.example.taskflow.util.SystemAlarmClock.openClockApp(ctx) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("打开系统时钟应用查看 / 清理闹钟") }
-                }
-
-                Spacer(Modifier.height(12.dp))
-                Text("响铃自动停止时长", style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "强提醒响铃 ${state.prefs.autoSnoozeMinutes} 分钟后,如果用户没点任何按钮,自动停响。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(1, 5, 10, 15, 30).forEach { m ->
-                        FilterChip(
-                            selected = state.prefs.autoSnoozeMinutes == m,
-                            onClick = { vm.setAutoSnooze(m) },
-                            label = { Text("${m}m") },
-                        )
                     }
                 }
             }
@@ -685,28 +654,66 @@ private fun SettingsCard(
 }
 
 @Composable
-private fun ToggleRow(
-    title: String,
-    desc: String,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit,
+private fun TimezonePickerDialog(
+    current: String,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit,
 ) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                desc,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(checked = checked, onCheckedChange = onChange)
-    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择时区") },
+        text = {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().height(420.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TIMEZONE_GROUPS.forEach { group ->
+                    item {
+                        Text(
+                            group.label,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    items(group.options, key = { it.value }) { option ->
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(option.value) },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (option.value == current) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            },
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(option.label, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        option.value,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (option.value == current) {
+                                    Icon(Icons.Default.Check, contentDescription = "当前")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+    )
 }
 
 @Composable

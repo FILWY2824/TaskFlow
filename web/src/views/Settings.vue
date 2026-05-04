@@ -89,7 +89,7 @@ function downloadUrl(path: string): string {
 }
 
 // ---- 检测更新(Tauri / Windows 端) ----
-const LOCAL_VERSION = '1.4.0'
+const LOCAL_VERSION = '1.4.1'
 type ReleaseManifest = Record<string, { version?: string; filename?: string; notes?: string }>
 const releasesManifest = ref<ReleaseManifest | null>(null)
 const updateChecking = ref(false)
@@ -457,7 +457,7 @@ async function toggleDesktopNotification(v: boolean) {
     <div class="settings-card">
       <div class="card-head"><h3>关于</h3></div>
       <div class="card-body">
-        <p class="muted">TaskFlow · Web v1.4.0</p>
+        <p class="muted">TaskFlow · Web v1.4.1</p>
         <p class="muted">多用户 TODO + Android / Windows 强提醒</p>
 
         <!-- ===== 客户端下载 / 检测更新 ===== -->
@@ -465,7 +465,7 @@ async function toggleDesktopNotification(v: boolean) {
           <!-- Windows (Tauri) 端:检测更新 -->
           <template v-if="isWindows">
             <div class="about-downloads-title">检测更新</div>
-            <p class="muted" style="font-size:13px;margin-bottom:10px">当前版本 v1.4.0</p>
+            <p class="muted" style="font-size:13px;margin-bottom:10px">当前版本 v1.4.1</p>
             <button class="btn-primary btn-sm" :disabled="updateChecking" @click="checkUpdate">
               {{ updateChecking ? '检测中…' : '检查新版本' }}
             </button>

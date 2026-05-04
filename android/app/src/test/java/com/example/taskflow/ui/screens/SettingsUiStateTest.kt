@@ -42,4 +42,11 @@ class SettingsUiStateTest {
         assertEquals(false, same.shouldSuggestSystemTimezone)
         assertEquals(true, different.shouldSuggestSystemTimezone)
     }
+
+    @Test
+    fun timezoneOptionsStartFromShanghaiAndAllowManualSelection() {
+        assertEquals("Asia/Shanghai", DEFAULT_TIMEZONE)
+        assertEquals("中国上海 (UTC+8)", timezoneLabel("Asia/Shanghai"))
+        assertEquals("美国洛杉矶 (UTC-8/-7)", timezoneLabel("America/Los_Angeles"))
+    }
 }

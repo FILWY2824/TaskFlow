@@ -78,7 +78,7 @@ pub struct UserMe {
 impl ApiClient {
     pub fn new(base: String, token: Option<String>) -> Self {
         let http = Client::builder()
-            .user_agent("taskflow-windows/1.4.0")
+            .user_agent("taskflow-windows/1.4.1")
             .timeout(Duration::from_secs(20))
             .build()
             .expect("build reqwest client");

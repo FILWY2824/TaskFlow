@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.taskflow.AppContainer
 import com.example.taskflow.data.local.TodoCacheEntity
 import com.example.taskflow.data.repository.Result
-import com.example.taskflow.util.DateTimeFmt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,20 +14,11 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-enum class TaskFilter(val label: String, val server: String?) {
-    Today("今天", "today"),
-    Tomorrow("明天", "tomorrow"),
-    ThisWeek("本周", "this_week"),
-    Overdue("已逾期", "overdue"),
-    NoDate("无日期", "nodate"),
-    All("全部", null),
-    Completed("已完成", "completed"),
-}
-
 data class TasksUiState(
     val isRefreshing: Boolean = false,
     val error: String? = null,
-    val filter: TaskFilter = TaskFilter.Today,
+    val dateFilter: TaskDateFilter = TaskDateFilter.Today,
+    val statusFilter: TaskStatusFilter = TaskStatusFilter.All,
     val items: List<TodoCacheEntity> = emptyList(),
     val allItems: List<TodoCacheEntity> = emptyList(),
     /** 用户时区,用于本地过滤 */
@@ -40,7 +30,8 @@ data class TasksUiState(
 
 class TasksViewModel(private val container: AppContainer) : ViewModel() {
 
-    private val filterFlow = MutableStateFlow(TaskFilter.Today)
+    private val dateFilterFlow = MutableStateFlow(TaskDateFilter.Today)
+    private val statusFilterFlow = MutableStateFlow(TaskStatusFilter.All)
     private val errorFlow = MutableStateFlow<String?>(null)
     private val refreshingFlow = MutableStateFlow(false)
     private val offlineFlow = MutableStateFlow(false)
@@ -49,7 +40,8 @@ class TasksViewModel(private val container: AppContainer) : ViewModel() {
     val state: StateFlow<TasksUiState> = combine(
         listOf(
             container.todoRepository.observeAll(),
-            filterFlow,
+            dateFilterFlow,
+            statusFilterFlow,
             refreshingFlow,
             errorFlow,
             offlineFlow,
@@ -58,17 +50,20 @@ class TasksViewModel(private val container: AppContainer) : ViewModel() {
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val all = values[0] as List<TodoCacheEntity>
-        val filter = values[1] as TaskFilter
-        val refreshing = values[2] as Boolean
-        val err = values[3] as String?
-        val offline = values[4] as Boolean
-        val search = values[5] as String
+        val dateFilter = values[1] as TaskDateFilter
+        val statusFilter = values[2] as TaskStatusFilter
+        val refreshing = values[3] as Boolean
+        val err = values[4] as String?
+        val offline = values[5] as Boolean
+        val search = values[6] as String
+        val timezone = container.tokenManager.current().timezone
         TasksUiState(
-            items = applyFilter(all, filter, container.tokenManager.current().timezone, search),
-            filter = filter,
+            items = filterTodosForAndroid(all, dateFilter, statusFilter, timezone, search),
+            dateFilter = dateFilter,
+            statusFilter = statusFilter,
             isRefreshing = refreshing,
             error = err,
-            tz = container.tokenManager.current().timezone,
+            tz = timezone,
             isOffline = offline,
             searchQuery = search,
             allItems = all,
@@ -77,7 +72,15 @@ class TasksViewModel(private val container: AppContainer) : ViewModel() {
 
     init { refresh() }
 
-    fun setFilter(f: TaskFilter) { filterFlow.value = f }
+    fun setDateFilter(f: TaskDateFilter) {
+        if (dateFilterFlow.value == f) return
+        dateFilterFlow.value = f
+        refresh()
+    }
+
+    fun setStatusFilter(f: TaskStatusFilter) {
+        statusFilterFlow.value = f
+    }
 
     fun clearError() { errorFlow.value = null }
 
@@ -92,7 +95,7 @@ class TasksViewModel(private val container: AppContainer) : ViewModel() {
         errorFlow.value = null
         viewModelScope.launch {
             val r = container.todoRepository.refreshAll(
-                filter = filterFlow.value.server,
+                filter = dateFilterFlow.value.server,
                 listId = null,
                 search = null,
             )
@@ -136,38 +139,6 @@ class TasksViewModel(private val container: AppContainer) : ViewModel() {
             if (r is Result.Error && r.code != "network") {
                 errorFlow.value = r.message
             }
-        }
-    }
-
-    private fun applyFilter(all: List<TodoCacheEntity>, f: TaskFilter, tz: String, search: String): List<TodoCacheEntity> {
-        val byFilter = when (f) {
-            TaskFilter.Today -> all.filter { !it.is_completed && DateTimeFmt.isToday(it.due_at, tz) }
-            TaskFilter.Tomorrow -> {
-                val tomorrow = DateTimeFmt.nowLocalDate(tz).plusDays(1)
-                all.filter {
-                    !it.is_completed && it.due_at != null &&
-                        DateTimeFmt.localDate(it.due_at, tz) == tomorrow.toString()
-                }
-            }
-            TaskFilter.ThisWeek -> {
-                val today = DateTimeFmt.nowLocalDate(tz)
-                val end = today.plusDays(7)
-                all.filter { e ->
-                    !e.is_completed && e.due_at != null && run {
-                        val d = DateTimeFmt.localDate(e.due_at, tz)
-                        d.isNotBlank() && d >= today.toString() && d < end.toString()
-                    }
-                }
-            }
-            TaskFilter.Overdue -> all.filter { !it.is_completed && DateTimeFmt.isOverdue(it.due_at, it.completed_at) }
-            TaskFilter.NoDate -> all.filter { !it.is_completed && it.due_at.isNullOrBlank() }
-            TaskFilter.All -> all.filter { !it.is_completed }
-            TaskFilter.Completed -> all.filter { it.is_completed }
-        }
-        if (search.isBlank()) return byFilter
-        val q = search.trim().lowercase()
-        return byFilter.filter {
-            it.title.lowercase().contains(q) || it.description.lowercase().contains(q)
         }
     }
 

@@ -1,6 +1,6 @@
 [package]
 name = "taskflow-tauri"
-version = "1.4.0"
+version = "1.4.1"
 description = "TaskFlow Windows desktop client"
 edition = "2021"
 rust-version = "1.75"

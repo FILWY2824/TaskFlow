@@ -1,12 +1,12 @@
 {
   "windows": {
-    "version": "1.4.0",
-    "filename": "TaskFlow_1.4.0_x64-setup.exe",
-    "notes": "V1.4.0: Android 改为 Telegram 风格底部导航与产品化登录首屏,Web/Windows/Android 任务新增预计时长,下载按钮使用 release 清单和外部打开兜底。"
+    "version": "1.4.1",
+    "filename": "TaskFlow_1.4.1_x64-setup.exe",
+    "notes": "V1.4.1: Android 工作台筛选逻辑对齐 Web,设置页支持手动选择账户时区,专注与统计页面重做为更现代的筛选式移动端界面。"
   },
   "android": {
-    "version": "1.4.0",
+    "version": "1.4.1",
     "filename": "TaskFlow-release-unsigned.apk",
-    "notes": "V1.4.0: Android 改为底部导航,登录页改成产品介绍与登录一体首屏,任务新增预计时长,日期和提醒时间改用精致时间盘。"
+    "notes": "V1.4.1: Android 新增手动时区选择,工作台改为下拉刷新与日期/状态双层筛选,移除设置页重复权限卡片,专注和统计页面视觉升级。"
   }
 }

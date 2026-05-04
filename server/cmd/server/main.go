@@ -25,7 +25,7 @@ import (
 	"github.com/youruser/taskflow/internal/telegram"
 )
 
-var version = "1.4.0"
+var version = "1.4.1"
 
 func main() {
 	cfgPath := flag.String("config", "config.toml", "path to config file")
