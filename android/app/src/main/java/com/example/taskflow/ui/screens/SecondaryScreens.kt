@@ -244,6 +244,15 @@ fun StatsScreen(container: AppContainer, onBack: () -> Unit) {
                                 }
                             }
                         }
+                        item {
+                            ProductCard {
+                                Text("专注概览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    MetricTile("今日专注", "${s.pomodoro_today_seconds / 60} 分钟", Modifier.weight(1f), MaterialTheme.colorScheme.primary)
+                                    MetricTile("本周专注", "${s.pomodoro_this_week_seconds / 60} 分钟", Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
+                                }
+                            }
+                        }
                     }
                     StatsPanel.Tasks -> {
                         item { StatCard("待办总数", s.todos_open.toString(), "还需要推进的任务") }
