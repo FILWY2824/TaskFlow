@@ -71,6 +71,7 @@ class TodoRepository(
                 id = it.id, user_id = it.user_id, list_id = it.list_id,
                 title = it.title, description = it.description,
                 priority = it.priority, effort = it.effort,
+                duration_minutes = it.duration_minutes,
                 due_at = it.due_at, due_all_day = it.due_all_day,
                 is_completed = it.is_completed, completed_at = it.completed_at,
                 sort_order = it.sort_order, timezone = it.timezone,

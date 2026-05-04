@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.4.0 (2026-05-04) — 任务预计时长
+
+### 新增
+
+- TODO 模型新增 `duration_minutes`,用于记录任务预计持续时间。
+- 数据库新增 migration v7,为 `todos` 表追加 `duration_minutes INTEGER NOT NULL DEFAULT 0`。
+- 创建与更新 TODO 时校验预计时长必须在 0 到 1440 分钟之间。
+
+### 测试
+
+- 新增 store 层测试覆盖创建与更新时持久化 `duration_minutes`。
+
 ## v1.3.0 (2026-05-04) — OIDC 邮箱 + 时区同步
 
 ### 新增

@@ -1,17 +1,51 @@
 package com.example.taskflow.ui.screens
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -21,6 +55,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.ZonedDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,13 +85,19 @@ fun TodoEditScreen(
         topBar = {
             TopAppBar(
                 title = { Text(if (todoId == null) "新建任务" else "编辑任务") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                    }
+                },
                 actions = {
-                    if (state.todoId != null) IconButton(onClick = vm::delete) {
-                        Icon(Icons.Default.Delete, "删除", tint = MaterialTheme.colorScheme.error)
+                    if (state.todoId != null) {
+                        IconButton(onClick = vm::delete) {
+                            Icon(Icons.Default.Delete, "删除", tint = MaterialTheme.colorScheme.error)
+                        }
                     }
                     TextButton(onClick = vm::save, enabled = !state.saving) {
-                        Text(if (state.saving) "..." else "保存")
+                        Text(if (state.saving) "保存中" else "保存")
                     }
                 },
             )
@@ -68,22 +109,26 @@ fun TodoEditScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             OutlinedTextField(
-                value = state.title, onValueChange = vm::setTitle,
-                label = { Text("标题 *") }, modifier = Modifier.fillMaxWidth(),
+                value = state.title,
+                onValueChange = vm::setTitle,
+                label = { Text("标题 *") },
+                modifier = Modifier.fillMaxWidth(),
                 isError = state.error != null,
+                singleLine = true,
             )
-            Spacer(Modifier.height(12.dp))
             OutlinedTextField(
-                value = state.description, onValueChange = vm::setDescription,
-                label = { Text("描述") }, modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
+                value = state.description,
+                onValueChange = vm::setDescription,
+                label = { Text("描述") },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
                 maxLines = 6,
             )
-            Spacer(Modifier.height(12.dp))
 
             Text("优先级", style = MaterialTheme.typography.labelMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(0, 1, 2, 3, 4).forEach { p ->
                     FilterChip(
                         selected = state.priority == p,
@@ -93,7 +138,9 @@ fun TodoEditScreen(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Text("预计时长", style = MaterialTheme.typography.labelMedium)
+            DurationPicker(minutes = state.durationMinutes, onChange = vm::setDurationMinutes)
+
             ListItem(
                 headlineContent = { Text("截止时间") },
                 supportingContent = {
@@ -102,34 +149,39 @@ fun TodoEditScreen(
                 trailingContent = {
                     Row {
                         TextButton(onClick = { showDateDialog = true }) { Text("选择") }
-                        if (state.dueAtIso != null) TextButton(onClick = { vm.setDueAt(null, false) }) { Text("清除") }
+                        if (state.dueAtIso != null) {
+                            TextButton(onClick = { vm.setDueAt(null, false) }) { Text("清除") }
+                        }
                     }
                 },
             )
 
-            // === 子任务 ===
             if (state.todoId != null) {
-                Spacer(Modifier.height(20.dp))
-                Text("子任务", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
-                state.subtasks.forEach { s ->
+                Text("子任务", style = MaterialTheme.typography.titleMedium)
+                state.subtasks.forEach { subtask ->
                     Row(
                         Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(checked = s.is_completed, onCheckedChange = { vm.toggleSubtask(s) })
-                        Text(
-                            s.title, modifier = Modifier.weight(1f),
-                            textDecoration = if (s.is_completed) TextDecoration.LineThrough else null,
+                        Checkbox(
+                            checked = subtask.is_completed,
+                            onCheckedChange = { vm.toggleSubtask(subtask) },
                         )
-                        IconButton(onClick = { vm.deleteSubtask(s.id) }) {
+                        Text(
+                            subtask.title,
+                            modifier = Modifier.weight(1f),
+                            textDecoration = if (subtask.is_completed) TextDecoration.LineThrough else null,
+                        )
+                        IconButton(onClick = { vm.deleteSubtask(subtask.id) }) {
                             Icon(Icons.Default.Delete, "删除")
                         }
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
-                        value = newSubtask, onValueChange = { newSubtask = it },
+                        value = newSubtask,
+                        onValueChange = { newSubtask = it },
                         label = { Text("添加子任务") },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
@@ -140,37 +192,40 @@ fun TodoEditScreen(
                             vm.addSubtask(newSubtask)
                             newSubtask = ""
                         }
-                    }) { Text("加") }
+                    }) { Text("添加") }
                 }
 
-                // === 提醒 ===
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("提醒", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                     TextButton(onClick = { showReminderDialog = true }) { Text("+ 新建") }
                 }
-                state.reminders.forEach { r ->
+                state.reminders.forEach { reminder ->
                     Row(
                         Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(r.title.ifEmpty { "(无标题)" })
+                            Text(reminder.title.ifEmpty { "未命名提醒" })
                             Text(
-                                "下次:" + (r.next_fire_at?.let { DateTimeFmt.localDateTime(it, r.timezone) } ?: "—"),
+                                "下次: " + (reminder.next_fire_at?.let {
+                                    DateTimeFmt.localDateTime(it, reminder.timezone)
+                                } ?: "-"),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        IconButton(onClick = { vm.deleteReminder(r.id) }) {
+                        IconButton(onClick = { vm.deleteReminder(reminder.id) }) {
                             Icon(Icons.Default.Delete, "删除")
                         }
                     }
                 }
             } else {
-                Spacer(Modifier.height(12.dp))
-                Text("保存后可以添加子任务和提醒", color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "保存后可以继续添加子任务和强提醒。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
 
             Spacer(Modifier.height(40.dp))
@@ -178,12 +233,14 @@ fun TodoEditScreen(
     }
 
     if (showDateDialog) {
-        DueDateDialog(
+        DateTimeDialDialog(
             timezone = state.timezone,
             initial = state.dueAtIso,
+            title = "选择截止时间",
+            confirmText = "确定",
             onDismiss = { showDateDialog = false },
-            onConfirm = { iso, allDay ->
-                vm.setDueAt(iso, allDay)
+            onConfirm = { iso ->
+                vm.setDueAt(iso, false)
                 showDateDialog = false
             },
         )
@@ -201,54 +258,113 @@ fun TodoEditScreen(
     }
 }
 
+@Composable
+private fun DurationPicker(
+    minutes: Int,
+    onChange: (Int) -> Unit,
+) {
+    val options = listOf(0, 15, 30, 45, 60, 90, 120)
+    var custom by remember(minutes) { mutableStateOf(if (minutes == 0) "" else minutes.toString()) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            options.forEach { value ->
+                FilterChip(
+                    selected = minutes == value,
+                    onClick = { onChange(value) },
+                    label = { Text(if (value == 0) "不设置" else durationText(value)) },
+                )
+            }
+        }
+        OutlinedTextField(
+            value = custom,
+            onValueChange = { raw ->
+                val clean = raw.filter { it.isDigit() }.take(4)
+                custom = clean
+                onChange((clean.toIntOrNull() ?: 0).coerceIn(0, 1440))
+            },
+            label = { Text("自定义分钟数") },
+            supportingText = { Text("最多 24 小时，用来规划这个任务预计占用的时间") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        )
+    }
+}
+
+private fun durationText(minutes: Int): String {
+    val safe = minutes.coerceAtLeast(0)
+    if (safe == 0) return "不设置"
+    val hours = safe / 60
+    val mins = safe % 60
+    return when {
+        hours > 0 && mins > 0 -> "${hours}小时${mins}分钟"
+        hours > 0 -> "${hours}小时"
+        else -> "${mins}分钟"
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DueDateDialog(
+private fun DateTimeDialDialog(
     timezone: String,
     initial: String?,
+    title: String,
+    confirmText: String,
     onDismiss: () -> Unit,
-    onConfirm: (iso: String?, allDay: Boolean) -> Unit,
+    onConfirm: (iso: String) -> Unit,
 ) {
     val tz = try { ZoneId.of(timezone) } catch (_: Exception) { ZoneId.systemDefault() }
-    val initZdt = initial?.let { try { ZonedDateTime.ofInstant(Instant.parse(it), tz) } catch (_: Exception) { null } }
-    var date by remember { mutableStateOf(initZdt?.toLocalDate() ?: LocalDate.now(tz)) }
-    var hour by remember { mutableIntStateOf(initZdt?.hour ?: 9) }
-    var minute by remember { mutableIntStateOf(initZdt?.minute ?: 0) }
-    var dateText by remember { mutableStateOf(date.toString()) }
-    var hhmm by remember { mutableStateOf("%02d:%02d".format(hour, minute)) }
+    val initZdt = initial?.let {
+        runCatching { ZonedDateTime.ofInstant(Instant.parse(it), tz) }.getOrNull()
+    }
+    val initialDate = initZdt?.toLocalDate() ?: LocalDate.now(tz)
+    val dateState = rememberDatePickerState(initialSelectedDateMillis = datePickerMillis(initialDate))
+    val timeState = rememberTimePickerState(
+        initialHour = initZdt?.hour ?: 9,
+        initialMinute = initZdt?.minute ?: 0,
+        is24Hour = true,
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("设置截止时间") },
+        title = { Text(title) },
         text = {
-            Column {
-                OutlinedTextField(
-                    value = dateText, onValueChange = {
-                        dateText = it
-                        runCatching { date = LocalDate.parse(it) }
-                    },
-                    label = { Text("日期 (YYYY-MM-DD)") }, singleLine = true,
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = hhmm, onValueChange = {
-                        hhmm = it
-                        val parts = it.split(":")
-                        if (parts.size == 2) {
-                            parts[0].toIntOrNull()?.let { h -> if (h in 0..23) hour = h }
-                            parts[1].toIntOrNull()?.let { m -> if (m in 0..59) minute = m }
-                        }
-                    },
-                    label = { Text("时间 (HH:mm)") }, singleLine = true,
-                )
+            Column(
+                Modifier
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                DatePicker(state = dateState, showModeToggle = true)
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text("时间", style = MaterialTheme.typography.labelLarge)
+                        Spacer(Modifier.height(8.dp))
+                        TimePicker(state = timeState)
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                val iso = ZonedDateTime.of(date, LocalTime.of(hour, minute), tz)
-                    .toInstant().toString()
-                onConfirm(iso, false)
-            }) { Text("确定") }
+                val date = selectedLocalDate(dateState.selectedDateMillis, initialDate)
+                val iso = ZonedDateTime.of(date, LocalTime.of(timeState.hour, timeState.minute), tz)
+                    .toInstant()
+                    .toString()
+                onConfirm(iso)
+            }) { Text(confirmText) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
@@ -262,42 +378,64 @@ private fun AddReminderDialog(
     onConfirm: (triggerAtIso: String, title: String) -> Unit,
 ) {
     val tz = try { ZoneId.of(timezone) } catch (_: Exception) { ZoneId.systemDefault() }
-    var date by remember { mutableStateOf(LocalDate.now(tz)) }
-    var hour by remember { mutableIntStateOf(LocalTime.now(tz).hour) }
-    var minute by remember { mutableIntStateOf(((LocalTime.now(tz).minute / 5) + 1) * 5 % 60) }
-    var dateText by remember { mutableStateOf(date.toString()) }
-    var hhmm by remember { mutableStateOf("%02d:%02d".format(hour, minute)) }
+    val now = LocalTime.now(tz)
+    val initialDate = LocalDate.now(tz)
+    val dateState = rememberDatePickerState(initialSelectedDateMillis = datePickerMillis(initialDate))
+    val timeState = rememberTimePickerState(
+        initialHour = now.hour,
+        initialMinute = (((now.minute / 5) + 1) * 5).coerceAtMost(59),
+        is24Hour = true,
+    )
     var title by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("新建提醒") },
         text = {
-            Column {
-                OutlinedTextField(value = title, onValueChange = { title = it },
-                    label = { Text("标题(可选)") }, singleLine = true)
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(value = dateText, onValueChange = {
-                    dateText = it; runCatching { date = LocalDate.parse(it) }
-                }, label = { Text("日期 (YYYY-MM-DD)") }, singleLine = true)
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(value = hhmm, onValueChange = {
-                    hhmm = it
-                    val parts = it.split(":")
-                    if (parts.size == 2) {
-                        parts[0].toIntOrNull()?.let { h -> if (h in 0..23) hour = h }
-                        parts[1].toIntOrNull()?.let { m -> if (m in 0..59) minute = m }
+            Column(
+                Modifier
+                    .heightIn(max = 600.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("标题，可选") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                DatePicker(state = dateState, showModeToggle = true)
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text("提醒时间", style = MaterialTheme.typography.labelLarge)
+                        Spacer(Modifier.height(8.dp))
+                        TimePicker(state = timeState)
                     }
-                }, label = { Text("时间 (HH:mm)") }, singleLine = true)
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                val iso = ZonedDateTime.of(date, LocalTime.of(hour, minute), tz)
-                    .toInstant().toString()
+                val date = selectedLocalDate(dateState.selectedDateMillis, initialDate)
+                val iso = ZonedDateTime.of(date, LocalTime.of(timeState.hour, timeState.minute), tz)
+                    .toInstant()
+                    .toString()
                 onConfirm(iso, title)
             }) { Text("添加") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
 }
+
+private fun datePickerMillis(date: LocalDate): Long =
+    date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+
+private fun selectedLocalDate(millis: Long?, fallback: LocalDate): LocalDate =
+    millis?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() } ?: fallback

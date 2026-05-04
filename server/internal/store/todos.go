@@ -21,16 +21,17 @@ func NewTodoStore(db *sql.DB, events *SyncEventStore) *TodoStore {
 }
 
 type TodoInput struct {
-	ListID      *int64
-	Title       string
-	Description string
-	Priority    int
-	Effort      int
-	DueAt       *time.Time
-	DueAllDay   bool
-	StartAt     *time.Time
-	SortOrder   int
-	Timezone    string
+	ListID          *int64
+	Title           string
+	Description     string
+	Priority        int
+	Effort          int
+	DurationMinutes int
+	DueAt           *time.Time
+	DueAllDay       bool
+	StartAt         *time.Time
+	SortOrder       int
+	Timezone        string
 }
 
 // TodoFilter 列表筛选。所有 Has* 标志为 true 时才启用对应字段。
@@ -73,11 +74,11 @@ func (s *TodoStore) Create(ctx context.Context, userID int64, in TodoInput) (*mo
 
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO todos(user_id, list_id, title, description, priority, effort,
-			due_at, due_all_day, start_at, sort_order, timezone)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			duration_minutes, due_at, due_all_day, start_at, sort_order, timezone)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, userID, in.ListID, in.Title, in.Description, in.Priority, in.Effort,
-		nullTime(in.DueAt), boolToInt(in.DueAllDay), nullTime(in.StartAt),
-		in.SortOrder, tz)
+		in.DurationMinutes, nullTime(in.DueAt), boolToInt(in.DueAllDay),
+		nullTime(in.StartAt), in.SortOrder, tz)
 	if err != nil {
 		return nil, fmt.Errorf("insert todo: %w", err)
 	}
@@ -104,7 +105,7 @@ func (s *TodoStore) Get(ctx context.Context, userID, id int64) (*models.Todo, er
 
 const todoSelect = `
 	SELECT id, user_id, list_id, title, description, priority, effort,
-		due_at, due_all_day, start_at, is_completed, completed_at,
+		duration_minutes, due_at, due_all_day, start_at, is_completed, completed_at,
 		sort_order, timezone, created_at, updated_at
 	FROM todos
 `
@@ -220,12 +221,12 @@ func (s *TodoStore) Update(ctx context.Context, userID, id int64, in TodoInput) 
 	res, err := tx.ExecContext(ctx, `
 		UPDATE todos
 		SET list_id = ?, title = ?, description = ?, priority = ?, effort = ?,
-		    due_at = ?, due_all_day = ?, start_at = ?, sort_order = ?, timezone = ?,
+		    duration_minutes = ?, due_at = ?, due_all_day = ?, start_at = ?, sort_order = ?, timezone = ?,
 		    updated_at = ?
 		WHERE id = ? AND user_id = ? AND deleted_at IS NULL
 	`, in.ListID, in.Title, in.Description, in.Priority, in.Effort,
-		nullTime(in.DueAt), boolToInt(in.DueAllDay), nullTime(in.StartAt),
-		in.SortOrder, tz, time.Now().UTC(), id, userID)
+		in.DurationMinutes, nullTime(in.DueAt), boolToInt(in.DueAllDay),
+		nullTime(in.StartAt), in.SortOrder, tz, time.Now().UTC(), id, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +331,7 @@ func scanTodo(r rowScanner) (*models.Todo, error) {
 	var dueAt, startAt, completedAt sql.NullTime
 	var dueAllDay, isCompleted int
 	if err := r.Scan(&t.ID, &t.UserID, &listID, &t.Title, &t.Description,
-		&t.Priority, &t.Effort, &dueAt, &dueAllDay, &startAt, &isCompleted, &completedAt,
+		&t.Priority, &t.Effort, &t.DurationMinutes, &dueAt, &dueAllDay, &startAt, &isCompleted, &completedAt,
 		&t.SortOrder, &t.Timezone, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return nil, err
 	}

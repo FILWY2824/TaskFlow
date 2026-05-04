@@ -24,16 +24,17 @@ func NewTodosHandler(todos *store.TodoStore, users *store.UserStore) *TodosHandl
 // todoRequest 用于 Create/Update 的请求体。
 // list_id 是 *int64,JSON null 与缺省都视为不放入任何 list。
 type todoRequest struct {
-	ListID      *int64     `json:"list_id"`
-	Title       string     `json:"title"`
-	Description string     `json:"description"`
-	Priority    int        `json:"priority"`
-	Effort      int        `json:"effort"`
-	DueAt       *time.Time `json:"due_at"`
-	DueAllDay   bool       `json:"due_all_day"`
-	StartAt     *time.Time `json:"start_at"`
-	SortOrder   int        `json:"sort_order"`
-	Timezone    string     `json:"timezone"`
+	ListID          *int64     `json:"list_id"`
+	Title           string     `json:"title"`
+	Description     string     `json:"description"`
+	Priority        int        `json:"priority"`
+	Effort          int        `json:"effort"`
+	DurationMinutes int        `json:"duration_minutes"`
+	DueAt           *time.Time `json:"due_at"`
+	DueAllDay       bool       `json:"due_all_day"`
+	StartAt         *time.Time `json:"start_at"`
+	SortOrder       int        `json:"sort_order"`
+	Timezone        string     `json:"timezone"`
 }
 
 func (req *todoRequest) validate() error {
@@ -53,6 +54,9 @@ func (req *todoRequest) validate() error {
 	if req.Effort < 0 || req.Effort > 5 {
 		return errors.New("effort must be in [0,5]")
 	}
+	if req.DurationMinutes < 0 || req.DurationMinutes > 1440 {
+		return errors.New("duration_minutes must be in [0,1440]")
+	}
 	if req.Timezone != "" {
 		if _, err := time.LoadLocation(req.Timezone); err != nil {
 			return errors.New("invalid timezone")
@@ -63,16 +67,17 @@ func (req *todoRequest) validate() error {
 
 func (req *todoRequest) toInput() store.TodoInput {
 	return store.TodoInput{
-		ListID:      req.ListID,
-		Title:       req.Title,
-		Description: req.Description,
-		Priority:    req.Priority,
-		Effort:      req.Effort,
-		DueAt:       req.DueAt,
-		DueAllDay:   req.DueAllDay,
-		StartAt:     req.StartAt,
-		SortOrder:   req.SortOrder,
-		Timezone:    req.Timezone,
+		ListID:          req.ListID,
+		Title:           req.Title,
+		Description:     req.Description,
+		Priority:        req.Priority,
+		Effort:          req.Effort,
+		DurationMinutes: req.DurationMinutes,
+		DueAt:           req.DueAt,
+		DueAllDay:       req.DueAllDay,
+		StartAt:         req.StartAt,
+		SortOrder:       req.SortOrder,
+		Timezone:        req.Timezone,
 	}
 }
 

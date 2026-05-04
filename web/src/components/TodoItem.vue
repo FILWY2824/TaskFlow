@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Todo } from '@/types'
-import { fmtRelative, isOverdue, PRIORITY_LABELS } from '@/utils'
+import { fmtDurationMinutes, fmtRelative, isOverdue, PRIORITY_LABELS } from '@/utils'
 import { useDataStore } from '@/stores/data'
 
 const props = defineProps<{ todo: Todo }>()
@@ -61,7 +61,7 @@ async function toggleDone(e: Event) {
         </span>
       </div>
 
-      <div v-if="todo.due_at || listName || todo.effort > 0" class="todo-meta">
+      <div v-if="todo.due_at || listName || todo.effort > 0 || todo.duration_minutes > 0" class="todo-meta">
         <span v-if="todo.due_at" class="todo-due">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/>
@@ -80,6 +80,13 @@ async function toggleDone(e: Event) {
             <path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/>
           </svg>
           工作量 {{ todo.effort }}
+        </span>
+
+        <span v-if="todo.duration_minutes > 0" :title="`预计时长：${fmtDurationMinutes(todo.duration_minutes)}`">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2h4"/><path d="M12 14l3-3"/><circle cx="12" cy="14" r="8"/>
+          </svg>
+          {{ fmtDurationMinutes(todo.duration_minutes) }}
         </span>
       </div>
     </div>

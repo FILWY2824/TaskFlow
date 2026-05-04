@@ -57,6 +57,7 @@ export interface Todo {
   description: string
   priority: number // 0..4
   effort: number // 0..5
+  duration_minutes: number
   due_at?: string | null
   due_all_day: boolean
   start_at?: string | null
@@ -74,6 +75,7 @@ export interface TodoInput {
   description?: string
   priority?: number
   effort?: number
+  duration_minutes?: number
   due_at?: string | null
   due_all_day?: boolean
   start_at?: string | null

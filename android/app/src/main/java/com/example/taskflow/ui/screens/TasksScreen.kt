@@ -379,6 +379,14 @@ private fun TodoRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(8.dp))
+                if (todo.duration_minutes > 0) {
+                    Text(
+                        durationLabel(todo.duration_minutes),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (isOverdue) StatusPill("已逾期", MaterialTheme.colorScheme.error)
                     if (todo.due_all_day) StatusPill("全天")
@@ -404,4 +412,16 @@ private fun priorityColor(priority: Int, overdue: Boolean): Color = when {
     priority == 2 -> Color(0xFF0F766E)
     priority == 1 -> Color(0xFF2563EB)
     else -> MaterialTheme.colorScheme.primary
+}
+
+private fun durationLabel(minutes: Int): String {
+    val safe = minutes.coerceAtLeast(0)
+    if (safe == 0) return "未设置"
+    val hours = safe / 60
+    val mins = safe % 60
+    return when {
+        hours > 0 && mins > 0 -> "${hours}小时${mins}分钟"
+        hours > 0 -> "${hours}小时"
+        else -> "${mins}分钟"
+    }
 }

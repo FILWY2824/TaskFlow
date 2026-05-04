@@ -32,6 +32,7 @@ data class TodoCacheEntity(
     val description: String,
     val priority: Int,
     val effort: Int,
+    val duration_minutes: Int,
     val due_at: String?,
     val due_all_day: Boolean,
     val is_completed: Boolean,
@@ -226,7 +227,7 @@ interface AlarmLogDao {
         SyncMetaEntity::class,
         LocalAlarmLogEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 @TypeConverters(BoolConverters::class)

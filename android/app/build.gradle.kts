@@ -64,8 +64,8 @@ android {
         applicationId = "com.example.taskflow"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 130
-        versionName = "1.3.0"
+        versionCode = 140
+        versionName = "1.4.0"
 
         // 默认服务端地址(出厂值)。优先级:
         //   1) 环境变量 TASKFLOW_DEFAULT_SERVER_URL —— 打包时显式传入

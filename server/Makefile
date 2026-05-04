@@ -2,7 +2,7 @@ BINARY      := taskflow-server
 PKG         := ./...
 GOFLAGS     := -trimpath
 LDFLAGS     := -s -w
-VERSION     ?= 1.3.0
+VERSION     ?= 1.4.0
 ENV_FILE    ?= ../.env
 
 .PHONY: all tidy build run test fmt vet clean lint

@@ -83,6 +83,16 @@ export function toDatetimeLocal(d: Date | null | undefined): string {
 }
 
 export const PRIORITY_LABELS = ['无', '低', '中', '高', '紧急']
+export function fmtDurationMinutes(minutes: number | null | undefined): string {
+  const total = Math.max(0, Math.round(Number(minutes) || 0))
+  if (total <= 0) return '未设置'
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  if (h > 0 && m > 0) return `${h} 小时 ${m} 分钟`
+  if (h > 0) return `${h} 小时`
+  return `${m} 分钟`
+}
+
 export const PRIORITY_COLORS = ['#9ca3af', '#3b82f6', '#10b981', '#f59e0b', '#ef4444']
 
 export function isOverdue(t: { due_at?: string | null; is_completed: boolean }): boolean {

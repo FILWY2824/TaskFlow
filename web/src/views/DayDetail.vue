@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Todo } from '@/types'
 import { todos as todosApi, ApiError } from '@/api'
-import { fmtTime, isOverdue, PRIORITY_LABELS, toRFC3339 } from '@/utils'
+import { fmtDurationMinutes, fmtTime, isOverdue, PRIORITY_LABELS, toRFC3339 } from '@/utils'
 import { useDataStore } from '@/stores/data'
 import TodoEditDrawer from '@/components/TodoEditDrawer.vue'
 import PrettyTimePicker from '@/components/PrettyTimePicker.vue'
@@ -220,9 +220,11 @@ const addTitle = ref('')
 const addTimeLocal = ref('') // HH:MM
 const addPriority = ref(0)
 const addListId = ref<number | null>(null)
+const addDurationMinutes = ref<number>(30)
 const addDescription = ref('')
 const addErr = ref('')
 const adding = ref(false)
+const DURATION_OPTIONS = [0, 15, 30, 45, 60, 90, 120]
 
 const PRIORITY_OPTIONS = [
   { value: 0, label: '无',   color: 'var(--tg-text-tertiary)' },
@@ -244,6 +246,7 @@ function openAdd() {
   if (filterKey.value === 'none') addListId.value = null
   else if (filterKey.value === 'all') addListId.value = null
   else addListId.value = Number(filterKey.value)
+  addDurationMinutes.value = 30
   addDescription.value = ''
   addErr.value = ''
   showAddDialog.value = true
@@ -254,6 +257,10 @@ function defaultTimeForToday(): string {
   // 但若当前时间已晚于 22:00，就给个 +1h 的整点更合理
   if (t.getHours() >= 22) return '23:59'
   return '23:59'
+}
+
+function normalizeDurationMinutes(value: number): number {
+  return Math.max(0, Math.min(1440, Math.round(Number(value) || 0)))
 }
 
 async function submitAdd() {
@@ -277,6 +284,7 @@ async function submitAdd() {
       title: addTitle.value.trim(),
       description: addDescription.value || undefined,
       priority: addPriority.value,
+      duration_minutes: normalizeDurationMinutes(addDurationMinutes.value),
       list_id: addListId.value,
       due_at: toRFC3339(due),
     })
@@ -546,6 +554,9 @@ function shiftDay(delta: number) {
                   <span v-if="t.priority > 0" class="meta-prio" :class="`prio-${t.priority}`">
                     {{ PRIORITY_LABELS[t.priority] }}
                   </span>
+                  <span v-if="t.duration_minutes > 0" class="meta-duration">
+                    {{ fmtDurationMinutes(t.duration_minutes) }}
+                  </span>
                 </div>
               </div>
               <div class="item-actions">
@@ -599,6 +610,9 @@ function shiftDay(delta: number) {
                   <span v-if="t.priority > 0" class="meta-prio" :class="`prio-${t.priority}`">
                     {{ PRIORITY_LABELS[t.priority] }}
                   </span>
+                  <span v-if="t.duration_minutes > 0" class="meta-duration">
+                    {{ fmtDurationMinutes(t.duration_minutes) }}
+                  </span>
                 </div>
               </div>
               <div class="item-actions">
@@ -648,6 +662,9 @@ function shiftDay(delta: number) {
                   </span>
                   <span class="meta-cat-chip" :style="{ '--cat-color': todoCatColor(t) || 'var(--tg-text-tertiary)' }">
                     <span class="chip-dot-inline" />{{ todoCatName(t) }}
+                  </span>
+                  <span v-if="t.duration_minutes > 0" class="meta-duration">
+                    {{ fmtDurationMinutes(t.duration_minutes) }}
                   </span>
                 </div>
               </div>
@@ -770,6 +787,40 @@ function shiftDay(delta: number) {
                 default-time="23:59"
               />
               <div class="form-hint muted">不填则默认为当天 23:59</div>
+            </div>
+
+            <div class="form-field">
+              <label>
+                预计时长
+                <span class="duration-summary">{{ fmtDurationMinutes(normalizeDurationMinutes(addDurationMinutes)) }}</span>
+              </label>
+              <div class="duration-picker">
+                <button
+                  v-for="m in DURATION_OPTIONS"
+                  :key="m"
+                  type="button"
+                  class="duration-chip"
+                  :class="{ 'is-selected': normalizeDurationMinutes(addDurationMinutes) === m }"
+                  @click="addDurationMinutes = m"
+                >
+                  {{ m === 0 ? '不设置' : fmtDurationMinutes(m) }}
+                </button>
+                <div class="duration-custom pretty-input-wrap">
+                  <input
+                    v-model.number="addDurationMinutes"
+                    class="pretty-input"
+                    type="number"
+                    min="0"
+                    max="1440"
+                    step="5"
+                    inputmode="numeric"
+                    aria-label="自定义预计时长分钟数"
+                    @blur="addDurationMinutes = normalizeDurationMinutes(addDurationMinutes)"
+                  />
+                  <span class="duration-unit">分钟</span>
+                  <span class="pretty-input-glow" aria-hidden="true" />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1319,6 +1370,14 @@ function shiftDay(delta: number) {
 .meta-prio.prio-2 { background: color-mix(in srgb, var(--cat-emerald) 14%, transparent); color: var(--cat-emerald); }
 .meta-prio.prio-3 { background: color-mix(in srgb, var(--cat-amber) 14%, transparent); color: var(--cat-amber); }
 .meta-prio.prio-4 { background: color-mix(in srgb, var(--cat-rose) 14%, transparent); color: var(--cat-rose); }
+.meta-duration {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tg-primary) 10%, transparent);
+  color: var(--tg-primary);
+  font-weight: 700;
+  font-size: 10.5px;
+}
 
 .item-actions {
   display: flex; gap: 4px;

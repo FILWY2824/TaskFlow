@@ -26,7 +26,7 @@ class SettingsUiStateTest {
     fun dismissedUpdateDialogClearsDialogState() {
         val state = SettingsUiState().withUpdateDialog(
             hasNew = false,
-            version = "1.3.0",
+            version = "1.4.0",
             url = null,
             notes = "当前已是最新版本",
         )

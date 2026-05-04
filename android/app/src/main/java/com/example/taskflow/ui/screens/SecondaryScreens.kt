@@ -26,6 +26,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.taskflow.AppContainer
+import com.example.taskflow.BuildConfig
 import com.example.taskflow.util.DateTimeFmt
 
 // ================================================================
@@ -416,7 +417,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () 
                     if (updateDialog.version != null) {
                         Text("最新版本: v${updateDialog.version}")
                     }
-                    Text("当前版本: v1.3.0", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("当前版本: v${BuildConfig.VERSION_NAME}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (!updateDialog.notes.isNullOrBlank()) {
                         Text(updateDialog.notes, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -628,7 +629,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () 
             // ---------- 检测更新 ----------
             SettingsCard(title = "检测更新") {
                 Text(
-                    "当前版本 v1.3.0",
+                    "当前版本 v${BuildConfig.VERSION_NAME}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -651,7 +652,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () 
 
             Spacer(Modifier.height(8.dp))
             Text(
-                "TaskFlow Android · v1.3.0",
+                "TaskFlow Android · v${BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),

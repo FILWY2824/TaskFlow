@@ -1,5 +1,5 @@
 /* ==========================================================================
- * ToDo List · Aurora Productivity Design System (v1.3.0 refresh)
+ * ToDo List · Aurora Productivity Design System (v1.4.0 refresh)
  * --------------------------------------------------------------------------
  * 设计取向："柔和极光" —— 低饱和的网格渐变背景、玻璃质感卡片、
  * 鲜亮但克制的多色强调（用于"分类/Categories"）。
@@ -1347,17 +1347,20 @@ hr {
   padding: 24px;
   position: relative;
   overflow: auto;
+  background:
+    linear-gradient(135deg, rgba(14, 165, 233, 0.08), rgba(16, 185, 129, 0.08)),
+    linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%);
 }
 .auth-page::before {
   content: '';
   position: absolute; inset: 0;
   background:
-    radial-gradient(circle at 20% 30%, rgba(99,102,241,0.18), transparent 45%),
-    radial-gradient(circle at 80% 70%, rgba(217,70,239,0.16), transparent 45%),
-    radial-gradient(circle at 50% 50%, rgba(45,212,191,0.10), transparent 60%);
+    linear-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.95), transparent 82%);
   z-index: 0;
   pointer-events: none;
-  animation: aurora-drift 18s ease-in-out infinite alternate;
 }
 .auth-card {
   position: relative; z-index: 1;
@@ -1365,7 +1368,7 @@ hr {
   padding: 36px 32px 32px;
   background: var(--tg-bg-elev);
   border: 1px solid var(--tg-divider);
-  border-radius: var(--tg-radius-xl);
+  border-radius: 8px;
   box-shadow: var(--tg-shadow-lg);
   display: flex; flex-direction: column; gap: 14px;
 }
@@ -1375,7 +1378,7 @@ hr {
   margin: 0 auto 4px;
   background: var(--tg-grad-brand);
   color: var(--tg-on-primary);
-  border-radius: var(--tg-radius-md);
+  border-radius: 8px;
   box-shadow: var(--tg-shadow-glow);
   position: relative; overflow: hidden;
 }
@@ -1388,7 +1391,7 @@ hr {
   margin: 0; text-align: center;
   font-family: 'Sora', sans-serif;
   font-size: 26px; font-weight: 800;
-  letter-spacing: -0.022em;
+  letter-spacing: 0;
 }
 .auth-subtitle {
   text-align: center;
@@ -1427,7 +1430,136 @@ hr {
   border: 1px solid color-mix(in srgb, var(--tg-danger) 22%, transparent);
 }
 .auth-error::before {
-  content: '⚠'; font-size: 14px; line-height: 1;
+  content: '!'; font-size: 14px; line-height: 1; font-weight: 800;
+}
+
+.auth-product-page {
+  padding: 32px 20px;
+}
+.auth-product-card {
+  width: min(560px, 100%);
+  padding: 30px;
+  gap: 20px;
+}
+.auth-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.auth-brand-row .auth-logo {
+  margin: 0;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+}
+.auth-brand-name {
+  font-family: 'Sora', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0;
+  color: var(--tg-text);
+}
+.auth-brand-subtitle {
+  margin-top: 2px;
+  color: var(--tg-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+.auth-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.auth-kicker {
+  margin: 0;
+  color: var(--tg-info);
+  font-size: 13px;
+  font-weight: 800;
+}
+.auth-copy h1 {
+  margin: 0;
+  color: var(--tg-text);
+  font-family: 'Sora', sans-serif;
+  font-size: 30px;
+  line-height: 1.18;
+  letter-spacing: 0;
+}
+.auth-copy p {
+  margin: 0;
+  color: var(--tg-text-secondary);
+  font-size: 14.5px;
+  line-height: 1.75;
+}
+.auth-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.auth-feature {
+  min-width: 0;
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--tg-divider);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.86);
+}
+.auth-feature-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--tg-info);
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.12);
+  flex: 0 0 auto;
+}
+.auth-feature strong,
+.auth-feature span {
+  display: block;
+}
+.auth-feature strong {
+  font-size: 13.5px;
+  color: var(--tg-text);
+  margin-bottom: 4px;
+}
+.auth-feature span {
+  color: var(--tg-text-secondary);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.auth-product-card .auth-actions {
+  margin-top: 0;
+}
+.auth-status-copy {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--tg-info-soft);
+  color: #075985;
+  font-size: 13.5px;
+  line-height: 1.65;
+  text-align: center;
+}
+.auth-footnote {
+  margin-top: -4px;
+}
+.auth-loading-card {
+  width: min(420px, 100%);
+}
+
+@media (max-width: 720px) {
+  .auth-product-page {
+    align-items: stretch;
+    padding: 18px;
+  }
+  .auth-product-card {
+    padding: 22px;
+  }
+  .auth-copy h1 {
+    font-size: 26px;
+  }
+  .auth-feature-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ==========================================================================
@@ -1736,6 +1868,60 @@ hr {
   background: color-mix(in srgb, var(--cat-color) 12%, var(--tg-bg-elev));
   border-color: color-mix(in srgb, var(--cat-color) 50%, transparent);
   color: var(--cat-color);
+}
+
+.duration-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.duration-chip {
+  padding: 8px 12px;
+  border: 1.5px solid var(--tg-divider);
+  border-radius: 999px;
+  background: var(--tg-bg-elev);
+  color: var(--tg-text-secondary);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--tg-trans-fast), border-color var(--tg-trans-fast),
+              color var(--tg-trans-fast), transform var(--tg-trans-fast);
+}
+.duration-chip:hover {
+  color: var(--tg-primary);
+  border-color: color-mix(in srgb, var(--tg-primary) 35%, var(--tg-divider));
+  transform: translateY(-1px);
+}
+.duration-chip.is-selected {
+  color: var(--tg-on-primary);
+  border-color: transparent;
+  background: var(--tg-grad-brand);
+  box-shadow: var(--tg-shadow-sm);
+}
+.duration-custom {
+  width: 128px;
+  display: flex;
+  align-items: center;
+}
+.duration-custom .pretty-input {
+  padding-right: 48px;
+  text-align: center;
+}
+.duration-unit {
+  position: absolute;
+  right: 13px;
+  z-index: 2;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--tg-text-tertiary);
+  pointer-events: none;
+}
+.duration-summary {
+  margin-left: 6px;
+  color: var(--tg-primary);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 /* ==========================================================================

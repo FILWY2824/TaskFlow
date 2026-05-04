@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.taskflow.AppContainer
+import com.example.taskflow.BuildConfig
 import com.example.taskflow.data.remote.NotificationDto
 import com.example.taskflow.data.remote.PomodoroSessionDto
 import com.example.taskflow.data.remote.StatsSummaryDto
@@ -311,6 +312,7 @@ fun SettingsUiState.dismissUpdateDialog(): SettingsUiState = copy(updateDialog =
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(loadInitial())
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
+    private val localVersion = BuildConfig.VERSION_NAME.substringBefore("-")
 
     init {
         // 启动时把本地缓存的 prefs 立刻铺上去,然后异步从服务端拉权威值
@@ -400,7 +402,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                     } finally { conn.disconnect() }
                 }
                 val (remoteVersion, filename, notes) = result
-                val hasNew = compareVersions(remoteVersion, "1.3.0") > 0
+                val hasNew = compareVersions(remoteVersion, localVersion) > 0
                 _state.value = _state.value.withUpdateDialog(
                     hasNew = hasNew,
                     version = remoteVersion,

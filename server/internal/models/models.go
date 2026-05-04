@@ -29,22 +29,23 @@ type List struct {
 }
 
 type Todo struct {
-	ID          int64      `json:"id"`
-	UserID      int64      `json:"user_id"`
-	ListID      *int64     `json:"list_id,omitempty"`
-	Title       string     `json:"title"`
-	Description string     `json:"description"`
-	Priority    int        `json:"priority"` // 0..4
-	Effort      int        `json:"effort"`   // 0..5
-	DueAt       *time.Time `json:"due_at,omitempty"`
-	DueAllDay   bool       `json:"due_all_day"`
-	StartAt     *time.Time `json:"start_at,omitempty"`
-	IsCompleted bool       `json:"is_completed"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
-	SortOrder   int        `json:"sort_order"`
-	Timezone    string     `json:"timezone"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID              int64      `json:"id"`
+	UserID          int64      `json:"user_id"`
+	ListID          *int64     `json:"list_id,omitempty"`
+	Title           string     `json:"title"`
+	Description     string     `json:"description"`
+	Priority        int        `json:"priority"` // 0..4
+	Effort          int        `json:"effort"`   // 0..5
+	DurationMinutes int        `json:"duration_minutes"`
+	DueAt           *time.Time `json:"due_at,omitempty"`
+	DueAllDay       bool       `json:"due_all_day"`
+	StartAt         *time.Time `json:"start_at,omitempty"`
+	IsCompleted     bool       `json:"is_completed"`
+	CompletedAt     *time.Time `json:"completed_at,omitempty"`
+	SortOrder       int        `json:"sort_order"`
+	Timezone        string     `json:"timezone"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 type Subtask struct {

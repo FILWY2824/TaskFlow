@@ -106,6 +106,7 @@ var migrations = []migration{
 	{Version: 4, SQL: schemaV4},
 	{Version: 5, SQL: schemaV5},
 	{Version: 6, SQL: schemaV6},
+	{Version: 7, SQL: schemaV7},
 }
 
 const schemaV1 = `
@@ -406,4 +407,10 @@ WHERE timezone = '' OR timezone = 'UTC';
 UPDATE reminder_rules
 SET timezone = 'Asia/Shanghai', updated_at = CURRENT_TIMESTAMP
 WHERE timezone = '' OR timezone = 'UTC';
+`
+
+// schemaV7 为普通任务增加预计时长(分钟)。
+// 0 表示未设置；客户端用它展示和同步创建任务时的持续时间间隔。
+const schemaV7 = `
+ALTER TABLE todos ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 0;
 `

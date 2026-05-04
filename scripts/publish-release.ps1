@@ -1,7 +1,7 @@
 param(
   [ValidateSet("all", "windows", "android", "android-debug", "android-release")]
   [string] $Platform = "all",
-  [string] $Version = "1.3.0"
+  [string] $Version = "1.4.0"
 )
 
 $ErrorActionPreference = "Stop"

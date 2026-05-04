@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDataStore } from '@/stores/data'
 import type { Todo, TodoFilterName } from '@/types'
-import { fromDatetimeLocal, isOverdue, toRFC3339 } from '@/utils'
+import { fmtDurationMinutes, fromDatetimeLocal, isOverdue, toRFC3339 } from '@/utils'
 import TodoItem from '@/components/TodoItem.vue'
 import TodoEditDrawer from '@/components/TodoEditDrawer.vue'
 import PrettyDateTimePicker from '@/components/PrettyDateTimePicker.vue'
@@ -132,12 +132,15 @@ const RECUR_UNITS: { value: RecurUnit; label: string }[] = [
   { value: 'YEARLY',  label: '年' },
 ]
 
+const DURATION_OPTIONS = [0, 15, 30, 45, 60, 90, 120]
+
 const showAddDialog = ref(false)
 const addTitle = ref('')
 const addDueLocal = ref('')
 const addPriority = ref(0)
 const addListId = ref<number | null>(null)
 const addEffort = ref(0)
+const addDurationMinutes = ref<number>(30)
 const addDescription = ref('')
 // 周期相关
 const addIsRecurring = ref(false)
@@ -156,6 +159,7 @@ function openAdd() {
   addPriority.value = 0
   addListId.value = props.listId ?? null
   addEffort.value = 0
+  addDurationMinutes.value = 30
   addDescription.value = ''
   addIsRecurring.value = false
   addRecurInterval.value = 1
@@ -200,6 +204,10 @@ function toLocalInputValue(d: Date): string {
   return `${y}-${mo}-${dd}T${h}:${m}`
 }
 
+function normalizeDurationMinutes(value: number): number {
+  return Math.max(0, Math.min(1440, Math.round(Number(value) || 0)))
+}
+
 // 周期摘要文字（用于预览展示）
 const recurSummary = computed(() => {
   if (!addIsRecurring.value) return ''
@@ -241,6 +249,7 @@ async function submitAdd() {
       description: addDescription.value || undefined,
       priority: addPriority.value,
       effort: addEffort.value,
+      duration_minutes: normalizeDurationMinutes(addDurationMinutes.value),
       due_at: dueDate ? toRFC3339(dueDate) : null,
       list_id: addListId.value || props.listId || null,
     })
@@ -561,6 +570,43 @@ const statusLabel = computed(() => {
             </div>
 
             <!-- ============ 截止时间（无日期视图下完全隐藏） ============ -->
+            <div class="pretty-field">
+              <label class="pretty-field-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 2h4"/><path d="M12 14l3-3"/><circle cx="12" cy="14" r="8"/>
+                </svg>
+                预计时长
+                <span class="optional">{{ fmtDurationMinutes(normalizeDurationMinutes(addDurationMinutes)) }}</span>
+              </label>
+              <div class="duration-picker">
+                <button
+                  v-for="m in DURATION_OPTIONS"
+                  :key="m"
+                  type="button"
+                  class="duration-chip"
+                  :class="{ 'is-selected': normalizeDurationMinutes(addDurationMinutes) === m }"
+                  @click="addDurationMinutes = m"
+                >
+                  {{ m === 0 ? '不设置' : fmtDurationMinutes(m) }}
+                </button>
+                <div class="duration-custom pretty-input-wrap">
+                  <input
+                    v-model.number="addDurationMinutes"
+                    class="pretty-input"
+                    type="number"
+                    min="0"
+                    max="1440"
+                    step="5"
+                    inputmode="numeric"
+                    aria-label="自定义预计时长分钟数"
+                    @blur="addDurationMinutes = normalizeDurationMinutes(addDurationMinutes)"
+                  />
+                  <span class="duration-unit">分钟</span>
+                  <span class="pretty-input-glow" aria-hidden="true" />
+                </div>
+              </div>
+            </div>
+
             <div v-if="!isNoDateView" class="pretty-field">
               <label class="pretty-field-label">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -1033,6 +1079,54 @@ const statusLabel = computed(() => {
 
 /* form-hint 复用 */
 .form-hint { font-size: 11.5px; }
+
+.duration-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.duration-chip {
+  padding: 8px 12px;
+  border: 1.5px solid var(--tg-divider);
+  border-radius: var(--tg-radius-pill);
+  background: var(--tg-bg-elev);
+  color: var(--tg-text-secondary);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--tg-trans-fast), border-color var(--tg-trans-fast),
+              color var(--tg-trans-fast), transform var(--tg-trans-fast);
+}
+.duration-chip:hover {
+  color: var(--tg-primary);
+  border-color: color-mix(in srgb, var(--tg-primary) 35%, var(--tg-divider));
+  transform: translateY(-1px);
+}
+.duration-chip.is-selected {
+  color: var(--tg-on-primary);
+  border-color: transparent;
+  background: var(--tg-grad-brand);
+  box-shadow: var(--tg-shadow-sm);
+}
+.duration-custom {
+  width: 128px;
+  display: flex;
+  align-items: center;
+}
+.duration-custom .pretty-input {
+  padding-right: 48px;
+  text-align: center;
+}
+.duration-unit {
+  position: absolute;
+  right: 13px;
+  z-index: 2;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--tg-text-tertiary);
+  pointer-events: none;
+}
 
 /* 「无日期」视图新建任务时的解释横幅 */
 .no-date-hint {

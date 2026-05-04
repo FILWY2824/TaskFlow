@@ -8,6 +8,7 @@ import { DEFAULT_TIMEZONE } from '@/timezones'
 import { tauri } from '@/tauri'
 import {
   fmtDateTime,
+  fmtDurationMinutes,
   fmtRelative,
   fromDatetimeLocal,
   PRIORITY_LABELS,
@@ -48,6 +49,7 @@ const description = ref(props.todo.description)
 const listId = ref<number | null>(props.todo.list_id ?? null)
 const priority = ref(props.todo.priority)
 const effort = ref(props.todo.effort)
+const durationMinutes = ref<number>(props.todo.duration_minutes || 0)
 const dueAtLocal = ref(toDatetimeLocal(props.todo.due_at ? new Date(props.todo.due_at) : null))
 const dueAllDay = ref(props.todo.due_all_day)
 // 时区永远跟随当前账号设置（在"设置 → 时区"里统一管理）；这里只读不可编辑。
@@ -73,6 +75,11 @@ const saving = ref(false)
 
 const subtasks = computed<Subtask[]>(() => data.subtasksByTodo[props.todo.id] || [])
 const reminders = computed<ReminderRule[]>(() => data.remindersByTodo[props.todo.id] || [])
+const DURATION_OPTIONS = [0, 15, 30, 45, 60, 90, 120]
+
+function normalizeDurationMinutes(value: number): number {
+  return Math.max(0, Math.min(1440, Math.round(Number(value) || 0)))
+}
 
 // 新子任务输入
 const newSubtaskTitle = ref('')
@@ -102,6 +109,7 @@ watch(
     listId.value = props.todo.list_id ?? null
     priority.value = props.todo.priority
     effort.value = props.todo.effort
+    durationMinutes.value = props.todo.duration_minutes || 0
     dueAtLocal.value = toDatetimeLocal(props.todo.due_at ? new Date(props.todo.due_at) : null)
     dueAllDay.value = props.todo.due_all_day
     tz.value = authStore.user?.timezone || props.todo.timezone || DEFAULT_TIMEZONE
@@ -145,6 +153,7 @@ async function save() {
       description: description.value,
       priority: priority.value,
       effort: effort.value,
+      duration_minutes: normalizeDurationMinutes(durationMinutes.value),
       list_id: listId.value,
       due_at: due ? toRFC3339(due) : null,
       due_all_day: originallyHadDueAt.value ? dueAllDay.value : false,
@@ -367,6 +376,40 @@ const rrulePresets = [
 
       <!-- ============ 截止时间 / "无日期"锁定标识 ============
            "无日期" 与 "日程任务" 互不串通；任务一旦创建为某种类型就不能跨过去。 -->
+      <div class="field">
+        <label>
+          预计时长
+          <span class="duration-summary">{{ fmtDurationMinutes(normalizeDurationMinutes(durationMinutes)) }}</span>
+        </label>
+        <div class="duration-picker">
+          <button
+            v-for="m in DURATION_OPTIONS"
+            :key="m"
+            type="button"
+            class="duration-chip"
+            :class="{ 'is-selected': normalizeDurationMinutes(durationMinutes) === m }"
+            @click="durationMinutes = m"
+          >
+            {{ m === 0 ? '不设置' : fmtDurationMinutes(m) }}
+          </button>
+          <div class="duration-custom pretty-input-wrap">
+            <input
+              v-model.number="durationMinutes"
+              class="pretty-input"
+              type="number"
+              min="0"
+              max="1440"
+              step="5"
+              inputmode="numeric"
+              aria-label="自定义预计时长分钟数"
+              @blur="durationMinutes = normalizeDurationMinutes(durationMinutes)"
+            />
+            <span class="duration-unit">分钟</span>
+            <span class="pretty-input-glow" aria-hidden="true" />
+          </div>
+        </div>
+      </div>
+
       <template v-if="isNoDateTask">
         <div class="field">
           <label>类型</label>
