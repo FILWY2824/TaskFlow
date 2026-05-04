@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { auth, clearTokens, loadTokens, loadUser, saveTokens } from '@/api'
 import { tauri } from '@/tauri'
 import { usePrefsStore } from '@/stores/prefs'
+import { DEFAULT_TIMEZONE } from '@/timezones'
 import type { AuthConfig, User } from '@/types'
 
 export const useAuthStore = defineStore('auth', {
@@ -17,7 +18,7 @@ export const useAuthStore = defineStore('auth', {
       return !!state.user && !!loadTokens()
     },
     timezone(state): string {
-      return state.user?.timezone || 'UTC'
+      return state.user?.timezone || DEFAULT_TIMEZONE
     },
   },
   actions: {
@@ -56,6 +57,7 @@ export const useAuthStore = defineStore('auth', {
         refresh_token: r.refresh_token,
         timezone: r.user.timezone,
       })
+      await tauri.bringToFront()
       void usePrefsStore().hydrate()
     },
     async logout() {

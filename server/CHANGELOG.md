@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.3.0 (2026-05-04) — OIDC 邮箱 + 时区同步
+
+### 新增
+
+- OAuth token response 支持解析 OIDC `id_token`,并用 `email` / `name` / `sub` 兜底 userinfo 缺失字段。
+- Android 可通过既有 `PATCH /api/auth/me` 持久化同步后的本机时区。
+
+### 修复
+
+- OAuth 用户在认证中心已提供真实邮箱时,优先写入真实邮箱。
+- userinfo 缺失邮箱时的可读占位邮箱回退更稳定。
+
+### 测试
+
+- 新增 OAuth 测试覆盖 `id_token` claims 合并。
+- store 层 OAuth 邮箱回退测试保持通过。
+
+## v1.0.0 (2026-05-03) — 时区 / OAuth / 提醒回归
+
+### 修复
+
+- 用户、管理员、todo、reminder 的默认时区统一为 `Asia/Shanghai`,统计接口异常回退也改为上海时区。
+- OAuth 资料解析兼容 QiShu 可能返回的 `email_name` 等邮箱字段,避免邮箱显示为 provider subject 生成的长串。
+- OAuth 用户再次登录时不再覆盖已手动修改的 `display_name`,只同步邮箱。
+
+### 测试
+
+- 新增 store 层测试覆盖默认时区、OAuth 邮箱同步、OAuth 显示名不覆盖。
+- 新增 OAuth 解析测试覆盖 QiShu 风格邮箱字段。
+
 ## v0.3.0 (2026-04-29) — 阶段 6 + 阶段 11
 
 ### 新增

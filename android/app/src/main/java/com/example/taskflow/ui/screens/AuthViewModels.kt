@@ -21,7 +21,6 @@ import kotlinx.coroutines.launch
  *                                +---ERROR-----+
  *
  * 用户在登录页:
- *   - 输入服务器 URL(默认烧入的 BuildConfig.DEFAULT_SERVER_URL,可改)
  *   - 点 "通过认证中心登录" 按钮
  *      * ViewModel 生成 device_id 并把 OAuth start URL 通过 [pendingOpenUrl] 暴露
  *      * Activity 监听 pendingOpenUrl,用 Custom Tabs / Intent 打开
@@ -55,6 +54,14 @@ class LoginViewModel(private val container: AppContainer) : ViewModel() {
         _state.value = _state.value.copy(serverUrl = v, error = null)
     }
 
+    fun reportError(message: String) {
+        _state.value = _state.value.copy(phase = OAuthLoginState.Phase.IDLE, error = message)
+    }
+
+    fun clearError() {
+        _state.value = _state.value.copy(error = null)
+    }
+
     /**
      * 用户点 "通过认证中心登录":
      *   1) 应用 server URL 到 ApiClient + TokenManager
@@ -64,20 +71,39 @@ class LoginViewModel(private val container: AppContainer) : ViewModel() {
      */
     fun startOAuth() {
         applyServerUrl(_state.value.serverUrl)
-        val id = container.authRepository.generateDeviceId()
-        deviceId = id
-        val url = container.authRepository.oauthStartUrl(id)
+        pollJob?.cancel()
         _state.value = _state.value.copy(
             phase = OAuthLoginState.Phase.LAUNCHING,
             error = null,
-            pendingOpenUrl = url,
+            pendingOpenUrl = null,
         )
-
-        // 启动后台 poll
-        pollJob?.cancel()
         pollJob = viewModelScope.launch {
-            // 进入 WAITING
-            _state.value = _state.value.copy(phase = OAuthLoginState.Phase.WAITING)
+            when (val cfg = container.authRepository.authConfig()) {
+                is Result.Success -> {
+                    if (!cfg.data.oauth_enabled) {
+                        _state.value = _state.value.copy(
+                            phase = OAuthLoginState.Phase.IDLE,
+                            error = "当前服务端未启用认证中心登录",
+                        )
+                        return@launch
+                    }
+                }
+                is Result.Error -> {
+                    _state.value = _state.value.copy(
+                        phase = OAuthLoginState.Phase.IDLE,
+                        error = "无法连接服务端: ${cfg.message}",
+                    )
+                    return@launch
+                }
+            }
+
+            val id = container.authRepository.generateDeviceId()
+            deviceId = id
+            val url = container.authRepository.oauthStartUrl(id)
+            _state.value = _state.value.copy(
+                phase = OAuthLoginState.Phase.WAITING,
+                pendingOpenUrl = url,
+            )
             val pollRes = container.authRepository.pollForHandoff(id)
             when (pollRes) {
                 is Result.Success -> {

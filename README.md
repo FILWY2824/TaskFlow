@@ -11,12 +11,12 @@
 | 4 | Telegram Bot deep-link 绑定与推送 | ✅ |
 | 5 | 服务端调度器 / 通知分发 / SSE | ✅ |
 | 6 | Web 完整管理端 | ✅ |
-| 7 | Android 完整管理端(Kotlin / Compose) | ✅ **v0.4.0** |
-| 8 | Android 强提醒(AlarmManager / 锁屏全屏 / 重启恢复) | ✅ **v0.4.0** |
-| 9 | Windows 完整管理端(Tauri 复用 Web) | ✅ **v0.4.0** |
-| 10 | Windows 强提醒(Toast / 总在最前窗 / 响铃) | ✅ **v0.4.0** |
+| 7 | Android 完整管理端(Kotlin / Compose) | ✅ **v1.3.0** |
+| 8 | Android 强提醒(AlarmManager / 锁屏全屏 / 重启恢复) | ✅ **v1.3.0** |
+| 9 | Windows 完整管理端(Tauri 复用 Web) | ✅ **v1.3.0** |
+| 10 | Windows 强提醒(Toast / 总在最前窗 / 响铃) | ✅ **v1.3.0** |
 | 11 | 番茄钟 / 统计 | ✅ |
-| 12 | 部署套件(systemd / nginx / HTTPS / 备份) | ✅ **v0.4.0** |
+| 12 | 部署套件(systemd / nginx / HTTPS / 备份) | ✅ **v1.3.0** |
 
 ---
 

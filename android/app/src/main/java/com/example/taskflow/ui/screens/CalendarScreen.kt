@@ -8,9 +8,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -49,7 +49,7 @@ data class CalendarUiState(
     val ym: YearMonth = YearMonth.now(),
     val selected: LocalDate = LocalDate.now(),
     val todos: List<TodoCacheEntity> = emptyList(),
-    val tz: String = "UTC",
+    val tz: String = "Asia/Shanghai",
     val error: String? = null,
 )
 
@@ -103,6 +103,8 @@ class CalendarViewModel(private val container: AppContainer) : ViewModel() {
         ymFlow.value = YearMonth.from(d)
     }
 
+    fun clearError() { errorFlow.value = null }
+
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = CalendarViewModel(container) as T
@@ -119,6 +121,8 @@ fun CalendarScreen(
     val vm: CalendarViewModel = viewModel(factory = CalendarViewModel.Factory(container))
     val state by vm.state.collectAsState()
 
+    TaskFlowErrorDialog(message = state.error, onDismiss = vm::clearError)
+
     val daysOfMonth = remember(state.todos, state.ym, state.tz) {
         groupTodosByDay(state.todos, state.ym, state.tz)
     }
@@ -129,7 +133,7 @@ fun CalendarScreen(
         topBar = {
             TopAppBar(
                 title = { Text("日历") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "返回") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
                 actions = { TextButton(onClick = vm::gotoToday) { Text("今天") } },
             )
         },
@@ -140,14 +144,14 @@ fun CalendarScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = vm::prevMonth) { Icon(Icons.Default.KeyboardArrowLeft, "上月") }
+                IconButton(onClick = vm::prevMonth) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "上月") }
                 Text(
                     "${state.ym.year}-${"%02d".format(state.ym.monthValue)}",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                 )
-                IconButton(onClick = vm::nextMonth) { Icon(Icons.Default.KeyboardArrowRight, "下月") }
+                IconButton(onClick = vm::nextMonth) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "下月") }
             }
 
             // 星期表头
@@ -171,7 +175,7 @@ fun CalendarScreen(
                 onSelect = vm::select,
             )
 
-            Divider(Modifier.padding(top = 8.dp))
+            HorizontalDivider(Modifier.padding(top = 8.dp))
 
             // 选中日的任务
             Row(
@@ -209,7 +213,7 @@ fun CalendarScreen(
                             },
                             modifier = Modifier.clickable { onOpenTodo(t.id) },
                         )
-                        Divider()
+                        HorizontalDivider()
                     }
                 }
             }

@@ -1,8 +1,53 @@
 # Changelog (top-level)
 
+## v1.3.0 (2026-05-04) - 下载发布流程补充
+
+- 客户端构建目标会自动把 Windows 和 Android 编译产物发布到 `releases/` 目录,避免下载链接指向不存在的文件。
+- Web 客户端下载卡片改为从 `releases/latest.json` 读取文件名,不再写死 Windows 安装包文件名。
+- 服务端 `/downloads/` 支持从仓库根目录或 `server/` 目录启动时正确解析 `releases/` 文件夹。
+
 参见 `server/CHANGELOG.md` 的详细变更记录。本文件用于记录跨 server / web / android / windows 的整体里程碑。
 
-## v0.5.0 (unreleased) — 管理面板 + Docker 部署
+## v1.3.0 (2026-05-04) — Android 产品化首页 + OIDC 邮箱与前台回拉
+
+- **Android:主页面产品化重设计**
+  - 首屏改为“今日工作台”:账号/同步状态、待办/今日/逾期/完成指标、日历/通知/番茄/统计快捷入口、Telegram 风格任务流。
+  - 空状态从大面积空白改为有引导动作的产品卡片。
+  - 登录页、设置页、任务编辑页及二级页面统一视觉密度与中文文案。
+- **Android:错误统一弹窗**
+  - 任务、登录、通知、Telegram、统计、番茄、日历、设置等页面的错误均改为弹窗提示。
+  - Repository 层把常见服务端错误码与网络异常转为中文用户提示。
+- **时区:用户可自动同步本机时区**
+  - Android 设置页展示账户时区与本机时区差异,支持一键同步到本机时区。
+  - 同步通过服务端 `PATCH /api/auth/me` 持久化,并更新本地登录会话。
+- **OAuth/OIDC:真实邮箱兜底**
+  - 服务端 OAuth 解析增加 OIDC `id_token` claims 兜底,优先使用其中的 `email` / `name` / `sub`。
+  - 认证中心修复后,TaskFlow 会拿到真实邮箱,不再依赖占位邮箱。
+- **Windows / Android:登录后主动回前台**
+  - Windows Tauri 登录成功后调用窗口前置命令。
+  - Android OAuth finalize 成功后主动拉起 `MainActivity`,避免登录完成后静默停在浏览器后台。
+- **版本:更新到 V1.3.0**
+  - server / web / windows / android / release metadata 全部更新到 `1.3.0`。
+
+## v1.0.0 (2026-05-03) — 提醒链路修复 + 三端图标与时区统一
+
+- **提醒:修复 Windows / Web 到点无提示**
+  - Windows 登录或刷新 token 后立即执行一次完整同步,把服务端 reminder 镜像落到本地 SQLite,避免后台调度器空跑。
+  - Web 在 Tauri 内新增提醒、启停提醒、删除提醒后主动触发 Windows 端同步,减少 30 秒轮询窗口造成的漏提醒体感。
+  - Web SSE 改为使用统一 API base,并在 access token 过期时走现有 refresh 单飞逻辑后重连,避免 Tauri 绝对地址模式下通知流连错地址或持有旧 token。
+- **时区:默认统一为中国上海**
+  - 服务端、Web、Windows、Android 的用户 / todo / reminder 默认时区统一为 `Asia/Shanghai`。
+  - 服务端统计接口在用户时区为空或异常时回退上海时区,不再回退 UTC。
+- **账号:修复 QiShu OAuth 邮箱与显示名**
+  - OAuth 邮箱字段增加 `email_name` / `emailName` / `email_address` / `user_email` / `preferred_username` 等兼容读取,优先展示 QiShu 返回的真实邮箱。
+  - OAuth 再登录时只同步邮箱,不再覆盖用户在设置里手动修改过的显示名。
+- **图标:三端统一清晰图标**
+  - Web favicon 与 Windows 多尺寸 PNG / ICO 统一为侧边栏同风格的高分辨率图标。
+  - Android launcher 背景色和前景勾形同步为新版品牌图标风格。
+- **版本:定版 V1.0.0**
+  - server / web / windows / android / release metadata 全部更新到 `1.0.0`。
+
+## v0.5.0 (2026-05-03) — 管理面板 + Docker 部署
 
 - **Windows:修复托盘恢复与 WebView2 启动目录**
   - 主窗口改为 `setup()` 阶段手动创建,并把 WebView2 数据目录固定到应用 `data/webview`,避免默认 `LOCALAPPDATA` 目录残留占用或权限异常导致启动失败。

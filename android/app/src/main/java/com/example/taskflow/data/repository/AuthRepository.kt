@@ -6,6 +6,7 @@ import com.example.taskflow.data.remote.ApiClient
 import com.example.taskflow.data.remote.AuthConfigDto
 import com.example.taskflow.data.remote.LogoutRequest
 import com.example.taskflow.data.remote.OAuthFinalizeRequest
+import com.example.taskflow.data.remote.UpdateMeRequest
 import com.example.taskflow.data.remote.UserDto
 import kotlinx.coroutines.delay
 import java.security.SecureRandom
@@ -83,7 +84,7 @@ class AuthRepository(
                 204 -> delay(pollIntervalMs)
                 else -> {
                     val msg = raw.errorBody()?.string()?.take(200) ?: "poll http ${raw.code()}"
-                    return Result.Error("poll_failed", msg, raw.code())
+                    return Result.Error("poll_failed", localizedApiMessage("poll_failed", msg), raw.code())
                 }
             }
         }
@@ -132,4 +133,14 @@ class AuthRepository(
     }
 
     suspend fun me(): Result<UserDto> = safeCall(client.moshi) { client.api.me() }
+
+    suspend fun updateMe(displayName: String? = null, timezone: String? = null): Result<UserDto> {
+        val r = safeCall(client.moshi) {
+            client.api.updateMe(UpdateMeRequest(display_name = displayName, timezone = timezone))
+        }
+        if (r is Result.Success) {
+            tokenManager.updateUser(userEmail = r.data.email, timezone = r.data.timezone)
+        }
+        return r
+    }
 }

@@ -22,7 +22,7 @@ func NewUserStore(db *sql.DB) *UserStore { return &UserStore{DB: db} }
 func (s *UserStore) Create(ctx context.Context, email, passwordHash, displayName, timezone string) (*models.User, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if timezone == "" {
-		timezone = "UTC"
+		timezone = DefaultTimezone
 	}
 	res, err := s.DB.ExecContext(ctx, `
 		INSERT INTO users(email, password_hash, display_name, timezone)
@@ -47,7 +47,7 @@ func (s *UserStore) GetByID(ctx context.Context, id int64) (*models.User, error)
 }
 
 // Update 修改 display_name / timezone。任意为 nil 表示该字段不变。
-// 只触碰非 nil 的字段；timezone 传 "" 视为重置为 "UTC"。
+// 只触碰非 nil 的字段；timezone 传 "" 视为重置为默认时区。
 func (s *UserStore) Update(ctx context.Context, id int64, displayName, timezone *string) (*models.User, error) {
 	sets := []string{}
 	args := []any{}
@@ -58,7 +58,7 @@ func (s *UserStore) Update(ctx context.Context, id int64, displayName, timezone 
 	if timezone != nil {
 		v := *timezone
 		if v == "" {
-			v = "UTC"
+			v = DefaultTimezone
 		}
 		sets = append(sets, "timezone = ?")
 		args = append(args, v)
@@ -120,7 +120,7 @@ func (s *UserStore) GetByOAuth(ctx context.Context, provider, subject string) (*
 //     管理员可以事后再决定是否手动合并。
 //  2. password_hash 留空字符串,这种用户走不通本地登录(本地登录用 bcrypt.Compare,
 //     空哈希必然失败),OAuth 流程才能进。
-//  3. timezone 默认 UTC,展示名取 displayName,空则用 email 的 local-part。
+//  3. timezone 默认中国上海,展示名取 displayName,空则用 email 的 local-part。
 //
 // 已存在时只更新易变字段(email / display_name);timezone 由用户自己在设置里改,
 // 不被覆盖。
@@ -136,14 +136,18 @@ func (s *UserStore) UpsertOAuth(ctx context.Context, provider, subject, email, d
 	// 已绑定?直接返回(并尽量同步邮箱/展示名)。
 	if u, err := s.GetByOAuth(ctx, provider, subject); err == nil {
 		// 仅在新值非空且与旧值不同时更新,避免无意义写入(也避免触发 updated_at)。
-		if (emailLow != "" && emailLow != u.Email) || (displayName != "" && displayName != u.DisplayName) {
+		newName := u.DisplayName
+		if strings.TrimSpace(newName) == "" && displayName != "" {
+			newName = displayName
+		}
+		newEmailCandidate := emailLow
+		if newEmailCandidate == "" {
+			newEmailCandidate = oauthFallbackEmail(provider, subject, displayName)
+		}
+		if (newEmailCandidate != "" && newEmailCandidate != u.Email) || newName != u.DisplayName {
 			newEmail := u.Email
-			if emailLow != "" {
-				newEmail = emailLow
-			}
-			newName := u.DisplayName
-			if displayName != "" {
-				newName = displayName
+			if newEmailCandidate != "" {
+				newEmail = newEmailCandidate
 			}
 			_, err := s.DB.ExecContext(ctx, `
 				UPDATE users SET email = ?, display_name = ?, updated_at = CURRENT_TIMESTAMP
@@ -165,7 +169,7 @@ func (s *UserStore) UpsertOAuth(ctx context.Context, provider, subject, email, d
 	// 未绑定 —— 新建。
 	insertEmail := emailLow
 	if insertEmail == "" {
-		insertEmail = subject + "@" + provider
+		insertEmail = oauthFallbackEmail(provider, subject, displayName)
 	}
 	if displayName == "" {
 		if at := strings.IndexByte(insertEmail, '@'); at > 0 {
@@ -177,8 +181,8 @@ func (s *UserStore) UpsertOAuth(ctx context.Context, provider, subject, email, d
 	tryInsert := func(emailToUse string) (int64, error) {
 		res, err := s.DB.ExecContext(ctx, `
 			INSERT INTO users(email, password_hash, display_name, timezone, oauth_provider, oauth_subject)
-			VALUES (?, '', ?, 'UTC', ?, ?)
-		`, emailToUse, displayName, provider, subject)
+			VALUES (?, '', ?, ?, ?, ?)
+		`, emailToUse, displayName, DefaultTimezone, provider, subject)
 		if err != nil {
 			return 0, err
 		}
@@ -196,6 +200,35 @@ func (s *UserStore) UpsertOAuth(ctx context.Context, provider, subject, email, d
 		}
 	}
 	return s.GetByID(ctx, id)
+}
+
+func oauthFallbackEmail(provider, subject, displayName string) string {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	subject = strings.ToLower(strings.TrimSpace(subject))
+	local := strings.ToLower(strings.TrimSpace(displayName))
+	if isSafeEmailLocalPart(local) {
+		return local + "@" + provider
+	}
+	return subject + "@" + provider
+}
+
+func isSafeEmailLocalPart(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' {
+			continue
+		}
+		if r >= '0' && r <= '9' {
+			continue
+		}
+		if r == '.' || r == '_' || r == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func scanUser(row *sql.Row) (*models.User, error) {
@@ -420,7 +453,7 @@ func (s *UserStore) EnsureAdminByEmail(ctx context.Context, email string) (*mode
 func (s *UserStore) CreateAdmin(ctx context.Context, email, passwordHash, displayName, timezone string) (*models.User, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if timezone == "" {
-		timezone = "UTC"
+		timezone = DefaultTimezone
 	}
 	if displayName == "" {
 		if at := strings.IndexByte(email, '@'); at > 0 {

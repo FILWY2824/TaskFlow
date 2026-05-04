@@ -12,11 +12,13 @@ import java.time.format.DateTimeParseException
  * 日期 / 时间格式化辅助。服务端用 RFC3339 UTC,本地展示用用户时区。
  */
 object DateTimeFmt {
+    const val DEFAULT_TIMEZONE = "Asia/Shanghai"
+
     private val DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     private val DATETIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private val TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
-    fun localDateTime(iso: String?, tz: String = "UTC"): String {
+    fun localDateTime(iso: String?, tz: String = DEFAULT_TIMEZONE): String {
         if (iso.isNullOrBlank()) return ""
         return try {
             val zoned = ZonedDateTime.ofInstant(Instant.parse(iso), zoneOf(tz))
@@ -26,7 +28,7 @@ object DateTimeFmt {
         }
     }
 
-    fun localDate(iso: String?, tz: String = "UTC"): String {
+    fun localDate(iso: String?, tz: String = DEFAULT_TIMEZONE): String {
         if (iso.isNullOrBlank()) return ""
         return try {
             val zoned = ZonedDateTime.ofInstant(Instant.parse(iso), zoneOf(tz))
@@ -36,7 +38,7 @@ object DateTimeFmt {
         }
     }
 
-    fun localTime(iso: String?, tz: String = "UTC"): String {
+    fun localTime(iso: String?, tz: String = DEFAULT_TIMEZONE): String {
         if (iso.isNullOrBlank()) return ""
         return try {
             val zoned = ZonedDateTime.ofInstant(Instant.parse(iso), zoneOf(tz))
@@ -47,12 +49,12 @@ object DateTimeFmt {
     }
 
     /** 把"今天 14:30"组合成 RFC3339 UTC */
-    fun localToUtcIso(date: LocalDate, hour: Int, minute: Int, tz: String = "UTC"): String {
+    fun localToUtcIso(date: LocalDate, hour: Int, minute: Int, tz: String = DEFAULT_TIMEZONE): String {
         val zoned = ZonedDateTime.of(date, java.time.LocalTime.of(hour, minute), zoneOf(tz))
         return zoned.toInstant().toString()
     }
 
-    fun nowLocalDate(tz: String = "UTC"): LocalDate =
+    fun nowLocalDate(tz: String = DEFAULT_TIMEZONE): LocalDate =
         LocalDate.now(zoneOf(tz))
 
     fun parseLocalDate(s: String): LocalDate = LocalDate.parse(s)
@@ -68,7 +70,7 @@ object DateTimeFmt {
         } catch (_: Exception) { false }
     }
 
-    fun isToday(iso: String?, tz: String = "UTC"): Boolean {
+    fun isToday(iso: String?, tz: String = DEFAULT_TIMEZONE): Boolean {
         if (iso.isNullOrBlank()) return false
         return try {
             val today = LocalDate.now(zoneOf(tz))

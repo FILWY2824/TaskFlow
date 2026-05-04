@@ -68,6 +68,16 @@ class TokenManager(context: Context) {
     }
 
     @Synchronized
+    fun updateUser(userEmail: String? = null, timezone: String? = null) {
+        prefs.edit().apply {
+            if (userEmail != null) putString(KEY_USER_EMAIL, userEmail)
+            if (timezone != null) putString(KEY_TZ, timezone)
+            apply()
+        }
+        _session.value = load()
+    }
+
+    @Synchronized
     fun setServerUrl(url: String) {
         prefs.edit().putString(KEY_SERVER_URL, url).apply()
         _session.value = load()

@@ -18,14 +18,14 @@ import (
 //
 // 端点:
 //   - GET  /api/auth/oauth/start     —— 浏览器入口,生成 PKCE,302 到认证中心。
-//                                       支持 ?client=web|desktop|android & ?device_id=xxx。
+//     支持 ?client=web|desktop|android & ?device_id=xxx。
 //   - GET  /api/auth/oauth/callback  —— 认证中心回调。完成 code 交换 + userinfo。
-//                                       client=web    -> 302 到 ${frontend}/oauth/callback#code=...
-//                                       client=desktop|android -> 302 到 ${PUBLIC_BASE_URL}/oauth/done
-//                                       (静态成功页,提示用户回到客户端);handoff 通过 device_id 索引,
-//                                       客户端走 /api/auth/oauth/poll 取走。
+//     client=web    -> 302 到 ${frontend}/oauth/callback#code=...
+//     client=desktop|android -> 302 到 ${PUBLIC_BASE_URL}/oauth/done
+//     (静态成功页,提示用户回到客户端);handoff 通过 device_id 索引,
+//     客户端走 /api/auth/oauth/poll 取走。
 //   - GET  /api/auth/oauth/poll      —— 桌面 / Android 客户端轮询接口。
-//                                       ?device_id=xxx -> {handoff_code} 或 204。
+//     ?device_id=xxx -> {handoff_code} 或 204。
 //   - POST /api/auth/oauth/finalize  —— 用 handoff code 换本服务的 access/refresh JWT。
 //   - GET  /api/auth/oauth/done      —— 静态登录成功页(桌面 / Android 用户登录后看到的"请回客户端"提示)。
 //
@@ -137,10 +137,10 @@ func (h *OAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2) access_token -> userinfo
+	// 2) access_token -> userinfo, 并用 OIDC id_token 兜底真实邮箱/姓名
 	uiCtx, cancel2 := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel2()
-	info, err := h.Provider.UserInfo(uiCtx, tok.AccessToken)
+	info, err := h.Provider.ResolveUserInfo(uiCtx, tok)
 	if err != nil {
 		h.logger().Warn("oauth userinfo failed", "err", err)
 		h.redirectAfterCallback(w, r, pending, "", "userinfo_failed", err.Error())

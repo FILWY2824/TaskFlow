@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/youruser/taskflow/internal/auth"
@@ -79,7 +80,7 @@ func BuildHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /healthz", healthH.Health)
 
 	// 客户端下载:把 ../releases/ 暴露为 /downloads/
-	downloadDir := http.Dir("../releases")
+	downloadDir := http.Dir(resolveDownloadsDir())
 	mux.Handle("GET /downloads/", http.StripPrefix("/downloads/", http.FileServer(downloadDir)))
 
 	// 本地邮箱注册/登录:OAuth 启用时关闭(返回 403),否则保持原行为。
@@ -231,4 +232,17 @@ func BuildHandler(d Deps) http.Handler {
 		middleware.CORS(),
 	)
 	return chain(mux)
+}
+
+func resolveDownloadsDir() string {
+	candidates := []string{
+		"releases",
+		"../releases",
+	}
+	for _, dir := range candidates {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir
+		}
+	}
+	return "../releases"
 }

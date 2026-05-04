@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { notifications as notifApi, loadTokens } from '@/api'
+import { absUrl, notifications as notifApi, loadTokens } from '@/api'
 import type { Notification, SSENotification } from '@/types'
 
 interface SSEHandle {
@@ -16,18 +16,28 @@ interface ToastItem {
 let toastSeq = 0
 
 // 用 fetch + ReadableStream 自己读 SSE，因为浏览器原生 EventSource 不能加 Authorization header。
-function openSSE(token: string, onEvent: (e: SSENotification) => void): SSEHandle {
+function openSSE(onEvent: (e: SSENotification) => void): SSEHandle {
   const ctrl = new AbortController()
   let closed = false
 
   ;(async () => {
     while (!closed) {
       try {
-        const res = await fetch('/ws/events', {
-          headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
+        const t = loadTokens()
+        if (!t) {
+          await new Promise((r) => setTimeout(r, 3000))
+          continue
+        }
+        const res = await fetch(absUrl('/ws/events'), {
+          headers: { Authorization: `Bearer ${t.accessToken}`, Accept: 'text/event-stream' },
           signal: ctrl.signal,
         })
         if (!res.ok || !res.body) {
+          if (res.status === 401) {
+            await notifApi.unreadCount().catch(() => {
+              // request() 会负责 refresh；失败时交给下一轮重连处理。
+            })
+          }
           throw new Error('SSE bad response: ' + res.status)
         }
         const reader = res.body.getReader()
@@ -132,7 +142,7 @@ export const useNotificationsStore = defineStore('notifications', {
       if (this.sse) return
       const t = loadTokens()
       if (!t) return
-      this.sse = openSSE(t.accessToken, (ev) => {
+      this.sse = openSSE((ev) => {
         this.unread += 1
         this.pushToast({
           id: ev.notification_id,

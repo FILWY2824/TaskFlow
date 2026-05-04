@@ -224,12 +224,81 @@ func (p *Provider) UserInfo(ctx context.Context, accessToken string) (*UserInfo,
 	}
 	info := &UserInfo{Raw: raw}
 	info.Subject = pickString(raw, p.SubjectField, "sub", "id", "user_id", "uid")
-	info.Email = pickString(raw, p.EmailField, "email", "mail")
+	info.Email = pickEmail(raw, p.EmailField)
 	info.DisplayName = pickString(raw, p.NameField, "name", "preferred_username", "username", "nickname")
+	if info.Email == "" {
+		info.Email = emailLike(info.DisplayName)
+	}
 	if info.Subject == "" {
 		return nil, errors.New("userinfo response missing subject (sub/id)")
 	}
 	return info, nil
+}
+
+// ResolveUserInfo 综合 userinfo 与 OIDC id_token 里的用户声明。
+//
+// 认证中心修复后会在 token response 中返回标准 id_token。userinfo 仍然是主路径，
+// 但部分认证中心的 userinfo 可能只暴露用户名而不是邮箱；这时 id_token 里的
+// email/name/sub 作为同一次后端 code exchange 的可信兜底。
+func (p *Provider) ResolveUserInfo(ctx context.Context, tok *TokenResponse) (*UserInfo, error) {
+	if tok == nil || tok.AccessToken == "" {
+		return nil, errors.New("token response missing access_token")
+	}
+	info, err := p.UserInfo(ctx, tok.AccessToken)
+	if err != nil {
+		if tok.IDToken == "" {
+			return nil, err
+		}
+		info = &UserInfo{Raw: map[string]any{}}
+	}
+	claims := parseIDTokenClaims(tok.IDToken)
+	if len(claims) == 0 {
+		return info, nil
+	}
+	if info.Raw == nil {
+		info.Raw = map[string]any{}
+	}
+	info.Raw["id_token_claims"] = claims
+
+	idSub := pickString(claims, p.SubjectField, "sub", "id", "user_id", "uid")
+	if idSub != "" {
+		if info.Subject != "" && info.Subject != idSub {
+			return nil, fmt.Errorf("userinfo subject %q does not match id_token subject %q", info.Subject, idSub)
+		}
+		info.Subject = idSub
+	}
+	if email := pickEmail(claims, p.EmailField); email != "" {
+		info.Email = email
+	}
+	if name := pickString(claims, p.NameField, "name", "preferred_username", "username", "nickname"); name != "" {
+		info.DisplayName = name
+	}
+	if info.Email == "" {
+		info.Email = emailLike(info.DisplayName)
+	}
+	if info.Subject == "" {
+		return nil, errors.New("oauth response missing subject (sub/id)")
+	}
+	return info, nil
+}
+
+func parseIDTokenClaims(idToken string) map[string]any {
+	parts := strings.Split(idToken, ".")
+	if len(parts) < 2 {
+		return nil
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		payload, err = base64.URLEncoding.DecodeString(parts[1])
+	}
+	if err != nil {
+		return nil
+	}
+	var claims map[string]any
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil
+	}
+	return claims
 }
 
 // pickString 从 map 里按多个候选 key 找第一个非空字符串。数字会被自动转字符串。
@@ -254,6 +323,32 @@ func pickString(m map[string]any, keys ...string) string {
 		case json.Number:
 			return x.String()
 		}
+	}
+	return ""
+}
+
+func pickEmail(m map[string]any, configured string) string {
+	return emailLike(pickString(m,
+		configured,
+		"email",
+		"mail",
+		"email_name",
+		"emailName",
+		"email_address",
+		"emailAddress",
+		"user_email",
+		"userEmail",
+		"account_email",
+		"accountEmail",
+		"preferred_username",
+		"username",
+	))
+}
+
+func emailLike(s string) string {
+	v := strings.ToLower(strings.TrimSpace(s))
+	if strings.Contains(v, "@") {
+		return v
 	}
 	return ""
 }

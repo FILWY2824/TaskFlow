@@ -1,0 +1,25 @@
+[server]
+listen = "127.0.0.1:18080"
+
+[database]
+path = "data/taskflow-18080.db"
+
+[auth]
+jwt_secret = "CHANGE_ME_TO_A_LONG_RANDOM_SECRET_AT_LEAST_32_BYTES"
+access_ttl_seconds = 900
+refresh_ttl_seconds = 2592000
+bcrypt_cost = 11
+
+[log]
+level = "info"
+
+[telegram]
+bot_token = ""
+bot_username = ""
+webhook_secret = ""
+bind_token_ttl_seconds = 600
+
+[scheduler]
+tick_interval_seconds = 5
+batch_size = 200
+disabled = false

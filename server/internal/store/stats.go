@@ -35,7 +35,7 @@ type Summary struct {
 // Summary 计算用户的总览统计(基于用户时区判定"今天"/"本周")。
 func (s *StatsStore) Summary(ctx context.Context, userID int64, loc *time.Location, now time.Time) (*Summary, error) {
 	if loc == nil {
-		loc = time.UTC
+		loc = defaultLocation()
 	}
 	startToday, endToday := dayRange(now, loc)
 	startWk, endWk := weekRange(now, loc)
@@ -124,7 +124,7 @@ type DailyBucket struct {
 // 这种实现避免在 SQL 里做时区敏感的 GROUP BY(SQLite 没有原生 TZ 支持)。
 func (s *StatsStore) Daily(ctx context.Context, userID int64, loc *time.Location, fromDate, toDate time.Time) ([]*DailyBucket, error) {
 	if loc == nil {
-		loc = time.UTC
+		loc = defaultLocation()
 	}
 	from := startOfLocalDay(fromDate, loc)
 	to := startOfLocalDay(toDate, loc) // exclusive
@@ -182,7 +182,7 @@ type WeeklyBucket struct {
 // Weekly 给定区间内按周聚合(以 from 所在周的周一为起点,周一对齐)。
 func (s *StatsStore) Weekly(ctx context.Context, userID int64, loc *time.Location, fromDate, toDate time.Time) ([]*WeeklyBucket, error) {
 	if loc == nil {
-		loc = time.UTC
+		loc = defaultLocation()
 	}
 	from := startOfLocalWeek(fromDate, loc)
 	to := startOfLocalDay(toDate, loc)
@@ -241,7 +241,7 @@ type PomodoroTotals struct {
 
 func (s *StatsStore) PomodoroAggregate(ctx context.Context, userID int64, loc *time.Location, fromDate, toDate time.Time) (*PomodoroTotals, error) {
 	if loc == nil {
-		loc = time.UTC
+		loc = defaultLocation()
 	}
 	from := startOfLocalDay(fromDate, loc)
 	to := startOfLocalDay(toDate, loc)

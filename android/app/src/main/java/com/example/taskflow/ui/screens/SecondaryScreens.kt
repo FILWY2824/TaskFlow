@@ -7,9 +7,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -17,12 +18,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.taskflow.AppContainer
 import com.example.taskflow.util.DateTimeFmt
@@ -37,18 +38,18 @@ fun NotificationsScreen(container: AppContainer, onBack: () -> Unit) {
     val vm: NotificationsViewModel = viewModel(factory = NotificationsViewModel.Factory(container))
     val state by vm.state.collectAsState()
 
+    TaskFlowErrorDialog(message = state.error, onDismiss = vm::clearError)
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("通知 (${state.unreadCount} 未读)") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "返回") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
                 actions = { TextButton(onClick = vm::markAllRead) { Text("全部已读") } },
             )
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            if (state.error != null) Text(state.error!!,
-                color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(12.dp))
             if (state.items.isEmpty() && !state.loading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("还没有通知", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -70,7 +71,7 @@ fun NotificationsScreen(container: AppContainer, onBack: () -> Unit) {
                                 { TextButton(onClick = { vm.markRead(n.id) }) { Text("已读") } }
                             } else null,
                         )
-                        Divider()
+                        HorizontalDivider()
                     }
                 }
             }
@@ -89,11 +90,13 @@ fun TelegramBindScreen(container: AppContainer, onBack: () -> Unit) {
     val state by vm.state.collectAsState()
     val ctx = LocalContext.current
 
+    TaskFlowErrorDialog(message = state.error, onDismiss = vm::clearError)
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Telegram 绑定") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "返回") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
             )
         },
     ) { padding ->
@@ -125,7 +128,7 @@ fun TelegramBindScreen(container: AppContainer, onBack: () -> Unit) {
             }
 
             Spacer(Modifier.height(16.dp))
-            Divider()
+            HorizontalDivider()
             Spacer(Modifier.height(16.dp))
 
             // 发起绑定
@@ -162,10 +165,6 @@ fun TelegramBindScreen(container: AppContainer, onBack: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 Text(state.info!!, color = MaterialTheme.colorScheme.primary)
             }
-            if (state.error != null) {
-                Spacer(Modifier.height(8.dp))
-                Text(state.error!!, color = MaterialTheme.colorScheme.error)
-            }
         }
     }
 }
@@ -194,16 +193,17 @@ fun StatsScreen(container: AppContainer, onBack: () -> Unit) {
     val vm: StatsViewModel = viewModel(factory = StatsViewModel.Factory(container))
     val state by vm.state.collectAsState()
 
+    TaskFlowErrorDialog(message = state.error, onDismiss = vm::clearError)
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("统计") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "返回") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
             )
         },
     ) { padding ->
         Column(Modifier.padding(padding).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState())) {
-            if (state.error != null) Text(state.error!!, color = MaterialTheme.colorScheme.error)
             val s = state.summary
             if (s != null) {
                 StatCard("今日完成", s.completed_today.toString())
@@ -240,6 +240,8 @@ fun PomodoroScreen(container: AppContainer, onBack: () -> Unit) {
     val vm: PomodoroViewModel = viewModel(factory = PomodoroViewModel.Factory(container))
     val state by vm.state.collectAsState()
 
+    TaskFlowErrorDialog(message = state.error, onDismiss = vm::clearError)
+
     // 实时倒计时:每秒重算一次"剩余秒数"
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(state.active?.id) {
@@ -253,7 +255,7 @@ fun PomodoroScreen(container: AppContainer, onBack: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text("番茄钟") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "返回") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
             )
         },
     ) { padding ->
@@ -366,6 +368,9 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () 
     val state by vm.state.collectAsState()
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+
+    TaskFlowErrorDialog(message = state.error, onDismiss = vm::clearError)
 
     // 五项权限的实时状态。每次 onResume 重读(用户从系统设置回来后立刻反映)。
     var permPostNotif by remember { mutableStateOf(true) }
@@ -393,11 +398,59 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () 
         onDispose { lifecycle.removeObserver(obs) }
     }
 
+    val updateDialog = state.updateDialog
+    if (updateDialog != null) {
+        AlertDialog(
+            onDismissRequest = vm::dismissUpdateDialog,
+            title = {
+                Text(
+                    when {
+                        updateDialog.error != null -> "检查失败"
+                        updateDialog.hasNew -> "发现新版本"
+                        else -> "当前已是最新版本"
+                    },
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (updateDialog.version != null) {
+                        Text("最新版本: v${updateDialog.version}")
+                    }
+                    Text("当前版本: v1.3.0", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (!updateDialog.notes.isNullOrBlank()) {
+                        Text(updateDialog.notes, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            },
+            confirmButton = {
+                if (updateDialog.hasNew && updateDialog.url != null) {
+                    Button(onClick = {
+                        uriHandler.openUri(updateDialog.url)
+                        vm.dismissUpdateDialog()
+                    }) {
+                        Text("安装新版本")
+                    }
+                } else {
+                    TextButton(onClick = vm::dismissUpdateDialog) {
+                        Text("知道了")
+                    }
+                }
+            },
+            dismissButton = {
+                if (updateDialog.hasNew && updateDialog.url != null) {
+                    TextButton(onClick = vm::dismissUpdateDialog) {
+                        Text("稍后")
+                    }
+                }
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("设置") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "返回") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
             )
         },
     ) { padding ->
@@ -418,6 +471,38 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () 
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (state.shouldSuggestSystemTimezone)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(
+                            "本机时区: ${state.systemTimezone}",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            if (state.shouldSuggestSystemTimezone)
+                                "检测到本机时区与账户时区不同，可以一键同步并保存到服务端。"
+                            else
+                                "账户时区已与本机保持一致。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (state.shouldSuggestSystemTimezone) {
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = vm::syncSystemTimezone,
+                                enabled = !state.timezoneSaving,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(if (state.timezoneSaving) "同步中..." else "同步为本机时区")
+                            }
+                        }
+                    }
+                }
             }
 
             // ---------- 权限自检(Android 专属,内联) ----------
@@ -504,7 +589,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () 
                     checked = state.prefs.pomodoroAutoComplete,
                     onChange = { v -> vm.togglePref { it.copy(pomodoroAutoComplete = v) } },
                 )
-                Divider(Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
                 // ---- 系统时钟双保险 ----
                 ToggleRow(
@@ -540,18 +625,10 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () 
                 }
             }
 
-            if (state.error != null) {
-                Text(
-                    state.error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-
             // ---------- 检测更新 ----------
             SettingsCard(title = "检测更新") {
                 Text(
-                    "当前版本 v0.4.0",
+                    "当前版本 v1.3.0",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -562,25 +639,6 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () 
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(if (state.updateChecking) "检测中…" else "检查新版本")
-                }
-                if (state.updateError != null) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(state.updateError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                }
-                if (state.updateHasNew == true) {
-                    Spacer(Modifier.height(8.dp))
-                    Text("发现新版本 v${state.updateVersion}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                    if (state.updateNotes != null) {
-                        Text(state.updateNotes!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (state.updateUrl != null) {
-                        Spacer(Modifier.height(6.dp))
-                        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-                        Button(onClick = { uriHandler.openUri(state.updateUrl!!) }, modifier = Modifier.fillMaxWidth()) { Text("下载新版本") }
-                    }
-                } else if (state.updateHasNew == false) {
-                    Spacer(Modifier.height(6.dp))
-                    Text("✓ 当前已是最新版本", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -593,7 +651,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, onLoggedOut: () 
 
             Spacer(Modifier.height(8.dp))
             Text(
-                "TaskFlow Android · v0.4.0",
+                "TaskFlow Android · v1.3.0",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),

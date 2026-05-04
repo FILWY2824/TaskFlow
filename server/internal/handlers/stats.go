@@ -31,11 +31,13 @@ func NewStatsHandler(s *store.StatsStore, u *store.UserStore) *StatsHandler {
 func (h *StatsHandler) loadLoc(r *http.Request, uid int64) *time.Location {
 	user, err := h.Users.GetByID(r.Context(), uid)
 	if err != nil {
-		return time.UTC
+		loc, _ := time.LoadLocation(store.DefaultTimezone)
+		return loc
 	}
 	loc, err := time.LoadLocation(user.Timezone)
 	if err != nil {
-		return time.UTC
+		loc, _ := time.LoadLocation(store.DefaultTimezone)
+		return loc
 	}
 	return loc
 }

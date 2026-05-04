@@ -56,7 +56,7 @@ type TodoFilter struct {
 func (s *TodoStore) Create(ctx context.Context, userID int64, in TodoInput) (*models.Todo, error) {
 	tz := in.Timezone
 	if tz == "" {
-		tz = "UTC"
+		tz = DefaultTimezone
 	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -203,7 +203,7 @@ func (s *TodoStore) List(ctx context.Context, userID int64, f TodoFilter) ([]*mo
 func (s *TodoStore) Update(ctx context.Context, userID, id int64, in TodoInput) (*models.Todo, error) {
 	tz := in.Timezone
 	if tz == "" {
-		tz = "UTC"
+		tz = DefaultTimezone
 	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {

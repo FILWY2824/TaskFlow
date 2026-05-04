@@ -31,6 +31,7 @@ Thumbs.db
 /server/*.log
 /server/vendor/
 /server/config.toml
+/server/.gocache/
 
 # 数据文件(保留目录结构,只忽略内容)
 /data/*
@@ -63,6 +64,10 @@ pnpm-debug.log
 # Android (/android)
 # ==============================
 /android/.gradle/
+/android/.gradle-user-home/
+/android/.gradle-project-cache/
+/android/.android-sdk-home/
+/android/.android-user-home/
 /android/build/
 /android/app/build/
 /android/local.properties
@@ -85,12 +90,18 @@ pnpm-debug.log
 *.log
 .tmp/
 .temp/
+/tmp-skill-download/
 *.patch
 .alma-snapshots
 .claude/
 .external-profile-reference/
+logs/
 
 # ==============================
 # 部署临时文件
 # ==============================
 /deploy/downloads/
+
+.gradle-user-home/
+.gradle-project-cache/
+.go-build-cache/

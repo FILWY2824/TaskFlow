@@ -27,3 +27,6 @@ Thumbs.db
 
 # 依赖缓存(Go 默认不要 vendor)
 /vendor/
+
+.gocache/
+.go-cache-codex/

@@ -64,17 +64,28 @@ pub struct SetTokensArgs {
 /// has the same access token in hand for background sync.
 #[tauri::command]
 pub async fn set_tokens(args: SetTokensArgs, state: State<'_, AppState>) -> Result<(), String> {
-    let mut cfg = state.cfg.lock().await;
-    cfg.access_token = args.access_token.clone();
-    if args.refresh_token.is_some() {
-        cfg.refresh_token = args.refresh_token;
+    let should_resync = args
+        .access_token
+        .as_ref()
+        .is_some_and(|token| !token.trim().is_empty());
+    {
+        let mut cfg = state.cfg.lock().await;
+        cfg.access_token = args.access_token.clone();
+        if args.refresh_token.is_some() {
+            cfg.refresh_token = args.refresh_token;
+        }
+        if let Some(tz) = args.timezone {
+            cfg.timezone = tz;
+        }
+        state.api.set_token(cfg.access_token.clone());
+        let app_dir = crate::config::default_app_dir().map_err(|e| e.to_string())?;
+        cfg.save(&app_dir).map_err(|e| e.to_string())?;
     }
-    if let Some(tz) = args.timezone {
-        cfg.timezone = tz;
+    if should_resync {
+        crate::sync::full_resync(&state.api, &state.db)
+            .await
+            .map_err(|e| format!("{:#}", e))?;
     }
-    state.api.set_token(cfg.access_token.clone());
-    let app_dir = crate::config::default_app_dir().map_err(|e| e.to_string())?;
-    cfg.save(&app_dir).map_err(|e| e.to_string())?;
     Ok(())
 }
 

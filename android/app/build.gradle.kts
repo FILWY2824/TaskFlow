@@ -7,6 +7,7 @@
 //   - Compose 插件由 Kotlin 2.0 直接提供,不再依赖独立 compiler 版本对齐。
 //   - DEFAULT_SERVER_URL 由仓库根目录 .env 的 PUBLIC_BASE_URL 烧入,与 server / web / windows 共用一份配置。
 
+import java.io.File
 import java.util.Properties
 
 plugins {
@@ -23,22 +24,34 @@ plugins {
  * 不是完整的 dotenv 解析器:足够覆盖 KEY=VALUE / KEY="VALUE" / 注释行 / 空行。
  */
 fun parseRootDotEnv(key: String): String? {
-    val envFile = rootProject.file("../.env").takeIf { it.exists() }
-        ?: rootProject.file("../.env.example").takeIf { it.exists() }
-        ?: return null
-    envFile.readLines().forEach { rawLine ->
-        val line = rawLine.trim()
-        if (line.isEmpty() || line.startsWith("#")) return@forEach
-        val idx = line.indexOf('=')
-        if (idx <= 0) return@forEach
-        val k = line.substring(0, idx).trim()
-        if (k != key) return@forEach
-        var v = line.substring(idx + 1).trim()
+    val repoRoot = rootProject.projectDir.parentFile ?: rootProject.projectDir
+    val envFiles = listOf(
+        File(repoRoot, ".env.local"),
+        File(repoRoot, ".env"),
+        File(repoRoot, ".env.example"),
+        rootProject.file(".env.local"),
+        rootProject.file(".env"),
+        rootProject.file("../.env.local"),
+        rootProject.file("../.env"),
+        rootProject.file("../.env.example"),
+    ).distinctBy { it.absoluteFile.toPath().normalize().toString() }
+
+    envFiles.forEach fileLoop@ { envFile ->
+        if (!envFile.exists()) return@fileLoop
+        envFile.readLines().forEach lineLoop@ { rawLine ->
+            val line = rawLine.trim()
+            if (line.isEmpty() || line.startsWith("#")) return@lineLoop
+            val idx = line.indexOf('=')
+            if (idx <= 0) return@lineLoop
+            val k = line.substring(0, idx).trim()
+            if (k != key) return@lineLoop
+            var v = line.substring(idx + 1).trim()
         // 去掉首尾配对的引号
-        if ((v.startsWith("\"") && v.endsWith("\"")) || (v.startsWith("'") && v.endsWith("'"))) {
-            v = v.substring(1, v.length - 1)
+            if ((v.startsWith("\"") && v.endsWith("\"")) || (v.startsWith("'") && v.endsWith("'"))) {
+                v = v.substring(1, v.length - 1)
+            }
+            return v
         }
-        return v
     }
     return null
 }
@@ -51,8 +64,8 @@ android {
         applicationId = "com.example.taskflow"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.4.0"
+        versionCode = 130
+        versionName = "1.3.0"
 
         // 默认服务端地址(出厂值)。优先级:
         //   1) 环境变量 TASKFLOW_DEFAULT_SERVER_URL —— 打包时显式传入
@@ -101,7 +114,7 @@ android {
                 storeFile = rootProject.file(signKeystorePath!!)
                 storePassword = signKeystorePass!!
                 keyAlias = signAlias!!
-                keyPassword = signKeyPass ?: signKeystorePass!!
+                keyPassword = signKeyPass ?: signKeystorePass
             }
         }
     }
@@ -144,6 +157,12 @@ android {
                 "/META-INF/DEPENDENCIES",
             )
         }
+        jniLibs {
+            keepDebugSymbols += setOf(
+                "**/libandroidx.graphics.path.so",
+                "**/libdatastore_shared_counter.so",
+            )
+        }
     }
 }
 
@@ -157,6 +176,7 @@ dependencies {
     // AndroidX core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.vm.ktx)
     implementation(libs.androidx.lifecycle.vm.comp)
     implementation(libs.androidx.activity.compose)
@@ -202,4 +222,6 @@ dependencies {
     // Coroutines
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
+
+    testImplementation(kotlin("test"))
 }

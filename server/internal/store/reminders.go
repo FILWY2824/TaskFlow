@@ -65,7 +65,7 @@ func (in *ReminderInput) validateAndComputeNext(now time.Time) (*time.Time, erro
 func (s *ReminderStore) Create(ctx context.Context, userID int64, in ReminderInput) (*models.ReminderRule, error) {
 	tz := in.Timezone
 	if tz == "" {
-		tz = "UTC"
+		tz = DefaultTimezone
 	}
 	in.Timezone = tz
 
@@ -114,7 +114,7 @@ func (s *ReminderStore) Create(ctx context.Context, userID int64, in ReminderInp
 func (s *ReminderStore) Update(ctx context.Context, userID, id int64, in ReminderInput) (*models.ReminderRule, error) {
 	tz := in.Timezone
 	if tz == "" {
-		tz = "UTC"
+		tz = DefaultTimezone
 	}
 	in.Timezone = tz
 

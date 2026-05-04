@@ -28,7 +28,7 @@ data class TodoEditUiState(
     val priority: Int = 0,
     val dueAtIso: String? = null,
     val dueAllDay: Boolean = false,
-    val timezone: String = "UTC",
+    val timezone: String = "Asia/Shanghai",
 
     val todoId: Long? = null,
     val subtasks: List<SubtaskCacheEntity> = emptyList(),
@@ -80,6 +80,7 @@ class TodoEditViewModel(
     }
 
     fun setTitle(v: String) { _state.value = _state.value.copy(title = v, error = null) }
+    fun clearError() { _state.value = _state.value.copy(error = null) }
     fun setDescription(v: String) { _state.value = _state.value.copy(description = v) }
     fun setPriority(v: Int) { _state.value = _state.value.copy(priority = v) }
     fun setDueAt(iso: String?, allDay: Boolean) { _state.value = _state.value.copy(dueAtIso = iso, dueAllDay = allDay) }
@@ -129,15 +130,24 @@ class TodoEditViewModel(
     fun addSubtask(title: String) {
         val id = _state.value.todoId ?: return
         if (title.isBlank()) return
-        viewModelScope.launch { container.subtaskRepository.create(id, title.trim()) }
+        viewModelScope.launch {
+            val r = container.subtaskRepository.create(id, title.trim())
+            if (r is Result.Error) _state.value = _state.value.copy(error = r.message)
+        }
     }
 
     fun toggleSubtask(s: SubtaskCacheEntity) {
-        viewModelScope.launch { container.subtaskRepository.toggle(s) }
+        viewModelScope.launch {
+            val r = container.subtaskRepository.toggle(s)
+            if (r is Result.Error) _state.value = _state.value.copy(error = r.message)
+        }
     }
 
     fun deleteSubtask(id: Long) {
-        viewModelScope.launch { container.subtaskRepository.delete(id) }
+        viewModelScope.launch {
+            val r = container.subtaskRepository.delete(id)
+            if (r is Result.Error) _state.value = _state.value.copy(error = r.message)
+        }
     }
 
     /** 添加单次提醒 */
@@ -150,17 +160,20 @@ class TodoEditViewModel(
             ))
             if (r is Result.Success) {
                 _state.value = _state.value.copy(reminders = container.db.reminderDao().byTodo(id))
+            } else if (r is Result.Error) {
+                _state.value = _state.value.copy(error = r.message)
             }
         }
     }
 
     fun deleteReminder(rid: Long) {
         viewModelScope.launch {
-            container.reminderRepository.delete(rid)
+            val r = container.reminderRepository.delete(rid)
             val tid = _state.value.todoId
             if (tid != null) {
                 _state.value = _state.value.copy(reminders = container.db.reminderDao().byTodo(tid))
             }
+            if (r is Result.Error) _state.value = _state.value.copy(error = r.message)
         }
     }
 

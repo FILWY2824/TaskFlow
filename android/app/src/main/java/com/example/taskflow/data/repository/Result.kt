@@ -27,7 +27,7 @@ sealed class Result<out T> {
 }
 
 /** 把 Retrofit Response 拆成 Result。null body 返回 Success(Unit) — Retrofit 在 204 上 body 为 null。 */
-inline fun <T> Response<T>.unwrap(moshi: Moshi, errorAdapter: JsonAdapter<ApiErrorBody> = moshi.adapter(ApiErrorBody::class.java)): Result<T> {
+fun <T> Response<T>.unwrap(moshi: Moshi, errorAdapter: JsonAdapter<ApiErrorBody> = moshi.adapter(ApiErrorBody::class.java)): Result<T> {
     return if (isSuccessful) {
         @Suppress("UNCHECKED_CAST")
         val body = body() ?: Unit as T
@@ -36,9 +36,9 @@ inline fun <T> Response<T>.unwrap(moshi: Moshi, errorAdapter: JsonAdapter<ApiErr
         val raw = errorBody()?.string()
         val parsed = raw?.let { runCatching { errorAdapter.fromJson(it) }.getOrNull() }
         if (parsed != null) {
-            Result.Error(parsed.error.code, parsed.error.message, code())
+            Result.Error(parsed.error.code, localizedApiMessage(parsed.error.code, parsed.error.message), code())
         } else {
-            Result.Error("http_${code()}", raw ?: message() ?: "unknown error", code())
+            Result.Error("http_${code()}", "服务端返回错误（HTTP ${code()}），请稍后重试。", code())
         }
     }
 }
@@ -47,9 +47,26 @@ inline fun <T> Response<T>.unwrap(moshi: Moshi, errorAdapter: JsonAdapter<ApiErr
 suspend inline fun <T> safeCall(moshi: Moshi, block: () -> Response<T>): Result<T> = try {
     block().unwrap(moshi)
 } catch (e: HttpException) {
-    Result.Error("http_${e.code()}", e.message ?: "http error", e.code())
+    Result.Error("http_${e.code()}", "服务端返回错误（HTTP ${e.code()}），请稍后重试。", e.code())
 } catch (e: IOException) {
-    Result.Error("network", e.message ?: "network error")
+    Result.Error("network", "网络连接失败，请检查网络后重试。")
 } catch (e: Exception) {
-    Result.Error("unexpected", e.message ?: "unexpected error")
+    Result.Error("unexpected", "发生未知错误：${e.message ?: "请稍后重试"}")
+}
+
+fun localizedApiMessage(code: String, message: String): String = when (code) {
+    "bad_request" -> "请求内容不正确，请检查输入后重试。"
+    "unauthorized" -> "登录状态已失效，请重新登录。"
+    "invalid_credentials" -> "邮箱或密码不正确。"
+    "invalid_refresh_token" -> "登录状态已过期，请重新登录。"
+    "account_disabled" -> "账号已被禁用，请联系管理员。"
+    "email_taken" -> "该邮箱已注册。"
+    "local_auth_disabled" -> "本地邮箱登录已关闭，请通过认证中心登录。"
+    "missing_device_id" -> "登录设备标识缺失，请重新发起登录。"
+    "invalid_handoff" -> "登录凭证已失效，请重新登录。"
+    "timeout" -> "操作超时，请重试。"
+    "poll_failed" -> "登录状态获取失败，请重新尝试。"
+    "network" -> "网络连接失败，请检查网络后重试。"
+    else -> message.takeIf { it.any { ch -> ch in '\u4e00'..'\u9fff' } }
+        ?: "操作失败（$code），请稍后重试。"
 }

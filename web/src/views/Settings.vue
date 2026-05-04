@@ -89,22 +89,38 @@ function downloadUrl(path: string): string {
 }
 
 // ---- 检测更新(Tauri / Windows 端) ----
-const LOCAL_VERSION = '0.4.0'
+const LOCAL_VERSION = '1.3.0'
+type ReleaseManifest = Record<string, { version?: string; filename?: string; notes?: string }>
+const releasesManifest = ref<ReleaseManifest | null>(null)
 const updateChecking = ref(false)
 const updateResult = ref<null | { hasNew: boolean; version?: string; url?: string; notes?: string }>(null)
 const updateErr = ref('')
+
+function downloadHrefFor(platform: 'android' | 'windows', fallbackFilename: string): string {
+  const filename = releasesManifest.value?.[platform]?.filename || fallbackFilename
+  return downloadUrl(`${platform}/${filename}`)
+}
+
+const androidDownloadHref = computed(() => downloadHrefFor('android', 'TaskFlow-release-unsigned.apk'))
+const windowsDownloadHref = computed(() => downloadHrefFor('windows', `TaskFlow_${LOCAL_VERSION}_x64-setup.exe`))
+
+async function loadReleasesManifest(): Promise<ReleaseManifest | null> {
+  if (releasesManifest.value) return releasesManifest.value
+  const resp = await fetch(downloadUrl('latest.json'))
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  const data = await resp.json() as ReleaseManifest
+  releasesManifest.value = data
+  return data
+}
 
 async function checkUpdate() {
   updateChecking.value = true
   updateErr.value = ''
   updateResult.value = null
   try {
-    const manifestUrl = downloadUrl('latest.json')
-    const resp = await fetch(manifestUrl)
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    const data = await resp.json()
+    const data = await loadReleasesManifest()
     const platform = 'windows'
-    const remote = data[platform]
+    const remote = data?.[platform]
     if (!remote) throw new Error('清单中未找到当前平台的版本信息')
     const hasNew = compareVersions(remote.version, LOCAL_VERSION) > 0
     updateResult.value = {
@@ -143,6 +159,7 @@ function openUpdateDownload() {
 
 onMounted(() => {
   themeMode.value = readSavedTheme()
+  loadReleasesManifest().catch(() => { /* keep fallback download links */ })
 })
 
 // ---- 浏览器桌面通知权限 ----
@@ -425,7 +442,7 @@ async function toggleDesktopNotification(v: boolean) {
     <div class="settings-card">
       <div class="card-head"><h3>关于</h3></div>
       <div class="card-body">
-        <p class="muted">TaskFlow · Web v0.4.0</p>
+        <p class="muted">TaskFlow · Web v1.3.0</p>
         <p class="muted">多用户 TODO + Android / Windows 强提醒</p>
 
         <!-- ===== 客户端下载 / 检测更新 ===== -->
@@ -433,7 +450,7 @@ async function toggleDesktopNotification(v: boolean) {
           <!-- Windows (Tauri) 端:检测更新 -->
           <template v-if="isWindows">
             <div class="about-downloads-title">检测更新</div>
-            <p class="muted" style="font-size:13px;margin-bottom:10px">当前版本 v0.4.0</p>
+            <p class="muted" style="font-size:13px;margin-bottom:10px">当前版本 v1.3.0</p>
             <button class="btn-primary btn-sm" :disabled="updateChecking" @click="checkUpdate">
               {{ updateChecking ? '检测中…' : '检查新版本' }}
             </button>
@@ -456,7 +473,7 @@ async function toggleDesktopNotification(v: boolean) {
             <div class="about-downloads-title">客户端下载</div>
             <div class="about-downloads-grid">
               <!-- Android APK -->
-              <a class="dl-card" :href="downloadUrl('android/TaskFlow-release-unsigned.apk')">
+              <a class="dl-card" :href="androidDownloadHref">
                 <span class="dl-icon dl-icon-android" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="2" x2="8" y2="5"/><line x1="18" y1="2" x2="16" y2="5"/><path d="M5 9h14v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9Z"/><circle cx="9" cy="13" r="0.6" fill="currentColor"/><circle cx="15" cy="13" r="0.6" fill="currentColor"/><path d="M3 11v5"/><path d="M21 11v5"/><path d="M9 20v2"/><path d="M15 20v2"/></svg>
                 </span>
@@ -469,7 +486,7 @@ async function toggleDesktopNotification(v: boolean) {
                 </span>
               </a>
               <!-- Windows 安装包 -->
-              <a class="dl-card" :href="downloadUrl('windows/TaskFlow_0.4.0_x64-setup.exe')">
+              <a class="dl-card" :href="windowsDownloadHref">
                 <span class="dl-icon dl-icon-windows" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5l7.5-1v8H3v-7zM11.5 4.3L21 3v10h-9.5V4.3zM3 13.5h7.5v8L3 20.5v-7zM11.5 13.5H21v8.5l-9.5-1.3v-7.2z"/></svg>
                 </span>

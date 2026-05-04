@@ -30,8 +30,9 @@ data class TasksUiState(
     val error: String? = null,
     val filter: TaskFilter = TaskFilter.Today,
     val items: List<TodoCacheEntity> = emptyList(),
+    val allItems: List<TodoCacheEntity> = emptyList(),
     /** 用户时区,用于本地过滤 */
-    val tz: String = "UTC",
+    val tz: String = "Asia/Shanghai",
     /** 服务端是否在线(影响"无网络"提示) */
     val isOffline: Boolean = false,
     val searchQuery: String = "",
@@ -70,12 +71,15 @@ class TasksViewModel(private val container: AppContainer) : ViewModel() {
             tz = container.tokenManager.current().timezone,
             isOffline = offline,
             searchQuery = search,
+            allItems = all,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TasksUiState())
 
     init { refresh() }
 
     fun setFilter(f: TaskFilter) { filterFlow.value = f }
+
+    fun clearError() { errorFlow.value = null }
 
     fun setSearch(q: String) {
         searchFlow.value = q
@@ -107,10 +111,16 @@ class TasksViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun complete(id: Long, completed: Boolean) {
+        if (!container.isOnline()) {
+            offlineFlow.value = true
+            errorFlow.value = "当前无网络，离线状态下不能修改任务完成状态。请联网后再确认。"
+            return
+        }
         viewModelScope.launch {
             val r = if (completed) container.todoRepository.complete(id)
                     else container.todoRepository.uncomplete(id)
-            if (r is Result.Error && r.code != "network") {
+            if (r is Result.Error) {
+                if (r.code == "network") offlineFlow.value = true
                 errorFlow.value = r.message
             }
         }

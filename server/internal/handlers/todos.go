@@ -138,7 +138,10 @@ func (h *TodosHandler) Index(w http.ResponseWriter, r *http.Request) {
 		}
 		loc, lerr := time.LoadLocation(user.Timezone)
 		if lerr != nil {
-			loc = time.UTC
+			loc, _ = time.LoadLocation(store.DefaultTimezone)
+			if loc == nil {
+				loc = time.Local
+			}
 		}
 		t, perr := time.ParseInLocation("2006-01-02", v, loc)
 		if perr != nil {
@@ -178,8 +181,11 @@ func (h *TodosHandler) Index(w http.ResponseWriter, r *http.Request) {
 func applyFilterShortcut(f *store.TodoFilter, name, tzName string, now time.Time) error {
 	loc, err := time.LoadLocation(tzName)
 	if err != nil {
-		// 用户时区被破坏时不要硬挂,用 UTC 兜底
-		loc = time.UTC
+		// 用户时区被破坏时不要硬挂,用默认时区兜底。
+		loc, _ = time.LoadLocation(store.DefaultTimezone)
+		if loc == nil {
+			loc = time.Local
+		}
 	}
 	startOfDay := func(t time.Time) time.Time {
 		y, m, d := t.In(loc).Date()

@@ -155,7 +155,7 @@ func (h *RemindersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	defaultTZ := "UTC"
+	defaultTZ := store.DefaultTimezone
 	if user, err := h.Users.GetByID(r.Context(), uid); err == nil {
 		defaultTZ = user.Timezone
 	}
@@ -185,7 +185,7 @@ func (h *RemindersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	defaultTZ := "UTC"
+	defaultTZ := store.DefaultTimezone
 	if user, err := h.Users.GetByID(r.Context(), uid); err == nil {
 		defaultTZ = user.Timezone
 	}

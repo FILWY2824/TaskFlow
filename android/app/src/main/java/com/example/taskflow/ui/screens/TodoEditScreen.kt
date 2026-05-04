@@ -6,7 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,11 +44,13 @@ fun TodoEditScreen(
     var showReminderDialog by remember { mutableStateOf(false) }
     var showDateDialog by remember { mutableStateOf(false) }
 
+    TaskFlowErrorDialog(message = state.error, onDismiss = vm::clearError)
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(if (todoId == null) "新建任务" else "编辑任务") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "返回") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
                 actions = {
                     if (state.todoId != null) IconButton(onClick = vm::delete) {
                         Icon(Icons.Default.Delete, "删除", tint = MaterialTheme.colorScheme.error)
@@ -104,11 +106,6 @@ fun TodoEditScreen(
                     }
                 },
             )
-
-            if (state.error != null) {
-                Spacer(Modifier.height(8.dp))
-                Text(state.error!!, color = MaterialTheme.colorScheme.error)
-            }
 
             // === 子任务 ===
             if (state.todoId != null) {

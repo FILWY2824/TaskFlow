@@ -10,6 +10,7 @@ import PrettyDateTimePicker from '@/components/PrettyDateTimePicker.vue'
 import { ApiError, reminders as remindersApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { DEFAULT_TIMEZONE } from '@/timezones'
+import { tauri } from '@/tauri'
 import { alertDialog, confirmDialog } from '@/dialogs'
 
 const online = ref(navigator.onLine)
@@ -260,6 +261,7 @@ async function submitAdd() {
           vibrate: true,
           fullscreen: true,
         })
+        await tauri.syncNow()
       } catch (e) {
         // 任务已建好，提醒失败仅作提示，不阻塞流程
         console.warn('创建周期提醒失败：', e)

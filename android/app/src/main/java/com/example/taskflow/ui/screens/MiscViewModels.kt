@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.ZoneId
 
 // ============== Notifications ==============
 
@@ -55,6 +56,10 @@ class NotificationsViewModel(private val container: AppContainer) : ViewModel() 
             container.notificationRepository.markAllRead()
             refresh()
         }
+    }
+
+    fun clearError() {
+        _state.value = _state.value.copy(error = null)
     }
 
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
@@ -130,6 +135,10 @@ class TelegramViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun clearError() {
+        _state.value = _state.value.copy(error = null)
+    }
+
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = TelegramViewModel(container) as T
@@ -159,6 +168,10 @@ class StatsViewModel(private val container: AppContainer) : ViewModel() {
                 is Result.Error -> _state.value.copy(loading = false, error = r.message)
             }
         }
+    }
+
+    fun clearError() {
+        _state.value = _state.value.copy(error = null)
     }
 
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
@@ -230,6 +243,10 @@ class PomodoroViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun clearError() {
+        _state.value = _state.value.copy(error = null)
+    }
+
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = PomodoroViewModel(container) as T
@@ -241,6 +258,8 @@ class PomodoroViewModel(private val container: AppContainer) : ViewModel() {
 data class SettingsUiState(
     val email: String = "",
     val timezone: String = "Asia/Shanghai",
+    val systemTimezone: String = "Asia/Shanghai",
+    val timezoneSaving: Boolean = false,
     val displayName: String = "",
     val prefs: AndroidPrefs = PreferenceRepository.DEFAULTS,
     val prefsLoading: Boolean = false,
@@ -251,7 +270,43 @@ data class SettingsUiState(
     val updateUrl: String? = null,
     val updateNotes: String? = null,
     val updateError: String? = null,
+    val updateDialog: UpdateDialogUiState? = null,
+) {
+    val shouldSuggestSystemTimezone: Boolean
+        get() = systemTimezone.isNotBlank() && timezone != systemTimezone
+}
+
+data class UpdateDialogUiState(
+    val hasNew: Boolean,
+    val version: String?,
+    val url: String?,
+    val notes: String?,
+    val error: String? = null,
 )
+
+fun SettingsUiState.withUpdateDialog(
+    hasNew: Boolean,
+    version: String?,
+    url: String?,
+    notes: String?,
+    error: String? = null,
+): SettingsUiState = copy(
+    updateChecking = false,
+    updateHasNew = null,
+    updateVersion = null,
+    updateUrl = null,
+    updateNotes = null,
+    updateError = null,
+    updateDialog = UpdateDialogUiState(
+        hasNew = hasNew,
+        version = version,
+        url = url,
+        notes = notes,
+        error = error,
+    ),
+)
+
+fun SettingsUiState.dismissUpdateDialog(): SettingsUiState = copy(updateDialog = null)
 
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(loadInitial())
@@ -268,6 +323,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         return SettingsUiState(
             email = s.userEmail ?: "",
             timezone = s.timezone,
+            systemTimezone = ZoneId.systemDefault().id,
             displayName = "",
             prefs = container.preferenceRepository.current(),
         )
@@ -302,12 +358,35 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         togglePref { it.copy(autoSnoozeMinutes = clamped) }
     }
 
+    fun syncSystemTimezone() {
+        val tz = _state.value.systemTimezone.ifBlank { "Asia/Shanghai" }
+        _state.value = _state.value.copy(timezoneSaving = true, error = null)
+        viewModelScope.launch {
+            val r = container.authRepository.updateMe(timezone = tz)
+            _state.value = when (r) {
+                is Result.Success -> _state.value.copy(
+                    email = r.data.email,
+                    timezone = r.data.timezone,
+                    timezoneSaving = false,
+                )
+                is Result.Error -> _state.value.copy(
+                    timezoneSaving = false,
+                    error = "时区同步失败: ${r.message}",
+                )
+            }
+        }
+    }
+
     fun checkUpdate() {
-        _state.value = _state.value.copy(updateChecking = true, updateError = null, updateHasNew = null)
+        _state.value = _state.value.copy(
+            updateChecking = true,
+            updateError = null,
+            updateHasNew = null,
+            updateDialog = null,
+        )
         viewModelScope.launch {
             try {
-                val baseUrl = container.tokenManager.current().serverUrl
-                    ?: container.apiClient.currentBase()
+                val baseUrl = container.apiClient.currentBase()
                 val url = "${baseUrl.trimEnd('/')}/downloads/latest.json"
                 val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
@@ -321,16 +400,32 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                     } finally { conn.disconnect() }
                 }
                 val (remoteVersion, filename, notes) = result
-                val hasNew = compareVersions(remoteVersion, "0.4.0") > 0
-                _state.value = _state.value.copy(
-                    updateChecking = false, updateHasNew = hasNew, updateVersion = remoteVersion,
-                    updateUrl = if (filename.isNotBlank()) "${baseUrl.trimEnd('/')}/downloads/android/$filename" else null,
-                    updateNotes = notes.ifBlank { null },
+                val hasNew = compareVersions(remoteVersion, "1.3.0") > 0
+                _state.value = _state.value.withUpdateDialog(
+                    hasNew = hasNew,
+                    version = remoteVersion,
+                    url = if (hasNew && filename.isNotBlank()) "${baseUrl.trimEnd('/')}/downloads/android/$filename" else null,
+                    notes = notes.ifBlank { if (hasNew) "发现可安装的新版本。" else "当前已是最新版本。" },
                 )
             } catch (e: Exception) {
-                _state.value = _state.value.copy(updateChecking = false, updateError = e.message ?: "检测失败")
+                val msg = e.message ?: "检测失败"
+                _state.value = _state.value.withUpdateDialog(
+                    hasNew = false,
+                    version = null,
+                    url = null,
+                    notes = msg,
+                    error = msg,
+                )
             }
         }
+    }
+
+    fun dismissUpdateDialog() {
+        _state.value = _state.value.dismissUpdateDialog()
+    }
+
+    fun clearError() {
+        _state.value = _state.value.copy(error = null)
     }
 
     private fun compareVersions(a: String, b: String): Int {

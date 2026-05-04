@@ -7,10 +7,10 @@
 #   android/build.gradle   —— Kotlin / Compose
 #   deploy/                —— systemd / nginx / 备份脚本
 
-VERSION ?= 0.4.0
+VERSION ?= 1.3.0
 
 .PHONY: all build dev server-build web-build server-run web-dev server-test web-typecheck \
-        windows-build windows-dev android-build android-debug android-clean \
+        windows-build windows-dev android-build android-debug android-clean publish-release \
         dist dist-src clean
 
 all: build
@@ -58,17 +58,24 @@ windows-dev:
 	cd windows && npm run tauri:dev
 
 windows-build:
-	cd windows && npm run tauri:build
+	cd windows && npm run build
+	cd windows && npx tauri build
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Platform windows -Version $(VERSION)
 
 # Android(需要 Android Studio / SDK / Gradle wrapper)
 android-debug:
 	cd android && ./gradlew :app:assembleDebug
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Platform android-debug -Version $(VERSION)
 
 android-build:
 	cd android && ./gradlew :app:assembleRelease
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Platform android-release -Version $(VERSION)
 
 android-clean:
 	cd android && ./gradlew clean
+
+publish-release:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Platform all -Version $(VERSION)
 
 # 源码 tarball(分发用,客户拿到后自行编译)
 dist-src:

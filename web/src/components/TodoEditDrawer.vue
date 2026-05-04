@@ -5,6 +5,7 @@ import { useDataStore } from '@/stores/data'
 import { useAuthStore } from '@/stores/auth'
 import { reminders as remindersApi, ApiError } from '@/api'
 import { DEFAULT_TIMEZONE } from '@/timezones'
+import { tauri } from '@/tauri'
 import {
   fmtDateTime,
   fmtRelative,
@@ -239,6 +240,7 @@ async function createReminder() {
     }
     await remindersApi.create(body)
     await data.loadReminders(props.todo.id)
+    await tauri.syncNow()
     showReminderDialog.value = false
   } catch (e) {
     remErr.value = e instanceof ApiError ? e.message : (e as Error).message
@@ -250,6 +252,7 @@ async function toggleReminder(r: ReminderRule) {
     if (r.is_enabled) await remindersApi.disable(r.id)
     else await remindersApi.enable(r.id)
     await data.loadReminders(props.todo.id)
+    await tauri.syncNow()
   } catch (e) {
     errMsg.value = e instanceof ApiError ? e.message : (e as Error).message
   }
@@ -269,6 +272,7 @@ async function removeReminder(r: ReminderRule) {
   try {
     await remindersApi.remove(r.id)
     await data.loadReminders(props.todo.id)
+    await tauri.syncNow()
   } catch (e) {
     errMsg.value = e instanceof ApiError ? e.message : (e as Error).message
   }

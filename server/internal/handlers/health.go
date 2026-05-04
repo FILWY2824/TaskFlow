@@ -25,6 +25,6 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":  "ok",
 		"time":    time.Now().UTC().Format(time.RFC3339),
-		"version": "0.3.0",
+		"version": "1.3.0",
 	})
 }

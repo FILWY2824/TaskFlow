@@ -105,6 +105,7 @@ var migrations = []migration{
 	{Version: 3, SQL: schemaV3},
 	{Version: 4, SQL: schemaV4},
 	{Version: 5, SQL: schemaV5},
+	{Version: 6, SQL: schemaV6},
 }
 
 const schemaV1 = `
@@ -387,4 +388,22 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action, created_at);
+`
+
+// schemaV6 —— 默认时区从 UTC 切换为中国上海。
+//
+// 旧版本由 store 层默认写入 UTC。这里不改已发布的 v1 schema,只把已经落库的旧默认值
+// 迁移到新的产品默认值;后续新写入由 store 层显式填充 Asia/Shanghai。
+const schemaV6 = `
+UPDATE users
+SET timezone = 'Asia/Shanghai', updated_at = CURRENT_TIMESTAMP
+WHERE timezone = '' OR timezone = 'UTC';
+
+UPDATE todos
+SET timezone = 'Asia/Shanghai', updated_at = CURRENT_TIMESTAMP
+WHERE timezone = '' OR timezone = 'UTC';
+
+UPDATE reminder_rules
+SET timezone = 'Asia/Shanghai', updated_at = CURRENT_TIMESTAMP
+WHERE timezone = '' OR timezone = 'UTC';
 `

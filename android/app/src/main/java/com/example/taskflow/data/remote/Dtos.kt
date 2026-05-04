@@ -33,6 +33,12 @@ data class LogoutRequest(
 )
 
 @JsonClass(generateAdapter = true)
+data class UpdateMeRequest(
+    val display_name: String? = null,
+    val timezone: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
 data class AuthResponse(
     val access_token: String,
     val access_token_expires_at: String,
@@ -99,7 +105,7 @@ data class TodoDto(
     val is_completed: Boolean = false,
     val completed_at: String? = null,
     val sort_order: Int = 0,
-    val timezone: String = "UTC",
+    val timezone: String = "Asia/Shanghai",
     val created_at: String,
     val updated_at: String,
 )
@@ -157,7 +163,7 @@ data class ReminderDto(
     val trigger_at: String? = null,
     val rrule: String = "",
     val dtstart: String? = null,
-    val timezone: String = "UTC",
+    val timezone: String = "Asia/Shanghai",
     val channel_local: Boolean = true,
     val channel_telegram: Boolean = false,
     val channel_web_push: Boolean = false,
@@ -181,7 +187,7 @@ data class ReminderInput(
     val trigger_at: String? = null,
     val rrule: String = "",
     val dtstart: String? = null,
-    val timezone: String = "UTC",
+    val timezone: String = "Asia/Shanghai",
     val channel_local: Boolean = true,
     val channel_telegram: Boolean = false,
     val ringtone: String = "default",
