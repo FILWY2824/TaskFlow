@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Todo } from '@/types'
 import { todos as todosApi, ApiError } from '@/api'
-import { fmtDurationMinutes, fmtTime, isOverdue, PRIORITY_LABELS, toRFC3339 } from '@/utils'
+import { fmtDurationMinutes, fmtTime, isOverdue, PRIORITY_LABELS, taskStartAt, toRFC3339 } from '@/utils'
 import { useDataStore } from '@/stores/data'
 import TodoEditDrawer from '@/components/TodoEditDrawer.vue'
 import PrettyTimePicker from '@/components/PrettyTimePicker.vue'
@@ -93,10 +93,10 @@ const grouped = computed(() => {
     else if (isOverdue(t)) overdue.push(t)
     else open.push(t)
   }
-  // 内部按 due_at 升序
+  // 内部按开始时间升序
   const byDue = (a: Todo, b: Todo) => {
-    const ta = a.due_at ? new Date(a.due_at).getTime() : 0
-    const tb = b.due_at ? new Date(b.due_at).getTime() : 0
+    const ta = taskStartAt(a) ? new Date(taskStartAt(a)!).getTime() : 0
+    const tb = taskStartAt(b) ? new Date(taskStartAt(b)!).getTime() : 0
     return ta - tb
   }
   open.sort(byDue); overdue.sort(byDue); done.sort(byDue)
@@ -252,11 +252,12 @@ function openAdd() {
   showAddDialog.value = true
 }
 function defaultTimeForToday(): string {
-  // 今日：默认 23:59 截止；以便快速登记
+  // 今日：默认就近的 15 分钟开始时间；以便快速登记
   const t = new Date()
-  // 但若当前时间已晚于 22:00，就给个 +1h 的整点更合理
-  if (t.getHours() >= 22) return '23:59'
-  return '23:59'
+  const next = Math.ceil(t.getMinutes() / 15) * 15
+  if (next >= 60) t.setHours(t.getHours() + 1, 0, 0, 0)
+  else t.setMinutes(next, 0, 0)
+  return `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`
 }
 
 function normalizeDurationMinutes(value: number): number {
@@ -272,12 +273,12 @@ async function submitAdd() {
   if (!dateObj.value) return
   adding.value = true
   try {
-    const due = new Date(dateObj.value)
+    const start = new Date(dateObj.value)
     if (addTimeLocal.value) {
       const [h, m] = addTimeLocal.value.split(':').map(Number)
-      due.setHours(h || 0, m || 0, 0, 0)
+      start.setHours(h || 0, m || 0, 0, 0)
     } else {
-      due.setHours(23, 59, 0, 0)
+      start.setHours(9, 0, 0, 0)
     }
     // 复用 data store，使其它视图同步
     await data.createTodo({
@@ -286,7 +287,8 @@ async function submitAdd() {
       priority: addPriority.value,
       duration_minutes: normalizeDurationMinutes(addDurationMinutes.value),
       list_id: addListId.value,
-      due_at: toRFC3339(due),
+      start_at: toRFC3339(start),
+      due_at: null,
     })
     showAddDialog.value = false
     await load()
@@ -544,9 +546,9 @@ function shiftDay(delta: number) {
               <div class="item-body">
                 <div class="item-title">{{ t.title }}</div>
                 <div class="item-meta">
-                  <span v-if="t.due_at" class="meta-time">
+                  <span v-if="taskStartAt(t)" class="meta-time">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    {{ fmtTime(t.due_at) }}
+                    {{ fmtTime(taskStartAt(t)) }}
                   </span>
                   <span class="meta-cat-chip" :style="{ '--cat-color': todoCatColor(t) || 'var(--tg-text-tertiary)' }">
                     <span class="chip-dot-inline" />{{ todoCatName(t) }}
@@ -600,9 +602,9 @@ function shiftDay(delta: number) {
               <div class="item-body">
                 <div class="item-title">{{ t.title }}</div>
                 <div class="item-meta">
-                  <span v-if="t.due_at" class="meta-time">
+                  <span v-if="taskStartAt(t)" class="meta-time">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    {{ fmtTime(t.due_at) }}
+                    {{ fmtTime(taskStartAt(t)) }}
                   </span>
                   <span class="meta-cat-chip" :style="{ '--cat-color': todoCatColor(t) || 'var(--tg-text-tertiary)' }">
                     <span class="chip-dot-inline" />{{ todoCatName(t) }}
@@ -656,9 +658,9 @@ function shiftDay(delta: number) {
               <div class="item-body">
                 <div class="item-title">{{ t.title }}</div>
                 <div class="item-meta">
-                  <span v-if="t.due_at" class="meta-time">
+                  <span v-if="taskStartAt(t)" class="meta-time">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    {{ fmtTime(t.due_at) }}
+                    {{ fmtTime(taskStartAt(t)) }}
                   </span>
                   <span class="meta-cat-chip" :style="{ '--cat-color': todoCatColor(t) || 'var(--tg-text-tertiary)' }">
                     <span class="chip-dot-inline" />{{ todoCatName(t) }}

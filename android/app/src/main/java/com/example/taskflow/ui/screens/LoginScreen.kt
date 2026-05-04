@@ -100,7 +100,7 @@ fun LoginScreen(
             FeatureRow(
                 icon = Icons.Default.Notifications,
                 title = "重要事项准时提醒",
-                body = "锁屏强提醒、通知和本地响铃组合保障，不让截止时间悄悄溜走。",
+                body = "锁屏强提醒、通知和本地响铃组合保障，不让开始时间悄悄溜走。",
             )
             FeatureRow(
                 icon = Icons.Default.CalendarMonth,

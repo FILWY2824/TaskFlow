@@ -35,7 +35,7 @@ export interface Prefs {
   pomodoroSound: boolean
   // 番茄到点自动结束并入库(false 时停留在 0:00 等用户点"完成")
   pomodoroAutoComplete: boolean
-  // 任务到截止日时是否本地弹窗提醒(与服务端 reminder 独立,纯本地)
+  // 任务到开始时间时是否本地弹窗提醒(与服务端 reminder 独立,纯本地)
   todoDueToast: boolean
   // 仅 Windows 有效:到点把窗口"总在最前"弹出来,直到用户停掉响铃
   alwaysOnTopAlarm: boolean

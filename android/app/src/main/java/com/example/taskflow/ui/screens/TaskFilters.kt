@@ -38,27 +38,41 @@ fun filterTodosForAndroid(
         .filter { passDateFilter(it, dateFilter, timezone, today) }
         .filter { passStatusFilter(it, statusFilter, now) }
         .filter { passSearch(it, search) }
-        .sortedWith(compareBy<TodoCacheEntity> { it.due_at == null }.thenBy { it.due_at ?: "" }.thenBy { it.id })
+        .sortedWith(compareBy<TodoCacheEntity> { taskStartAt(it) == null }.thenBy { taskStartAt(it) ?: "" }.thenBy { it.id })
         .toList()
     return dateScoped
 }
 
 private fun passDateFilter(todo: TodoCacheEntity, filter: TaskDateFilter, timezone: String, today: LocalDate): Boolean {
-    val due = todo.due_at?.let { runCatching { LocalDate.parse(DateTimeFmt.localDate(it, timezone)) }.getOrNull() }
+    val start = taskStartLocalDate(todo, timezone)
     return when (filter) {
-        TaskDateFilter.Today -> due != null && due < today.plusDays(1) && (due >= today || !todo.is_completed)
-        TaskDateFilter.Tomorrow -> due == today.plusDays(1) && !todo.is_completed
+        TaskDateFilter.Today -> passCompoundDate(todo, start, today, today.plusDays(1), timezone)
+        TaskDateFilter.Tomorrow -> start == today.plusDays(1)
         TaskDateFilter.ThisWeek -> {
             val weekStart = today.minusDays(((today.dayOfWeek.value - 1).toLong()).coerceAtLeast(0))
             val weekEnd = weekStart.plusDays(7)
-            due != null && due < weekEnd && (due >= weekStart || !todo.is_completed)
+            passCompoundDate(todo, start, weekStart, weekEnd, timezone)
         }
-        TaskDateFilter.RecentWeek -> due != null && due < today.plusDays(7) && (due >= today || !todo.is_completed)
-        TaskDateFilter.RecentMonth -> due != null && due < today.plusDays(30) && (due >= today || !todo.is_completed)
+        TaskDateFilter.RecentWeek -> passCompoundDate(todo, start, today, today.plusDays(7), timezone)
+        TaskDateFilter.RecentMonth -> passCompoundDate(todo, start, today, today.plusDays(30), timezone)
         TaskDateFilter.All -> true
-        TaskDateFilter.Scheduled -> due != null
-        TaskDateFilter.NoDate -> due == null && !todo.is_completed
+        TaskDateFilter.Scheduled -> start != null
+        TaskDateFilter.NoDate -> start == null
     }
+}
+
+private fun passCompoundDate(
+    todo: TodoCacheEntity,
+    start: LocalDate?,
+    from: LocalDate,
+    toExclusive: LocalDate,
+    timezone: String,
+): Boolean {
+    if (start == null) return false
+    if (start >= from && start < toExclusive) return true
+    if (start < from && !todo.is_completed) return true
+    val completed = completedLocalDate(todo, timezone)
+    return start < from && completed != null && completed >= from && completed < toExclusive
 }
 
 private fun passStatusFilter(todo: TodoCacheEntity, filter: TaskStatusFilter, now: Instant): Boolean {
@@ -72,12 +86,29 @@ private fun passStatusFilter(todo: TodoCacheEntity, filter: TaskStatusFilter, no
 }
 
 private fun isOverdueAt(todo: TodoCacheEntity, now: Instant): Boolean {
-    if (todo.completed_at != null || todo.due_at.isNullOrBlank()) return false
-    return runCatching { Instant.parse(todo.due_at).isBefore(now) }.getOrDefault(false)
+    val start = taskStartAt(todo)
+    if (todo.completed_at != null || start.isNullOrBlank()) return false
+    return runCatching { Instant.parse(start).isBefore(now) }.getOrDefault(false)
 }
 
 private fun passSearch(todo: TodoCacheEntity, search: String): Boolean {
     val q = search.trim().lowercase()
     if (q.isBlank()) return true
     return todo.title.lowercase().contains(q) || todo.description.lowercase().contains(q)
+}
+
+fun taskStartAt(todo: TodoCacheEntity): String? = todo.start_at ?: todo.due_at
+
+private fun taskStartLocalDate(todo: TodoCacheEntity, timezone: String): LocalDate? =
+    taskStartAt(todo)?.let { runCatching { LocalDate.parse(DateTimeFmt.localDate(it, timezone)) }.getOrNull() }
+
+private fun completedLocalDate(todo: TodoCacheEntity, timezone: String): LocalDate? =
+    todo.completed_at?.let { runCatching { LocalDate.parse(DateTimeFmt.localDate(it, timezone)) }.getOrNull() }
+
+fun taskPriorityLabel(priority: Int): String = when (priority.coerceIn(0, 4)) {
+    1 -> "低"
+    2 -> "中"
+    3 -> "高"
+    4 -> "紧急"
+    else -> "无"
 }

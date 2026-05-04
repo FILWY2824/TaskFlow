@@ -12,6 +12,7 @@ import {
   fmtRelative,
   fromDatetimeLocal,
   PRIORITY_LABELS,
+  taskStartAt,
   toDatetimeLocal,
   toRFC3339,
 } from '@/utils'
@@ -50,25 +51,25 @@ const listId = ref<number | null>(props.todo.list_id ?? null)
 const priority = ref(props.todo.priority)
 const effort = ref(props.todo.effort)
 const durationMinutes = ref<number>(props.todo.duration_minutes || 0)
-const dueAtLocal = ref(toDatetimeLocal(props.todo.due_at ? new Date(props.todo.due_at) : null))
+const startAtLocal = ref(toDatetimeLocal(taskStartAt(props.todo) ? new Date(taskStartAt(props.todo)!) : null))
 const dueAllDay = ref(props.todo.due_all_day)
 // 时区永远跟随当前账号设置（在"设置 → 时区"里统一管理）；这里只读不可编辑。
 const tz = ref(authStore.user?.timezone || props.todo.timezone || DEFAULT_TIMEZONE)
 
 // ─── 「无日期」 vs「日程任务」 互不串通的强约束 ────────────────────────────────
 // 业务规则:
-//   - 一旦任务被创建为"无日期"（due_at 为空），它在编辑时就不能再被加上日期 ——
+//   - 一旦任务被创建为"无日期"（start_at 为空），它在编辑时就不能再被加上日期 ——
 //     这种任务专门用来登记"想做但还没排期"的事项，不该跑到日程里搅局；
 //   - 反过来，一旦任务被创建为"有日期"（即在日程视图里的任务），它在编辑时
 //     也不能被把日期清空 —— 不能让它意外地"跌出"日程进入无日期视图。
 // 也就是说："是否有日期"是任务的一个不可变属性。需要切换的话，请删除并重建。
 //
 // 实现上：
-//   - originallyHadDueAt 在抽屉首次打开和切换 todo 时刻"快照"任务原始状态；
+//   - originallyHadStartAt 在抽屉首次打开和切换 todo 时刻"快照"任务原始状态；
 //   - 模板里根据它分别渲染"已锁定的无日期标识"或"已锁定的日期时间选择器"；
 //   - PrettyDateTimePicker 在前一种情况下完全不渲染；后一种情况下传 allow-clear=false。
-const originallyHadDueAt = ref<boolean>(!!props.todo.due_at)
-const isNoDateTask = computed(() => !originallyHadDueAt.value)
+const originallyHadStartAt = ref<boolean>(!!taskStartAt(props.todo))
+const isNoDateTask = computed(() => !originallyHadStartAt.value)
 
 const errMsg = ref('')
 const saving = ref(false)
@@ -110,11 +111,11 @@ watch(
     priority.value = props.todo.priority
     effort.value = props.todo.effort
     durationMinutes.value = props.todo.duration_minutes || 0
-    dueAtLocal.value = toDatetimeLocal(props.todo.due_at ? new Date(props.todo.due_at) : null)
+    startAtLocal.value = toDatetimeLocal(taskStartAt(props.todo) ? new Date(taskStartAt(props.todo)!) : null)
     dueAllDay.value = props.todo.due_all_day
     tz.value = authStore.user?.timezone || props.todo.timezone || DEFAULT_TIMEZONE
     // 重新拍摄"原始是否有日期"的快照（这是任务的不可变属性）
-    originallyHadDueAt.value = !!props.todo.due_at
+    originallyHadStartAt.value = !!taskStartAt(props.todo)
     errMsg.value = ''
     await Promise.all([data.loadSubtasks(props.todo.id), data.loadReminders(props.todo.id)]).catch(() => {})
   },
@@ -133,20 +134,20 @@ async function save() {
   }
   // 强约束：日程任务不能把日期清空，无日期任务不能加日期。
   // UI 上已通过禁用控件防止用户操作；这里再做一次双保险，防止意外路径绕过。
-  if (originallyHadDueAt.value && !dueAtLocal.value) {
-    errMsg.value = '日程任务必须保留截止时间。如需把它改为"无日期"，请先删除再重建。'
+  if (originallyHadStartAt.value && !startAtLocal.value) {
+    errMsg.value = '日程任务必须保留开始时间。如需把它改为"无日期"，请先删除再重建。'
     return
   }
-  if (!originallyHadDueAt.value && dueAtLocal.value) {
-    errMsg.value = '"无日期"任务不能添加截止时间。如需安排进日程，请先删除再重建。'
+  if (!originallyHadStartAt.value && startAtLocal.value) {
+    errMsg.value = '"无日期"任务不能添加开始时间。如需安排进日程，请先删除再重建。'
     return
   }
   saving.value = true
   try {
     // 严格按"原始是否有日期"决定提交内容：无日期任务永远提交 null，杜绝任何
     // 隐式状态切换。
-    const due = originallyHadDueAt.value
-      ? (dueAtLocal.value ? fromDatetimeLocal(dueAtLocal.value) : null)
+    const start = originallyHadStartAt.value
+      ? (startAtLocal.value ? fromDatetimeLocal(startAtLocal.value) : null)
       : null
     const updated = await data.updateTodo(props.todo.id, {
       title: title.value.trim(),
@@ -155,8 +156,9 @@ async function save() {
       effort: effort.value,
       duration_minutes: normalizeDurationMinutes(durationMinutes.value),
       list_id: listId.value,
-      due_at: due ? toRFC3339(due) : null,
-      due_all_day: originallyHadDueAt.value ? dueAllDay.value : false,
+      start_at: start ? toRFC3339(start) : null,
+      due_at: null,
+      due_all_day: originallyHadStartAt.value ? dueAllDay.value : false,
       timezone: tz.value,
     })
     emit('updated', updated)
@@ -374,7 +376,7 @@ const rrulePresets = [
         </div>
       </div>
 
-      <!-- ============ 截止时间 / "无日期"锁定标识 ============
+      <!-- ============ 开始时间 / "无日期"锁定标识 ============
            "无日期" 与 "日程任务" 互不串通；任务一旦创建为某种类型就不能跨过去。 -->
       <div class="field">
         <label>
@@ -434,10 +436,10 @@ const rrulePresets = [
       </template>
       <template v-else>
         <div class="field">
-          <label>截止时间 <span class="required" title="日程任务必填">*</span></label>
-          <PrettyDateTimePicker v-model="dueAtLocal" :allow-clear="false" />
+          <label>开始时间 <span class="required" title="日程任务必填">*</span></label>
+          <PrettyDateTimePicker v-model="startAtLocal" :allow-clear="false" />
           <div class="form-hint muted">
-            日程任务必须保留截止时间。
+            日程任务必须保留开始时间。
           </div>
         </div>
         <div class="field">

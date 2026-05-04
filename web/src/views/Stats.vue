@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { stats as statsApi, todos as todosApi, ApiError } from '@/api'
 import type { DailyBucket, PomodoroAggregate, StatsSummary, Todo } from '@/types'
-import { fmtDuration } from '@/utils'
+import { fmtDuration, taskStartAt } from '@/utils'
 
 const summary = ref<StatsSummary | null>(null)
 const daily = ref<DailyBucket[]>([])
@@ -101,7 +101,7 @@ const todayBucket = computed<DailyBucket | null>(() => {
 
 // =============================================================
 // 客户端聚合: 用 openTodos 算"最近 N 天的过期/未完成"
-//   - 过期: 未完成 ∩ due_at < now ∩ due_at 在最近 N 天内
+//   - 过期: 未完成 ∩ 开始时间 < now ∩ 开始时间在最近 N 天内
 //   - 未完成: 未完成 ∩ created_at 在最近 N 天内
 // =============================================================
 function inLastDaysCount(days: number, mode: 'overdue' | 'open'): number {
@@ -111,9 +111,10 @@ function inLastDaysCount(days: number, mode: 'overdue' | 'open'): number {
   for (const t of openTodos.value) {
     if (t.is_completed) continue
     if (mode === 'overdue') {
-      if (!t.due_at) continue
-      const due = new Date(t.due_at).getTime()
-      if (due < now && due >= cutoff) n++
+      const start = taskStartAt(t)
+      if (!start) continue
+      const ts = new Date(start).getTime()
+      if (ts < now && ts >= cutoff) n++
     } else {
       const created = new Date(t.created_at).getTime()
       if (created >= cutoff) n++
@@ -441,7 +442,7 @@ function cellTitle(c: HeatCell, kind: 'task' | 'pomo'): string {
             <div class="value">{{ todayBucket?.pomodoro_count ?? 0 }}</div>
           </div>
           <div class="stat-card">
-            <div class="label">今日到期</div>
+            <div class="label">今日开始</div>
             <div class="value">{{ summary.todos_due_today }}</div>
           </div>
         </div>

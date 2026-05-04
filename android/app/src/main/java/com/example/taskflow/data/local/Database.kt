@@ -33,6 +33,7 @@ data class TodoCacheEntity(
     val priority: Int,
     val effort: Int,
     val duration_minutes: Int,
+    val start_at: String?,
     val due_at: String?,
     val due_all_day: Boolean,
     val is_completed: Boolean,
@@ -114,7 +115,7 @@ data class LocalAlarmLogEntity(
 
 @Dao
 interface TodoDao {
-    @Query("SELECT * FROM todos_cache WHERE user_id = :userId ORDER BY due_at IS NULL, due_at ASC, id ASC")
+    @Query("SELECT * FROM todos_cache WHERE user_id = :userId ORDER BY start_at IS NULL, start_at ASC, id ASC")
     fun all(userId: Long): Flow<List<TodoCacheEntity>>
 
     @Query("SELECT * FROM todos_cache WHERE id = :id")
@@ -227,7 +228,7 @@ interface AlarmLogDao {
         SyncMetaEntity::class,
         LocalAlarmLogEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 @TypeConverters(BoolConverters::class)

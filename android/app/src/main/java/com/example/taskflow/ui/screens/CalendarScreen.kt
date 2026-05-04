@@ -39,7 +39,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 
 /**
- * 一个 6×7 的月历视图,每格上显示日期,如果该天有截止任务就在右下角点一个圆点。
+ * 一个 6×7 的月历视图,每格上显示日期,如果该天有开始任务就在右下角点一个圆点。
  * 选中某天显示"该日所有 todo"列表(本地缓存,无网也能用)。
  *
  * 没引入第三方日历库;Compose + java.time 完全够用。
@@ -127,7 +127,7 @@ fun CalendarScreen(
         groupTodosByDay(state.todos, state.ym, state.tz)
     }
     val selectedDay = state.selected.toString()
-    val daysList = state.todos.filter { DateTimeFmt.localDate(it.due_at, state.tz) == selectedDay }
+    val daysList = state.todos.filter { DateTimeFmt.localDate(taskStartAt(it), state.tz) == selectedDay }
 
     Scaffold(
         topBar = {
@@ -206,8 +206,9 @@ fun CalendarScreen(
                                 )
                             },
                             supportingContent = {
-                                if (!t.due_at.isNullOrBlank()) Text(
-                                    DateTimeFmt.localTime(t.due_at, state.tz),
+                                val startAt = taskStartAt(t)
+                                if (!startAt.isNullOrBlank()) Text(
+                                    DateTimeFmt.localTime(startAt, state.tz),
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             },
@@ -300,7 +301,7 @@ private fun MonthGrid(
 private fun groupTodosByDay(todos: List<TodoCacheEntity>, ym: YearMonth, tz: String): Map<LocalDate, Int> {
     val out = mutableMapOf<LocalDate, Int>()
     for (t in todos) {
-        val d = DateTimeFmt.localDate(t.due_at, tz)
+        val d = DateTimeFmt.localDate(taskStartAt(t), tz)
         if (d.isBlank()) continue
         runCatching { LocalDate.parse(d) }.getOrNull()?.let { date ->
             // 只统计当前显示的月份 ± 1 周(网格里能看到的所有格)

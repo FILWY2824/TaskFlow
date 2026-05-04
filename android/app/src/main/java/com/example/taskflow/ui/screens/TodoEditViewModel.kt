@@ -27,7 +27,7 @@ data class TodoEditUiState(
     val description: String = "",
     val priority: Int = 0,
     val durationMinutes: Int = 30,
-    val dueAtIso: String? = null,
+    val startAtIso: String? = null,
     val dueAllDay: Boolean = false,
     val timezone: String = "Asia/Shanghai",
 
@@ -63,7 +63,7 @@ class TodoEditViewModel(
                     description = cached.description,
                     priority = cached.priority,
                     durationMinutes = cached.duration_minutes,
-                    dueAtIso = cached.due_at,
+                    startAtIso = cached.start_at ?: cached.due_at,
                     dueAllDay = cached.due_all_day,
                     timezone = cached.timezone.ifBlank { _state.value.timezone },
                 )
@@ -88,7 +88,7 @@ class TodoEditViewModel(
     fun setDurationMinutes(v: Int) {
         _state.value = _state.value.copy(durationMinutes = v.coerceIn(0, 1440))
     }
-    fun setDueAt(iso: String?, allDay: Boolean) { _state.value = _state.value.copy(dueAtIso = iso, dueAllDay = allDay) }
+    fun setStartAt(iso: String?, allDay: Boolean) { _state.value = _state.value.copy(startAtIso = iso, dueAllDay = allDay) }
 
     fun save() {
         val s = _state.value
@@ -104,7 +104,7 @@ class TodoEditViewModel(
         val input = TodoInput(
             title = s.title.trim(), description = s.description, priority = s.priority,
             duration_minutes = s.durationMinutes.coerceIn(0, 1440),
-            due_at = s.dueAtIso, due_all_day = s.dueAllDay,
+            start_at = s.startAtIso, due_at = null, due_all_day = s.dueAllDay,
             timezone = s.timezone,
         )
         viewModelScope.launch {

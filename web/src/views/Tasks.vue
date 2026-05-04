@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDataStore } from '@/stores/data'
 import type { Todo, TodoFilterName } from '@/types'
-import { fmtDurationMinutes, fromDatetimeLocal, isOverdue, toRFC3339 } from '@/utils'
+import { fmtDurationMinutes, fromDatetimeLocal, isOverdue, taskStartAt, toRFC3339 } from '@/utils'
 import TodoItem from '@/components/TodoItem.vue'
 import TodoEditDrawer from '@/components/TodoEditDrawer.vue'
 import PrettyDateTimePicker from '@/components/PrettyDateTimePicker.vue'
@@ -40,8 +40,8 @@ watch(
 
 const activeFilter = computed<TodoFilterName>(() => {
   if (props.filterGroup === 'schedule') {
-    // 「日程·全部」严格只显示"有日期"的任务，与「无日期」视图互斥。
-    // 服务端用专门的 'scheduled' 过滤器返回所有 due_at IS NOT NULL 的任务（含已完成）。
+    // 「日程·全部」严格只显示"有开始时间"的任务，与「无日期」视图互斥。
+    // 服务端用专门的 'scheduled' 过滤器返回所有 start_at IS NOT NULL 的任务（含已完成）。
     if (currentFilter.value === 'all') return 'scheduled'
     return currentFilter.value
   }
@@ -80,7 +80,7 @@ onMounted(async () => {
 //   - done    = 已完成
 //   - all     = 不过滤
 // 把已过期错误地塞进未完成里是严重的语义错误：用户在「未完成」中本不该看到那些
-// 已经超过截止时间的事项，否则根本没法快速识别"哪些是还来得及做的"。
+// 已经超过开始时间的事项，否则根本没法快速识别"哪些是还来得及做的"。
 function passStatus(t: Todo): boolean {
   switch (data.statusFilter) {
     case 'open':    return !t.is_completed && !isOverdue(t)
@@ -94,14 +94,14 @@ function passStatus(t: Todo): boolean {
 const filteredTodos = computed(() => {
   let arr = data.todos
   // 双保险: 「日程」分组下的任意 tab（今日 / 明天 / 本周 / 近一周 / 近一个月 / 全部）
-  // 都不允许显示 due_at 为空的任务 —— 它们是「无日期」视图的专属。即使后端意外
+  // 都不允许显示 start_at 为空的任务 —— 它们是「无日期」视图的专属。即使后端意外
   // 漏放了一条无日期记录进来,这里也会过滤掉。
   if (props.filterGroup === 'schedule') {
-    arr = arr.filter((t) => !!t.due_at)
+    arr = arr.filter((t) => !!taskStartAt(t))
   }
   // 反向: 「无日期」视图下,绝不能出现任何带日期的任务
   if (activeFilter.value === 'no_date') {
-    arr = arr.filter((t) => !t.due_at)
+    arr = arr.filter((t) => !taskStartAt(t))
   }
   return arr.filter(passStatus)
 })
@@ -165,13 +165,12 @@ function openAdd() {
   addRecurInterval.value = 1
   addRecurUnit.value = 'DAILY'
   addErr.value = ''
-  // 「无日期」视图：保持日期为空，且禁用周期；其它视图：根据筛选预填一个合理的截止时间
+  // 「无日期」视图：保持日期为空，且禁用周期；其它视图：根据筛选预填一个合理的开始时间
   if (isNoDateView.value) {
     // 显式置空，防御重复打开后的脏值
     addDueLocal.value = ''
   } else if (activeFilter.value === 'today') {
-    const d = new Date()
-    d.setHours(23, 59, 0, 0)
+    const d = nextStartTime()
     addDueLocal.value = toLocalInputValue(d)
   } else if (activeFilter.value === 'tomorrow') {
     const d = new Date()
@@ -183,16 +182,22 @@ function openAdd() {
     activeFilter.value === 'recent_month' ||
     activeFilter.value === 'this_week'
   ) {
-    const d = new Date()
-    d.setHours(23, 59, 0, 0)
+    const d = nextStartTime()
     addDueLocal.value = toLocalInputValue(d)
   } else if (props.filterGroup === 'schedule') {
-    // 日程组的其它分支（如 all），同样默认给一个今天 23:59
-    const d = new Date()
-    d.setHours(23, 59, 0, 0)
+    // 日程组的其它分支（如 all），同样默认给一个就近开始时间
+    const d = nextStartTime()
     addDueLocal.value = toLocalInputValue(d)
   }
   showAddDialog.value = true
+}
+
+function nextStartTime(): Date {
+  const d = new Date()
+  const next = Math.ceil(d.getMinutes() / 15) * 15
+  if (next >= 60) d.setHours(d.getHours() + 1, 0, 0, 0)
+  else d.setMinutes(next, 0, 0)
+  return d
 }
 
 function toLocalInputValue(d: Date): string {
@@ -229,12 +234,12 @@ async function submitAdd() {
   } else if (props.filterGroup === 'schedule') {
     // 日程视图：日期为必填
     if (!addDueLocal.value) {
-      addErr.value = '日程任务必须填写截止日期'
+      addErr.value = '日程任务必须填写开始时间'
       return
     }
   }
   if (addIsRecurring.value && !addDueLocal.value) {
-    addErr.value = '周期日程必须设置一个起始的截止时间'
+    addErr.value = '周期日程必须设置一个开始时间'
     return
   }
   if (addIsRecurring.value && (!addRecurInterval.value || addRecurInterval.value < 1)) {
@@ -250,7 +255,8 @@ async function submitAdd() {
       priority: addPriority.value,
       effort: addEffort.value,
       duration_minutes: normalizeDurationMinutes(addDurationMinutes.value),
-      due_at: dueDate ? toRFC3339(dueDate) : null,
+      start_at: dueDate ? toRFC3339(dueDate) : null,
+      due_at: null,
       list_id: addListId.value || props.listId || null,
     })
     // 如果是周期日程，再绑定一条 RRULE 提醒。
@@ -400,7 +406,7 @@ const statusLabel = computed(() => {
 
       <div v-if="groupedTodos.open.length > 0">
         <div v-if="groupedTodos.overdue.length > 0" class="section-divider">
-          待办（未到截止时间） · {{ groupedTodos.open.length }}
+          待办（未到开始时间） · {{ groupedTodos.open.length }}
         </div>
         <TransitionGroup name="list" tag="div" class="todo-list">
           <TodoItem
@@ -569,7 +575,7 @@ const statusLabel = computed(() => {
               </div>
             </div>
 
-            <!-- ============ 截止时间（无日期视图下完全隐藏） ============ -->
+            <!-- ============ 开始时间（无日期视图下完全隐藏） ============ -->
             <div class="pretty-field">
               <label class="pretty-field-label">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -612,17 +618,17 @@ const statusLabel = computed(() => {
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                 </svg>
-                截止时间
+                开始时间
                 <span v-if="filterGroup === 'schedule'" class="required">*</span>
                 <span v-else class="optional">可选</span>
               </label>
               <PrettyDateTimePicker
                 v-model="addDueLocal"
                 :allow-clear="filterGroup !== 'schedule'"
-                :placeholder="filterGroup === 'schedule' ? '日程任务必须设置时间' : '点此选择日期与时间'"
+                :placeholder="filterGroup === 'schedule' ? '日程任务必须设置开始时间' : '点此选择开始日期与时间'"
               />
               <div v-if="filterGroup === 'schedule'" class="form-hint muted">
-                · 日程任务必须设置时间
+                · 日程任务必须设置开始时间
               </div>
             </div>
 
@@ -704,7 +710,7 @@ const statusLabel = computed(() => {
                   <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                 </svg>
                 {{ recurSummary }}
-                <span v-if="!addDueLocal" class="recur-summary-warn">（请设置截止时间作为起始点）</span>
+                <span v-if="!addDueLocal" class="recur-summary-warn">（请设置开始时间作为起始点）</span>
                 <span v-else class="recur-summary-meta">
                   · 起始 {{ addDueLocal.replace('T', ' ') }}
                 </span>

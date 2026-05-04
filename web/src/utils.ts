@@ -95,7 +95,12 @@ export function fmtDurationMinutes(minutes: number | null | undefined): string {
 
 export const PRIORITY_COLORS = ['#9ca3af', '#3b82f6', '#10b981', '#f59e0b', '#ef4444']
 
-export function isOverdue(t: { due_at?: string | null; is_completed: boolean }): boolean {
-  if (t.is_completed || !t.due_at) return false
-  return new Date(t.due_at).getTime() < Date.now()
+export function taskStartAt(t: { start_at?: string | null; due_at?: string | null }): string | null {
+  return t.start_at || t.due_at || null
+}
+
+export function isOverdue(t: { start_at?: string | null; due_at?: string | null; is_completed: boolean }): boolean {
+  const start = taskStartAt(t)
+  if (t.is_completed || !start) return false
+  return new Date(start).getTime() < Date.now()
 }

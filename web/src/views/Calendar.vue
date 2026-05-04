@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import type { Todo } from '@/types'
 import { todos as todosApi, ApiError } from '@/api'
 import { useDataStore } from '@/stores/data'
-import { isOverdue } from '@/utils'
+import { isOverdue, taskStartAt } from '@/utils'
 
 const data = useDataStore()
 const router = useRouter()
@@ -59,8 +59,9 @@ const monthLabel = computed(() => {
 const todoMap = computed<Record<string, Todo[]>>(() => {
   const m: Record<string, Todo[]> = {}
   for (const t of items.value) {
-    if (!t.due_at) continue
-    const d = new Date(t.due_at)
+    const start = taskStartAt(t)
+    if (!start) continue
+    const d = new Date(start)
     const key = dayKey(d)
     ;(m[key] ??= []).push(t)
   }
@@ -105,8 +106,9 @@ async function load() {
 
     const all = await todosApi.list({ limit: 500, include_done: true, order_by: 'due_at_asc' })
     items.value = all.filter((t) => {
-      if (!t.due_at) return false
-      const d = new Date(t.due_at).getTime()
+      const startAt = taskStartAt(t)
+      if (!startAt) return false
+      const d = new Date(startAt).getTime()
       return d >= after.getTime() && d < before.getTime()
     })
   } catch (e) {

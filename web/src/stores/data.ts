@@ -7,7 +7,7 @@ import { playDing } from '@/sound'
 //   all      — 全部（默认）
 //   open     — 未完成
 //   done     — 已完成
-//   expired  — 已过期（未完成且 due_at 在过去）
+//   expired  — 已过期（未完成且开始时间在过去）
 export type TodoStatusFilter = 'all' | 'open' | 'done' | 'expired'
 
 export const useDataStore = defineStore('data', {
@@ -72,6 +72,7 @@ export const useDataStore = defineStore('data', {
           list_id: f.listId,
           search: f.search || undefined,
           order_by: f.name === 'completed' ? 'created_desc' : 'due_at_asc',
+          include_done: true,
         })
       } finally {
         this.todosLoading = false
@@ -104,12 +105,7 @@ export const useDataStore = defineStore('data', {
       if (!wasCompleted && updated.is_completed) {
         playDing()
       }
-      // 在 today/no_date 等过滤下,完成/取消完成会改变是否归属此过滤
-      if (this.currentFilter.name !== 'completed' && this.currentFilter.name !== 'all') {
-        if (updated.is_completed) {
-          this.todos = this.todos.filter((x) => x.id !== updated.id)
-        }
-      }
+      // 完成后的任务仍留在当前视图,由页面里的"已完成"分组承接。
     },
     async removeTodo(id: number) {
       await todosApi.remove(id)

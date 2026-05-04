@@ -107,6 +107,7 @@ var migrations = []migration{
 	{Version: 5, SQL: schemaV5},
 	{Version: 6, SQL: schemaV6},
 	{Version: 7, SQL: schemaV7},
+	{Version: 8, SQL: schemaV8},
 }
 
 const schemaV1 = `
@@ -413,4 +414,11 @@ WHERE timezone = '' OR timezone = 'UTC';
 // 0 表示未设置；客户端用它展示和同步创建任务时的持续时间间隔。
 const schemaV7 = `
 ALTER TABLE todos ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 0;
+`
+
+// schemaV8 —— 任务主时间语义切换为 start_at。
+// due_at 字段保留在协议里用于旧客户端兜底,但筛选 / 排序 / 统计统一按 start_at。
+const schemaV8 = `
+CREATE INDEX IF NOT EXISTS idx_todos_start ON todos(user_id, start_at)
+WHERE deleted_at IS NULL AND start_at IS NOT NULL;
 `

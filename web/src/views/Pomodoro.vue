@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { pomodoro as pomoApi, todos as todosApi, ApiError } from '@/api'
 import type { PomodoroKind, PomodoroSession, Todo } from '@/types'
-import { fmtDuration } from '@/utils'
+import { fmtDuration, taskStartAt } from '@/utils'
 import { useDataStore } from '@/stores/data'
 import { usePrefsStore } from '@/stores/prefs'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -259,7 +259,7 @@ function kindColor(k: PomodoroKind): string {
 // 旧版本是个朴素的 <select>,任务一多就拉到很长且无法筛选。这里换成一个弹窗,
 // 内部支持:
 //   - 搜索框(按标题模糊匹配)
-//   - 日期段筛选(今日 / 明天 / 本周 / 全部),命中 due_at 落在该窗口的任务
+//   - 日期段筛选(今日 / 明天 / 本周 / 全部),命中开始时间落在该窗口的任务
 //   - 分类筛选(复用 .cat-picker 样式,与 DayDetail / 编辑抽屉视觉一致)
 // 选择后回填到 todoId,关闭弹窗。
 // ============================================================
@@ -315,10 +315,11 @@ const filteredTodoOptions = computed<Todo[]>(() => {
     }
     // 2) 日期窗
     if (dateF === 'no_date') {
-      if (t.due_at) return false
+      if (taskStartAt(t)) return false
     } else if (dateF !== 'all') {
-      if (!t.due_at) return false
-      const ts = new Date(t.due_at).getTime()
+      const start = taskStartAt(t)
+      if (!start) return false
+      const ts = new Date(start).getTime()
       const { from, to } = dateBounds(dateF)
       if (ts < from || ts >= to) return false
     }
@@ -629,8 +630,8 @@ function pickTodo(t: Todo | null) {
                     <span class="row-title">{{ t.title }}</span>
                     <span class="row-meta">
                       <span class="row-cat">{{ todoListName(t) }}</span>
-                      <span v-if="t.due_at" class="row-due muted">
-                        · {{ new Date(t.due_at).toLocaleString() }}
+                      <span v-if="taskStartAt(t)" class="row-due muted">
+                        · 开始 {{ new Date(taskStartAt(t)!).toLocaleString() }}
                       </span>
                     </span>
                   </span>

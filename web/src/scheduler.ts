@@ -1,13 +1,14 @@
-// 本地任务到期提醒调度器（与服务端的 reminder rules 完全独立）。
-// 当用户在「设置」打开「任务截止本地提醒」时，遍历当前 data.todos，
-// 对所有未完成、due_at 在未来不超过 24 小时的任务，
-// 设置 setTimeout 在到期时刻弹应用内 toast（并按设置触发桌面通知）。
+// 本地任务开始提醒调度器（与服务端的 reminder rules 完全独立）。
+// 当用户在「设置」打开「任务开始本地提醒」时，遍历当前 data.todos，
+// 对所有未完成、start_at 在未来不超过 24 小时的任务，
+// 设置 setTimeout 在开始时刻弹应用内 toast（并按设置触发桌面通知）。
 //
 // 浏览器关闭/刷新后定时器会丢失——这是预期行为，下一次刷新会重新挂载。
 
 import { useDataStore } from '@/stores/data'
 import { useNotificationsStore } from '@/stores/notifications'
 import { usePrefsStore } from '@/stores/prefs'
+import { taskStartAt } from '@/utils'
 import { watch } from 'vue'
 
 interface Scheduled {
@@ -30,13 +31,13 @@ function fire(todoId: number, title: string) {
   // 应用内 toast（pushToast 内部已经检查 inAppToast 偏好）
   notif.pushToast({
     id: -todoId, // 用负数避免与服务端 notification_id 冲突
-    title: '任务到期：' + title,
+    title: '任务开始：' + title,
     body: '点击查看详情',
   })
   // 桌面通知（pushToast 走的是 SSE 路径，本地路径自己再补一次）
   try {
     if (prefs.desktopNotification && 'Notification' in window && Notification.permission === 'granted') {
-      new Notification('任务到期：' + title, { body: '点击查看详情', tag: 'due-' + todoId })
+      new Notification('任务开始：' + title, { body: '点击查看详情', tag: 'start-' + todoId })
     }
   } catch { /* ignore */ }
 }
@@ -51,8 +52,9 @@ function rescheduleAll() {
   const horizon = 24 * 3600 * 1000  // 仅对 24 小时内的任务调度，避免长 timeout
 
   for (const t of data.todos) {
-    if (t.is_completed || !t.due_at) continue
-    const fireAt = new Date(t.due_at).getTime()
+    const start = taskStartAt(t)
+    if (t.is_completed || !start) continue
+    const fireAt = new Date(start).getTime()
     const delta = fireAt - now
     if (delta <= 0 || delta > horizon) continue
     const id = t.id

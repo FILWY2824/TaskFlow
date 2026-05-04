@@ -236,7 +236,7 @@ fun StatsScreen(container: AppContainer, onBack: () -> Unit) {
                                 Text("今天的推进感", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     MetricTile("今日完成", s.completed_today.toString(), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
-                                    MetricTile("今日到期", s.todos_due_today.toString(), Modifier.weight(1f), MaterialTheme.colorScheme.tertiary)
+                                    MetricTile("今日开始", s.todos_due_today.toString(), Modifier.weight(1f), MaterialTheme.colorScheme.tertiary)
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     MetricTile("本周完成", s.completed_this_week.toString(), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
@@ -256,7 +256,7 @@ fun StatsScreen(container: AppContainer, onBack: () -> Unit) {
                     }
                     StatsPanel.Tasks -> {
                         item { StatCard("待办总数", s.todos_open.toString(), "还需要推进的任务") }
-                        item { StatCard("今日到期", s.todos_due_today.toString(), "今天需要收口的事项", MaterialTheme.colorScheme.tertiaryContainer) }
+                        item { StatCard("今日开始", s.todos_due_today.toString(), "今天开始的事项", MaterialTheme.colorScheme.tertiaryContainer) }
                         item { StatCard("已逾期", s.todos_overdue.toString(), "建议优先处理", MaterialTheme.colorScheme.errorContainer) }
                     }
                     StatsPanel.Focus -> {

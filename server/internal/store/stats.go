@@ -25,7 +25,7 @@ type Summary struct {
 	TodosOpen         int `json:"todos_open"`
 	TodosCompleted    int `json:"todos_completed"`
 	TodosOverdue      int `json:"todos_overdue"`
-	TodosDueToday     int `json:"todos_due_today"`
+	TodosDueToday     int `json:"todos_due_today"` // 历史 JSON 名；语义为今日开始
 	CompletedToday    int `json:"completed_today"`
 	CompletedThisWk   int `json:"completed_this_week"`
 	PomodoroTodaySec  int `json:"pomodoro_today_seconds"`
@@ -56,20 +56,20 @@ func (s *StatsStore) Summary(ctx context.Context, userID int64, loc *time.Locati
 		return nil, fmt.Errorf("summary totals: %w", err)
 	}
 
-	// todos_overdue:有 due_at 且 < now 且未完成
+	// todos_overdue:有 start_at 且 < now 且未完成
 	if err := s.DB.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM todos
 		WHERE user_id = ? AND deleted_at IS NULL AND is_completed = 0
-			AND due_at IS NOT NULL AND due_at < ?
+			AND start_at IS NOT NULL AND start_at < ?
 	`, userID, nowUTC).Scan(&out.TodosOverdue); err != nil {
 		return nil, fmt.Errorf("summary overdue: %w", err)
 	}
 
-	// todos_due_today:due_at 落在用户今日(任意完成状态)
+	// todos_due_today:start_at 落在用户今日(任意完成状态)
 	if err := s.DB.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM todos
 		WHERE user_id = ? AND deleted_at IS NULL
-			AND due_at IS NOT NULL AND due_at >= ? AND due_at < ?
+			AND start_at IS NOT NULL AND start_at >= ? AND start_at < ?
 	`, userID, startToday.UTC(), endToday.UTC()).Scan(&out.TodosDueToday); err != nil {
 		return nil, fmt.Errorf("summary due today: %w", err)
 	}

@@ -162,7 +162,7 @@ class PreferenceRepository(
  *  - fullScreenAlarm      到点时是否拉起 AlarmActivity 锁屏全屏(系统级 USE_FULL_SCREEN_INTENT)
  *  - vibrate              强提醒时是否震动
  *  - inAppToast           应用前台时是否额外弹出应用内 toast
- *  - todoDueLocalAlarm    任务截止时间到点是否本地弹窗(独立于服务端 reminder)
+ *  - todoDueLocalAlarm    任务开始时间到点是否本地弹窗(独立于服务端 reminder)
  *  - pomodoroSound        番茄到点是否响铃
  *  - pomodoroAutoComplete 番茄到点是否自动结束并入库
  *  - useSystemAlarmClock  在创建 reminder 时,是否同时通过 AlarmClock.ACTION_SET_ALARM

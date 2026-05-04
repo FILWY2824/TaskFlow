@@ -23,7 +23,7 @@ class TodoRepository(
     suspend fun refreshAll(filter: String? = null, listId: Long? = null, search: String? = null) : Result<List<TodoDto>> {
         val r = safeCall(client.moshi) {
             client.api.todosList(filter = filter, listId = listId, search = search,
-                limit = 200, includeDone = filter == "completed" || filter == "all")
+                limit = 200, includeDone = true)
         }
         return when (r) {
             is Result.Success -> {
@@ -72,7 +72,7 @@ class TodoRepository(
                 title = it.title, description = it.description,
                 priority = it.priority, effort = it.effort,
                 duration_minutes = it.duration_minutes,
-                due_at = it.due_at, due_all_day = it.due_all_day,
+                start_at = it.start_at, due_at = it.due_at, due_all_day = it.due_all_day,
                 is_completed = it.is_completed, completed_at = it.completed_at,
                 sort_order = it.sort_order, timezone = it.timezone,
                 created_at = it.created_at, updated_at = it.updated_at,

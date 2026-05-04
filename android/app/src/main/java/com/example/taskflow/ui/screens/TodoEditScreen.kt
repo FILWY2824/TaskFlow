@@ -133,7 +133,7 @@ fun TodoEditScreen(
                     FilterChip(
                         selected = state.priority == p,
                         onClick = { vm.setPriority(p) },
-                        label = { Text(if (p == 0) "无" else "P$p") },
+                        label = { Text(taskPriorityLabel(p)) },
                     )
                 }
             }
@@ -142,15 +142,15 @@ fun TodoEditScreen(
             DurationPicker(minutes = state.durationMinutes, onChange = vm::setDurationMinutes)
 
             ListItem(
-                headlineContent = { Text("截止时间") },
+                headlineContent = { Text("开始时间") },
                 supportingContent = {
-                    Text(state.dueAtIso?.let { DateTimeFmt.localDateTime(it, state.timezone) } ?: "未设置")
+                    Text(state.startAtIso?.let { DateTimeFmt.localDateTime(it, state.timezone) } ?: "未设置")
                 },
                 trailingContent = {
                     Row {
                         TextButton(onClick = { showDateDialog = true }) { Text("选择") }
-                        if (state.dueAtIso != null) {
-                            TextButton(onClick = { vm.setDueAt(null, false) }) { Text("清除") }
+                        if (state.startAtIso != null) {
+                            TextButton(onClick = { vm.setStartAt(null, false) }) { Text("清除") }
                         }
                     }
                 },
@@ -235,12 +235,12 @@ fun TodoEditScreen(
     if (showDateDialog) {
         DateTimeDialDialog(
             timezone = state.timezone,
-            initial = state.dueAtIso,
-            title = "选择截止时间",
+            initial = state.startAtIso,
+            title = "选择开始时间",
             confirmText = "确定",
             onDismiss = { showDateDialog = false },
             onConfirm = { iso ->
-                vm.setDueAt(iso, false)
+                vm.setStartAt(iso, false)
                 showDateDialog = false
             },
         )
@@ -414,7 +414,7 @@ private fun AddReminderDialog(
                         Modifier.fillMaxWidth().padding(12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Text("提醒时间", style = MaterialTheme.typography.labelLarge)
+                        Text("提醒开始时间", style = MaterialTheme.typography.labelLarge)
                         Spacer(Modifier.height(8.dp))
                         TimePicker(state = timeState)
                     }

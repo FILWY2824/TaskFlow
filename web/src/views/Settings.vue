@@ -246,7 +246,7 @@ async function toggleDesktopNotification(v: boolean) {
     <div class="settings-card">
       <div class="card-head">
         <h3>时区</h3>
-        <p class="card-hint">所有任务的截止时间、提醒触发时间都按此时区显示。新建任务时不再单独询问，统一用这里的设置。</p>
+        <p class="card-hint">所有任务的开始时间、提醒触发时间都按此时区显示。新建任务时不再单独询问，统一用这里的设置。</p>
       </div>
       <div class="card-body">
         <div class="form-row">
@@ -331,8 +331,8 @@ async function toggleDesktopNotification(v: boolean) {
         </div>
         <div class="toggle-row">
           <div class="toggle-text">
-            <div class="toggle-title">任务截止本地提醒</div>
-            <div class="toggle-desc">当任务到达截止时间,在浏览器内本地弹窗提醒。</div>
+            <div class="toggle-title">任务开始本地提醒</div>
+            <div class="toggle-desc">当任务到达开始时间,在浏览器内本地弹窗提醒。</div>
           </div>
           <label class="switch">
             <input type="checkbox" :checked="prefs.todoDueToast"
@@ -420,8 +420,8 @@ async function toggleDesktopNotification(v: boolean) {
         </div>
         <div class="toggle-row">
           <div class="toggle-text">
-            <div class="toggle-title">任务截止本地提醒</div>
-            <div class="toggle-desc">任务到达截止时间时本地弹窗(独立于服务端 reminder)。</div>
+            <div class="toggle-title">任务开始本地提醒</div>
+            <div class="toggle-desc">任务到达开始时间时本地弹窗(独立于服务端 reminder)。</div>
           </div>
           <label class="switch">
             <input type="checkbox" :checked="prefs.todoDueToast"

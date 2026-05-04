@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Todo } from '@/types'
-import { fmtDurationMinutes, fmtRelative, isOverdue, PRIORITY_LABELS } from '@/utils'
+import { fmtDurationMinutes, fmtRelative, isOverdue, PRIORITY_LABELS, taskStartAt } from '@/utils'
 import { useDataStore } from '@/stores/data'
 
 const props = defineProps<{ todo: Todo }>()
@@ -12,6 +12,7 @@ const emit = defineEmits<{
 
 const data = useDataStore()
 const overdue = computed(() => isOverdue(props.todo))
+const startAt = computed(() => taskStartAt(props.todo))
 
 const list = computed(() => {
   const id = props.todo.list_id
@@ -61,13 +62,13 @@ async function toggleDone(e: Event) {
         </span>
       </div>
 
-      <div v-if="todo.due_at || listName || todo.effort > 0 || todo.duration_minutes > 0" class="todo-meta">
-        <span v-if="todo.due_at" class="todo-due">
+      <div v-if="startAt || listName || todo.effort > 0 || todo.duration_minutes > 0" class="todo-meta">
+        <span v-if="startAt" class="todo-due">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/>
             <polyline points="12 6 12 12 16 14"/>
           </svg>
-          {{ fmtRelative(todo.due_at) }}
+          开始 {{ fmtRelative(startAt) }}
         </span>
 
         <span v-if="listName" class="cat-chip" :style="{ '--cat-color': listColor || 'var(--tg-primary)' }">
